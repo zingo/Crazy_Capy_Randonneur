@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.CrazyCapy" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/brand_green_deep</item>
+        <item name="android:statusBarColor">@color/brand_green_deep</item>
+        <item name="android:navigationBarColor">@color/brand_green_deep</item>
+        <!-- Android 12+ splash (min SDK 37) -->
+        <item name="android:windowSplashScreenBackground">@color/brand_green_deep</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+    </style>
+</resources>

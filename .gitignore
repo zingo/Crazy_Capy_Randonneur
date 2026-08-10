@@ -1,0 +1,16 @@
+# Gradle / AGP
+.gradle/
+build/
+app/build/
+.kotlin/
+
+# Local machine config (SDK paths, signing keys)
+local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
