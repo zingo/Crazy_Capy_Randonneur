@@ -19,7 +19,8 @@ the phone in the pocket with the screen off, and ride to spoken guidance.
 - Maps: **MapLibre Native (org.maplibre.gl:android-sdk:12.x)** — offline-capable vector maps
   (region download, MBTiles/PMTiles), the engine GraphHopper's navigation SDK builds on.
   Pivot note: Mapsforge/VTM 0.21 dropped the `.map` reader, so we use MapLibre instead.
-- GPS: `LocationManager.GPS_PROVIDER` (no Google Play Services), adaptive 2–5 s intervals.
+- GPS: `LocationManager.GPS_PROVIDER` (no Google Play Services). Currently a
+  flat 3 s interval; adaptive intervals are a future suggestion (below).
 - Navigation: track-follow engine — snap to polyline, extract turn instructions from
   track geometry, Android TTS + beeps. Rerouting (GraphHopper/BRouter) deferred.
 - Import: GPX v1.0/1.1 + basic TCX via system file picker; URL import later.
@@ -63,6 +64,19 @@ CrazyCapyRouting/
   scoped wake-lock, notification.
 - M5 — polish: settings UI, big-contrast nav screen, deviation recovery, edge cases.
 - Future — Coros HR/speed; offline reroute (GraphHopper/BRouter); site URL import.
+
+## Future suggestions
+
+- **Adaptive GPS interval.** GPS duty cycle is the main screen-off drain; on
+  a long straight we request ~10x more fixes than the guidance needs. Idea:
+  vary `requestLocationUpdates` `minTime` on the next-turn distance with
+  hysteresis, e.g. `nextTurnM > 800 → 10 s`, `250–800 → 5 s`, `<250 → 2.5 s`,
+  and force the fast interval whenever `isOffRoute` so return-to-route is
+  still detected quickly. Speed-based approach leads (~50 s ≈ 500 m at
+  36 km/h) are far larger than one coarse step, so no missed announcements.
+  Only re-request when crossing a threshold (not per fix; takes a second or
+  two to take effect). Unit-test the pure decision function; real tuning on
+  the physical phone with `dumpsys battery` before/after.
 
 ## Status
 

@@ -15,6 +15,7 @@ import android.graphics.Path
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -82,8 +83,10 @@ import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
@@ -91,7 +94,6 @@ import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
-import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
@@ -174,6 +176,7 @@ private const val STYLE_LIGHT = "https://tiles.openfreemap.org/styles/liberty"
 private const val STYLE_DARK = "https://tiles.openfreemap.org/styles/dark"
 private const val DEFAULT_LAT = 59.329
 private const val DEFAULT_LON = 18.069
+private const val TAG = "CrazyCapyRandonneur"
 
 @Composable
 fun NavigationMapScreen(
@@ -197,6 +200,9 @@ fun NavigationMapScreen(
     // Idle-position marker: last known / passively-updated position when not riding.
     var idleLat by remember { mutableStateOf<Double?>(null) }
     var idleLon by remember { mutableStateOf<Double?>(null) }
+
+    // True once the map has centred on the user's position at startup (idle, no route).
+    var idleCenteredOnce by remember { mutableStateOf(false) }
 
     // Settings overlay: {@link BuildConfig} exposes version/name for the About section.
     var showSettings by remember { mutableStateOf(false) }
@@ -251,12 +257,21 @@ fun NavigationMapScreen(
     LaunchedEffect(map, RideStore.darkMap) {
         val m = map ?: return@LaunchedEffect
         m.setStyle(if (RideStore.darkMap) STYLE_DARK else STYLE_LIGHT) {
+            // OpenFreeMap's dark style paints roads nearly black on black;
+            // lift the road network so it's actually visible in dark mode.
+            if (RideStore.darkMap) brightenDarkRoads(it)
             refreshRoute(m, track)
             // Style reload resets the camera: re-fit the route, else keep rider/default.
             if (RideStore.active) {
                 m.centerOnRider()
             } else if (track != null) {
                 m.fitRoute(track)
+            } else if (idleLat != null && idleLon != null) {
+                // No route loaded: show the current position instead of a hard-coded default.
+                Log.d(TAG, "Centering on self position @ $idleLat,$idleLon")
+                m.animateCamera(
+                    CameraUpdateFactory.newLatLngZoom(LatLng(idleLat!!, idleLon!!), 15.0)
+                )
             } else {
                 m.cameraPosition = CameraPosition.Builder()
                     .target(LatLng(DEFAULT_LAT, DEFAULT_LON))
@@ -290,11 +305,23 @@ fun NavigationMapScreen(
     // so this costs ~nothing while the screen is on and you are not navigating.
     DisposableEffect(context, RideStore.mapVisible) {
         val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
-        // Seed with the last known fix right away.
         val hasLoc = ContextCompat.checkSelfPermission(
             context, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
+
+        // Center on the current position once, when idle with no route loaded.
+        fun centerToSelf() {
+            if (idleCenteredOnce) return
+            if (!RideStore.mapVisible || RideStore.active || RideStore.track != null) return
+            val m = map ?: return
+            val la = idleLat ?: return
+            val lo = idleLon ?: return
+            idleCenteredOnce = true
+            m.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(la, lo), 15.0))
+        }
+
         if (hasLoc && idleLat == null && idleLon == null) {
+            // Seed with the last known fix right away.
             val last = listOf(
                 android.location.LocationManager.GPS_PROVIDER,
                 android.location.LocationManager.NETWORK_PROVIDER,
@@ -305,6 +332,21 @@ fun NavigationMapScreen(
             if (last != null) {
                 idleLat = last.latitude
                 idleLon = last.longitude
+                centerToSelf()
+            } else if (RideStore.mapVisible) {
+                // No cached fix: grab one quick GPS sample for the "where am I?" centre.
+                try {
+                    lm.requestSingleUpdate(
+                        android.location.LocationManager.GPS_PROVIDER,
+                        { location ->
+                            idleLat = location.latitude
+                            idleLon = location.longitude
+                            centerToSelf()
+                        },
+                        android.os.Looper.getMainLooper(),
+                    )
+                } catch (ignored: Exception) {
+                }
             }
         }
         val listener = object : android.location.LocationListener {
@@ -860,6 +902,27 @@ private fun LicensesDialog(onDismiss: () -> Unit) {
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
     )
+}
+
+/** Lighten the road network of OpenFreeMap's dark style for better contrast on OLED. */
+private fun brightenDarkRoads(style: Style) {
+    val overrides = mapOf(
+        // Major roads (primary/secondary/tertiary/trunk) and their casing outline.
+        "highway_major_inner" to 0xFF838383.toInt(),
+        "highway_major_casing" to 0xFF4A4A4A.toInt(),
+        "highway_major_subtle" to 0xFF5A5A5A.toInt(),
+        // Motorways and their casing.
+        "highway_motorway_inner" to 0xFF8E8E8E.toInt(),
+        "highway_motorway_casing" to 0xFF505050.toInt(),
+        "highway_motorway_subtle" to 0xFF5A5A5A.toInt(),
+        // Minor roads, service roads, tracks.
+        "highway_minor" to 0xFF6E6E6E.toInt(),
+        // Foot/bike paths (slightly lifted, still distinct from roads).
+        "highway_path" to 0xFF3A3A3C.toInt(),
+    )
+    for ((id, color) in overrides) {
+        (style.getLayer(id) as? LineLayer)?.setProperties(PropertyFactory.lineColor(color))
+    }
 }
 
 /** Replace the route polyline and waypoint markers on the map. */
