@@ -1,7 +1,7 @@
 # Third-Party Notices
 
 This file lists the third-party libraries, tools, and data the **Crazy Capy
-Routing** project uses, together with the licenses that apply to them.
+Randonneur** project uses, together with the licenses that apply to them.
 
 The project itself is licensed under the Apache License 2.0 – see
 [LICENSE](LICENSE). The notices below apply to code, components, and data
@@ -46,7 +46,6 @@ You must keep the MapLibre attribution control enabled.
 | --- | --- | --- |
 | JUnit 4 | EPL-1.0 (junit.org) | JUnit contributors |
 | AndroidX Test (junit, runner, core) | Apache-2.0 | The Android Open Source Project |
-| Mockito/mocked-test helpers (if present transitively) | MIT / Apache-2.0 | — |
 
 ## Build tooling (not shipped)
 
@@ -54,7 +53,7 @@ You must keep the MapLibre attribution control enabled.
 | --- | --- | --- |
 | Gradle + Gradle Wrapper | Apache-2.0 | Gradle Inc. |
 | Android Gradle Plugin 8.13.0 | Apache-2.0 | The Android Open Source Project |
-| Kotlin 2.1.21 (compiler, stdlib, compose plugin) | Apache-2.0 | JetBrains |Kotlin Foundation |
+| Kotlin 2.1.21 (compiler, stdlib, compose plugin) | Apache-2.0 | JetBrains / Kotlin Foundation |
 | Android platform SDK | Apache-2.0 | The Android Open Source Project |
 
 ---
@@ -67,6 +66,10 @@ its platform wrappers are licensed under the **2-Clause BSD License**
 incorporates third-party code; the aggregate set of licenses used by
 MapLibre Native includes the BSD-2-Clause, ISC, and MIT licenses. See
 `LICENSE.md` inside the `maplibre-native` repository for the full text.
+
+The MapLibre Android SDK also pulls in `android-sdk-turf` (6.0.1,
+BSD-2-Clause) and `maplibre-android-gestures` (0.0.4, MIT), both published
+by the MapLibre project under the same organization.
 
 ---
 
