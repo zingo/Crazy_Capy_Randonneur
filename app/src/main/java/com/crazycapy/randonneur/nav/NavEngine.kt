@@ -51,7 +51,13 @@ class NavEngine(initialTrack: Track? = null) {
     /** Meters before a turn that trigger the near-turn notice (with distance to the next). */
     var nearWindowM = 200.0
 
-    /** Meters before a turn that trigger TurnNow. */
+    /** Seconds before a turn (at current speed) that trigger the final "turn now". */
+    var nowLeadS = 3.0
+
+    /** Lower bound for the "turn now" window so slow riding still warns before the turn. */
+    var nowWindowMinM = 15.0
+
+    /** Fallback meters-before-a-turn window used when the current speed is unknown. */
     var nowWindowM = 60.0
 
     /** Beyond this distance the engine emits periodic "go on for x.x km" notices. */
@@ -163,7 +169,15 @@ class NavEngine(initialTrack: Track? = null) {
                 listeners.forEach { it(NavEvent.TurnNear(next, dist.coerceAtLeast(0.0), after, gap)) }
             }
 
-            if (dist <= nowWindowM && nowAnnounced.add(next.index)) {
+            // Final "turn now" notice. Timed close to the turn (2-4 s ahead at the
+            // current speed), not a fixed distance, so it never fires across a
+            // previous turn on routes with tight consecutive turns.
+            val nowWin = if (speedKmh > 0.0) {
+                (speedKmh * nowLeadS / 3.6).coerceIn(nowWindowMinM, nowWindowM)
+            } else {
+                nowWindowM
+            }
+            if (dist <= nowWin && nowAnnounced.add(next.index)) {
                 listeners.forEach { it(NavEvent.TurnNow(next)) }
             }
 
@@ -238,6 +252,9 @@ class NavEngine(initialTrack: Track? = null) {
         return null
     }
 
+    /** The turn after the next turn, if any (for the "then …" heads-up). */
+    fun peekNextNextTurn(): Turn? = peekNextTurn()?.position?.let { peekTurnAfter(it) }
+
     /** The turn after [turn] in the turns list, if any. */
     private fun peekTurnAfter(position: Int): Turn? {
         val n = position + 1
@@ -265,6 +282,14 @@ class NavEngine(initialTrack: Track? = null) {
             guard++
         }
         return pts
+    }
+
+    /** Points for the turn popup: from the rider to just past the next turn, stepping so
+     *  the junction stays in view at any approach distance (zooms in as you get close). */
+    fun turnPreview(maxPoints: Int = 22): List<TrackPoint> {
+        val turn = peekNextTurn() ?: return emptyList()
+        val span = (turn.distAlongM - distanceAlongM).coerceAtLeast(0.0) + 55.0
+        return upcomingRoute(metersAhead = span, stepM = (span / maxPoints).coerceAtLeast(2.0), maxPoints = maxPoints)
     }
 
     /** Whether the rider is currently outside the route corridor. */

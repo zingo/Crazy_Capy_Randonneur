@@ -10,8 +10,8 @@ import kotlin.math.roundToInt
 /** Builds spoken instructions. Pure Kotlin so it can be unit-tested headlessly. */
 object Phrases {
 
-    private const val METERS: String = "meters"
-    private const val KILOMETERS: String = "kilometers"
+    private const val METERS: String = "m"
+    private const val KILOMETERS: String = "km"
 
     fun maneuverWord(m: Maneuver): String = when (m) {
         Maneuver.STRAIGHT -> "continue straight"
@@ -24,23 +24,33 @@ object Phrases {
         Maneuver.U_TURN -> "make a U-turn"
     }
 
-    /** Human friendly distance: e.g. 2537 -> "2.5 kilometers". */
+    /** Human friendly distance: e.g. 2537 -> "2.5 km". */
     fun formatDistance(meters: Double): String {
         val m = meters.coerceAtLeast(0.0)
         return if (m < 1000) {
             val rounded = when {
+                m <= 0.0 -> 0
                 m < 90 -> 50
                 m < 200 -> 100
-                m < 500 -> ((m + 50) / 100).roundToInt() * 100
                 else -> ((m + 50) / 100).roundToInt() * 100
             }
             "$rounded $METERS"
         } else {
-            val km = m / 1000
-            val tenths = (km * 10).roundToInt()
-            if (tenths % 10 == 0) "${tenths / 10} $KILOMETERS"
-            else (tenths / 10.0).toString() + " " + KILOMETERS
+            formatKilometers(m / 1000) + " " + KILOMETERS
         }
+    }
+
+    /** Compact distance for tight UI/notification space: e.g. 2537 -> "2.5 km". */
+    fun formatShort(meters: Double): String {
+        val m = meters.coerceAtLeast(0.0)
+        return if (m < 1000) "${m.roundToInt()} $METERS"
+        else formatKilometers(m / 1000) + " " + KILOMETERS
+    }
+
+    /** Rounds kilometers to one decimal, dropping the fraction when whole. */
+    private fun formatKilometers(km: Double): String {
+        val tenths = (km * 10).roundToInt()
+        return if (tenths % 10 == 0) "${tenths / 10}" else (tenths / 10.0).toString()
     }
 
     fun turnApproachAt(m: Maneuver, meters: Double): String =

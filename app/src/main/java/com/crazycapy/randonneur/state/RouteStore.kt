@@ -27,6 +27,7 @@ data class LastRide(
     val reverse: Boolean,
     val alongM: Double,
     val elapsedSec: Long,
+    val mode: RideMode,
 )
 
 /**
@@ -129,6 +130,9 @@ object RouteStore {
         map["nextTurnPopup"]?.toBooleanStrictOrNull()?.let { RideStore.nextTurnPopupEnabled = it }
         map["notification"]?.toBooleanStrictOrNull()?.let { RideStore.notificationEnabled = it }
         map["duckMusic"]?.toBooleanStrictOrNull()?.let { RideStore.duckMusicEnabled = it }
+        map["beepVolume"]?.toIntOrNull()?.let { RideStore.beepVolume = it }
+        map["navVolume"]?.toIntOrNull()?.let { RideStore.navVolume = it }
+        map["beeps"]?.toBooleanStrictOrNull()?.let { RideStore.beepVolume = if (it) RideStore.beepVolume else 0 }
         map["darkMap"]?.toBooleanStrictOrNull()?.let { RideStore.darkMap = it }
         map["ghostTimeScale"]?.toDoubleOrNull()?.let { RideStore.ghostTimeScale = it }
         map["ghostSpeedKmh"]?.toDoubleOrNull()?.let { RideStore.ghostSpeedKmh = it }
@@ -139,6 +143,8 @@ object RouteStore {
             "nextTurnPopup=${RideStore.nextTurnPopupEnabled}",
             "notification=${RideStore.notificationEnabled}",
             "duckMusic=${RideStore.duckMusicEnabled}",
+            "beepVolume=${RideStore.beepVolume}",
+            "navVolume=${RideStore.navVolume}",
             "darkMap=${RideStore.darkMap}",
             "ghostTimeScale=${RideStore.ghostTimeScale}",
             "ghostSpeedKmh=${RideStore.ghostSpeedKmh}",
@@ -156,13 +162,26 @@ object RouteStore {
         val reverse = parts[1].toBooleanStrictOrNull() ?: false
         val along = parts[2].toDoubleOrNull() ?: return null
         val elapsed = parts[3].toLongOrNull() ?: 0L
-        LastRide(parts[0], reverse, along, elapsed)
+        val mode = if (parts.size >= 5) {
+            RideMode.entries.firstOrNull { it.name == parts[4] } ?: RideMode.GPS
+        } else {
+            RideMode.GPS
+        }
+        LastRide(parts[0], reverse, along, elapsed, mode)
     }.getOrNull()
 
-    fun saveLastRide(context: Context, routeName: String, reverse: Boolean, alongM: Double, elapsedSec: Long) {
+    fun saveLastRide(
+        context: Context,
+        routeName: String,
+        reverse: Boolean,
+        alongM: Double,
+        elapsedSec: Long,
+        mode: RideMode,
+    ) {
         runCatching {
             lastRideFile(context).writeText(
-                listOf(routeName, reverse.toString(), alongM.toString(), elapsedSec.toString()).joinToString("\t")
+                listOf(routeName, reverse.toString(), alongM.toString(), elapsedSec.toString(), mode.name)
+                    .joinToString("\t")
             )
         }
     }

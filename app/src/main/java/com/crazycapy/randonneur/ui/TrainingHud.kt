@@ -6,21 +6,16 @@ package com.crazycapy.randonneur.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,87 +27,93 @@ import com.crazycapy.randonneur.voice.Phrases
 import kotlin.math.roundToInt
 
 /**
- * Training-focused HUD shown while a ride is active: speed, heart rate,
- * distance covered/remaining, elapsed time and next POI. Only composed when the
- * screen is on and the app is in front.
+ * Top info box: a 2x2 grid of big, glanceable numbers (Speed | dist ridden over
+ * Avg | dist total) with the next-turn junction preview beside it whenever one
+ * is relevant. Kept on screen after a ride is stopped so the finished stats stay
+ * readable; hidden only on a fresh launch.
  */
 @Composable
-fun TrainingHud() {
-    val active by androidx.compose.runtime.rememberUpdatedState(RideStore.active)
-    if (!active) return
+fun TrainingHud(modifier: Modifier = Modifier) {
+    // Keep showing the box after the ride ends so the finished stats remain
+    // visible, and once a route is loaded (even before starting); suppress it
+    // on a fresh launch where there is nothing to show.
+    if (!RideStore.active && RideStore.track == null && RideStore.coveredM == 0.0 && RideStore.elapsedSec == 0L) return
 
     val speed = RideStore.speedKmh
     val avg = RideStore.avgSpeedKmh
-    val hr = RideStore.hr
     val covered = RideStore.coveredM
-    val remaining = RideStore.remainingM
-    val elapsed = RideStore.elapsedSec
-    val poiName = RideStore.nextPoiName
-    val poiM = RideStore.nextPoiM
+    val total = RideStore.totalM.takeIf { it > 0 } ?: RideStore.track?.lengthMeters ?: 0.0
+    val leftM = RideStore.remainingM ?: total
+    val previewM = RideStore.nextTurnM
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 36.dp)
+    val coveredFmt = Phrases.formatDistance(covered)
+    val leftFmt = Phrases.formatDistance(leftM)
+    val showPreview = RideStore.nextTurnPopupEnabled &&
+        RideStore.nextTurnPopupVisible &&
+        RideStore.upcomingRoute.isNotEmpty()
+
+    Row(
+        modifier
             .background(
                 if (RideStore.darkMap) Color(0xCC121212) else Color(0xE8FFFFFF),
-                RoundedCornerShape(18.dp),
+                RoundedCornerShape(24.dp),
             )
-            .padding(14.dp),
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BigMetric(
-                value = if (speed > 0) formatKmh(speed) else "--",
-                unit = "km/h",
-                label = "Speed",
-                valueColor = if (RideStore.darkMap) Color(0xFF7CC29A) else Color(0xFF2E5D46),
-                modifier = Modifier.weight(1f),
-            )
-            BigMetric(
-                value = if (avg > 0) formatKmh(avg) else "--",
-                unit = "km/h",
-                label = "Avg",
-                modifier = Modifier.weight(1f),
-            )
-            BigMetric(
-                value = hr?.toString() ?: "--",
-                unit = "bpm",
-                label = "Heart",
-                icon = if (hr != null) Icons.Filled.Favorite else null,
-                modifier = Modifier.weight(1f),
-            )
-        }
-
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            LineMetric("Ridden", if (covered > 0) Phrases.formatDistance(covered) else "0 meters")
-            LineMetric("To go", remaining?.let { Phrases.formatDistance(it) } ?: "--")
-            LineMetric("Time", formatTime(elapsed))
-        }
-
-        if (poiName != null && poiM != null) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp)
-                    .background(
-                        if (RideStore.darkMap) Color(0x1A7CC29A) else Color(0x2A2E5D46),
-                        RoundedCornerShape(10.dp),
-                    )
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+        // 2x2 stats grid: Speed | ridden over Avg | total.
+        Column(Modifier.width(IntrinsicSize.Min)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
+                Metric(
+                    value = if (speed > 0) formatKmh(speed) else "--",
+                    unit = "km/h",
+                    label = "Speed",
+                    valueColor = if (RideStore.darkMap) Color(0xFF7CC29A) else Color(0xFF2E5D46),
+                    modifier = Modifier.weight(1f),
+                )
+                Metric(
+                    value = coveredFmt.substringBefore(" "),
+                    unit = coveredFmt.substringAfter(" "),
+                    label = "ridden",
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Metric(
+                    value = if (avg > 0) formatKmh(avg) else "--",
+                    unit = "km/h",
+                    label = "Avg",
+                    modifier = Modifier.weight(1f),
+                )
+                Metric(
+                    value = leftFmt.substringBefore(" "),
+                    unit = leftFmt.substringAfter(" "),
+                    label = "left",
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        if (showPreview) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                TurnPreview(Modifier.size(84.dp))
                 Text(
-                    "Next: $poiName · ${Phrases.formatDistance(poiM)}",
-                    color = if (RideStore.darkMap) Color(0xFFBFE8CE) else Color(0xFF2E5D46),
+                    text = "${(previewM ?: 0.0).coerceAtLeast(0.0).roundToInt()} m",
+                    color = if (RideStore.darkMap) Color(0xFFE9E9E9) else Color(0xFF1A1A1A),
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                 )
             }
         }
@@ -120,73 +121,38 @@ fun TrainingHud() {
 }
 
 @Composable
-private fun BigMetric(
+private fun Metric(
     modifier: Modifier = Modifier,
     value: String,
     unit: String,
     label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     valueColor: Color = if (RideStore.darkMap) Color.White else Color(0xFF1A1A1A),
 ) {
     Column(
         modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (icon != null) {
-                Icon(
-                    icon,
-                    contentDescription = label,
-                    tint = Color(0xFFE53935),
-                    modifier = Modifier.size(14.dp),
-                )
-            }
-            Text(
-                value,
-                color = valueColor,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                unit,
-                modifier = Modifier.padding(start = 4.dp, top = 10.dp),
-                color = if (RideStore.darkMap) Color(0xFFBABABA) else Color(0xFF666666),
-                fontSize = 11.sp,
-            )
-        }
-        Text(
-            label,
-            color = if (RideStore.darkMap) Color(0xFFBABABA) else Color(0xFF666666),
-            fontSize = 11.sp,
-        )
-    }
-}
-
-@Composable
-private fun LineMetric(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             value,
-            color = if (RideStore.darkMap) Color(0xFFF1F1F1) else Color(0xFF1A1A1A),
-            fontSize = 14.sp,
+            color = valueColor,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
+        Text(
+            unit,
+            color = if (RideStore.darkMap) Color(0xFFBABABA) else Color(0xFF666666),
+            fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
         )
         Text(
             label,
             color = if (RideStore.darkMap) Color(0xFF9A9A9A) else Color(0xFF888888),
-            fontSize = 11.sp,
+            fontSize = 9.sp,
+            maxLines = 1,
         )
     }
 }
 
 private fun formatKmh(kmh: Double): String = ((kmh * 10).roundToInt() / 10.0).toString()
-
-private fun formatTime(sec: Long): String {
-    val h = sec / 3600
-    val m = (sec % 3600) / 60
-    val s = sec % 60
-    return when {
-        h > 0 -> "%d:%02d:%02d".format(h, m, s)
-        else -> "%02d:%02d".format(m, s)
-    }
-}

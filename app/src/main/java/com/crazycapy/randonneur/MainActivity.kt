@@ -75,10 +75,10 @@ import com.crazycapy.randonneur.service.NavigationService
 import com.crazycapy.randonneur.state.RideMode
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
-import com.crazycapy.randonneur.ui.NextTurnCard
 import com.crazycapy.randonneur.ui.OffRouteAck
 import com.crazycapy.randonneur.ui.TrainingHud
 import com.crazycapy.randonneur.voice.Phrases
+import kotlin.math.roundToInt
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -160,6 +160,7 @@ class MainActivity : ComponentActivity() {
         val last = RouteStore.loadLastRide(context) ?: return
         RideStore.resumeRouteName = last.routeName
         RideStore.resumeReversed = last.reverse
+        RideStore.resumeMode = last.mode
         RideStore.resumeAlongM = last.alongM
         RideStore.resumeElapsedSec = last.elapsedSec
     }
@@ -462,10 +463,16 @@ fun NavigationMapScreen(
                         ResumeBanner(
                             onResume = {
                                 RideStore.reverse = RideStore.resumeReversed
+                                val resumeMode = if (RideStore.resumeMode == RideMode.GHOST) RideMode.GHOST else RideMode.GPS
+                                if (resumeMode == RideMode.GHOST) RideStore.ghostTimeScale = 1.0
                                 if (hasLocation) {
-                                    NavigationService.startGhost(context)
+                                    if (resumeMode == RideMode.GHOST) {
+                                        NavigationService.startGhost(context)
+                                    } else {
+                                        NavigationService.startGps(context)
+                                    }
                                 } else {
-                                    pendingStart = RideMode.GHOST
+                                    pendingStart = resumeMode
                                     permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                                 }
                             },
@@ -483,18 +490,13 @@ fun NavigationMapScreen(
                         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
                     ) {
                         if (!RideStore.active) {
-                            OutlinedButton(onClick = onImportRequest, Modifier.weight(1f)) { Text("Import") }
                             OutlinedButton(onClick = { showRoutes = true }, Modifier.weight(1f)) { Text("Routes") }
-                            OutlinedButton(
-                                onClick = { pendingStart = RideMode.GPS },
-                                Modifier.weight(1f),
-                                enabled = track != null,
-                            ) { Text("Navigate") }
-                            Button(
-                                onClick = { pendingStart = RideMode.GHOST },
-                                Modifier.weight(1f),
-                                enabled = track != null,
-                            ) { Text("Ghost") }
+                            if (track != null) {
+                                OutlinedButton(
+                                    onClick = { pendingStart = RideMode.GPS },
+                                    Modifier.weight(1f),
+                                ) { Text("Navigate") }
+                            }
                         } else {
                             OutlinedButton(
                                 onClick = { NavigationService.toggleReverse(context) },
@@ -514,14 +516,11 @@ fun NavigationMapScreen(
     ) { insets ->
         Box(Modifier.fillMaxSize().padding(insets)) {
             AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
-            TrainingHud()
-            if (RideStore.active) {
-                NextTurnCard(
-                    Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(8.dp)
-                )
-            }
+            TrainingHud(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 8.dp)
+            )
             if (RideStore.active && RideStore.offRouteActive && !RideStore.offRouteAcknowledged) {
                 OffRouteAck(
                     Modifier
@@ -553,6 +552,8 @@ fun NavigationMapScreen(
             onDismiss = { showSettings = false },
             onShowLicenses = { showLicenses = true },
             onShowRoutes = { showRoutes = true },
+            onStartGhost = { pendingStart = RideMode.GHOST },
+            ghostAvailable = track != null,
             versionName = BuildConfig.VERSION_NAME,
             versionCode = BuildConfig.VERSION_CODE,
             buildType = BuildConfig.BUILD_TYPE,
@@ -579,6 +580,8 @@ fun NavigationMapScreen(
                 RideStore.resumeAlongM = null
                 RideStore.resumeElapsedSec = null
                 RideStore.resumeRouteName = null
+                // Ghost is a demo/test tool: always start it at real-time speed.
+                if (mode == RideMode.GHOST) RideStore.ghostTimeScale = 1.0
                 val start: () -> Unit = {
                     if (mode == RideMode.GHOST) NavigationService.startGhost(context)
                     else {
@@ -785,6 +788,8 @@ private fun SettingsDialog(
     onDismiss: () -> Unit,
     onShowLicenses: () -> Unit,
     onShowRoutes: () -> Unit,
+    onStartGhost: () -> Unit,
+    ghostAvailable: Boolean,
     versionName: String,
     versionCode: Int,
     buildType: String,
@@ -824,9 +829,44 @@ private fun SettingsDialog(
                     title = "Pause audio while speaking",
                     subtitle = "Other apps pause during guidance announcements",
                 )
+                SettingSlider(
+                    value = RideStore.beepVolume,
+                    onValueChange = {
+                        RideStore.beepVolume = it
+                        RouteStore.saveSettings(context)
+                    },
+                    title = "Turn beeps",
+                    subtitle = "Left vs right beeps that shorten as the turn nears",
+                )
+                SettingSlider(
+                    value = RideStore.navVolume,
+                    onValueChange = {
+                        RideStore.navVolume = it
+                        RouteStore.saveSettings(context)
+                    },
+                    title = "Navigation voice",
+                    subtitle = "Spoken turn guidance",
+                )
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Saved routes", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = { onShowRoutes(); onDismiss() }) { Text("Manage") }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text("Demo", style = MaterialTheme.typography.titleSmall)
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Ghost ride", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (ghostAvailable) "Simulated ride on the loaded route (real time)"
+                            else "Load a route first",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    TextButton(
+                        enabled = ghostAvailable,
+                        onClick = { onStartGhost(); onDismiss() },
+                    ) { Text("Start") }
                 }
                 Spacer(Modifier.height(12.dp))
                 Text("About", style = MaterialTheme.typography.titleSmall)
@@ -868,6 +908,34 @@ private fun SettingSwitch(
             Text(subtitle, style = MaterialTheme.typography.bodySmall)
         }
         androidx.compose.material3.Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/** Volume slider where 0 is "off" and 100 is full device volume. */
+@Composable
+private fun SettingSlider(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    title: String,
+    subtitle: String,
+) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyMedium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall)
+            }
+            Text(
+                if (value <= 0) "Off" else "$value%",
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+        androidx.compose.material3.Slider(
+            value = value.toFloat(),
+            onValueChange = { onValueChange(it.roundToInt()) },
+            valueRange = 0f..100f,
+            steps = 19,
+        )
     }
 }
 

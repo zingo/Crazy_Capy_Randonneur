@@ -8,6 +8,7 @@ import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.gpx.TrackPoint
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -111,6 +112,26 @@ class NavEngineTest {
             prev = engine.distanceAlongM
         }
         assertTrue(engine.remainingM >= 0.0)
+    }
+
+    @Test
+    fun turnNowFiresCloseToTheTurn() {
+        // Ride at 36 km/h (10 m/s): the final "turn now" should come ~3 s ahead,
+        // i.e. within ~30 m, not the old fixed 60 m window.
+        var nowAtDist: Double? = null
+        engine = NavEngine(track)
+        engine.addListener { e ->
+            if (e is NavEvent.TurnNow) nowAtDist = engine.distanceToNextTurn
+        }
+        var d = 0.0
+        while (d <= track.lengthMeters) {
+            val p = track.pointAtDistance(d)
+            engine.update(p.lat, p.lon, speedKmh = 36.0)
+            d += 5.0
+        }
+        assertNotNull("expected a TurnNow event", nowAtDist)
+        assertTrue("TurnNow fired too early: ${nowAtDist} m ahead", nowAtDist!! <= 40.0)
+        assertTrue(nowAtDist!! >= 0.0)
     }
 
     @Test

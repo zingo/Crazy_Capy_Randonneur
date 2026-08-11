@@ -18,6 +18,7 @@ import android.location.LocationManager
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -42,7 +43,11 @@ import com.crazycapy.randonneur.sim.RouteSimulator
 import com.crazycapy.randonneur.state.RideMode
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
+import com.crazycapy.randonneur.voice.BeepPlanner
+import com.crazycapy.randonneur.voice.BeepSignal
+import com.crazycapy.randonneur.voice.BeepTone
 import com.crazycapy.randonneur.voice.Phrases
+import com.crazycapy.randonneur.voice.TurnSummary
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -79,12 +84,16 @@ class NavigationService : Service() {
     private var sim: RouteSimulator? = null
     private var tickCounter = 0
 
+    // Turn beeps (left/right cue that shortens as the turn nears).
+    private var tone: ToneGenerator? = null
+    private var beeping = false
+    private var lastBeepAtMs = 0L
+
+    /** True while a real turn is being approached; drives beeps independently of the popup UI. */
+    private var turnActive = false
+
     // Last notification text built, to skip rendering duplicates (battery).
     private var lastNotificationText: String? = null
-
-    // Last popup-preview refresh, to avoid recomputing the route preview on every fix.
-    private var lastPreviewMs = 0L
-    private var lastPreviewDist = -1.0
 
     // GPS speed estimation state
     private var lastFixAtMs: Long? = null
@@ -176,6 +185,7 @@ class NavigationService : Service() {
         RideStore.nextTurnAfterDegrees = null
         RideStore.nextTurnAfterM = null
         RideStore.upcomingRoute = emptyList()
+        RideStore.nextTurnPopupVisible = false
 
         startForeground(NOTIF_ID, buildNotification("Preparing ${track.name}…"))
 
@@ -397,7 +407,7 @@ class NavigationService : Service() {
                 sim?.timeScale = RideStore.ghostTimeScale
                 sim?.speedKmh = RideStore.ghostSpeedKmh
                 if (RideStore.notificationEnabled) {
-                    val s = navSummary()
+                    val s = notifSummary()
                     // Skip redundant renders while the summary is unchanged (e.g.
                     // stopped at a light) — saves notification-system battery.
                     if (s != lastNotificationText) {
@@ -424,25 +434,43 @@ class NavigationService : Service() {
                 RideStore.remainingM = event.distanceByRouteM
                 val t = event.nextTurn
                 RideStore.nextTurnDegrees = t?.degrees
-                RideStore.nextTurnM = event.distanceToNextTurnM
-                // Recompute the popup preview at most every ~200 ms, or whenever
-                // the next turn moved by >25 m, so ghost rides (many fixes/sec)
-                // don't churn garbage and redraw the preview on every fix.
                 val dist = event.distanceToNextTurnM
-                val now = SystemClock.elapsedRealtime()
-                if (dist == null || now - lastPreviewMs >= 200 || kotlin.math.abs(dist - lastPreviewDist) >= 25.0) {
-                    lastPreviewMs = now
-                    lastPreviewDist = dist ?: -1.0
+                RideStore.nextTurnM = dist
+                // Keep the "then …" (next-next turn) heads-up current, so the
+                // notification and popup stay correct even after a mid-route resume.
+                val nextNext = engine?.peekNextNextTurn()
+                val nextDist = t?.distAlongM
+                RideStore.nextTurnAfterDegrees = nextNext?.degrees
+                RideStore.nextTurnAfterM = if (nextDist != null && nextNext != null) {
+                    nextNext.distAlongM - nextDist
+                } else {
+                    null
+                }
+                // Popup stays up while a turn is near (it was raised by a turn notice);
+                // resumes mid-route raise it here as a fallback since voice notices
+                // for that turn already fired.
+                val popupWasVisible = RideStore.nextTurnPopupVisible
+                if (!popupWasVisible && dist != null && dist <= (engine?.nearWindowM ?: 200.0)) {
+                    RideStore.nextTurnPopupVisible = true
+                }
+                // Generate the junction preview once, when the popup is first raised,
+                // and keep it static while approaching so the card doesn't redraw or
+                // rotate on every fix; only the distance countdown keeps updating.
+                if (!popupWasVisible && RideStore.nextTurnPopupVisible) {
                     val nav = engine
                     if (nav != null) {
-                        RideStore.upcomingRoute = nav.upcomingRoute().map { it.lat to it.lon }
+                        RideStore.upcomingRoute = nav.turnPreview().map { it.lat to it.lon }
                     }
                 }
             }
             is NavEvent.TurnApproachAt -> {
                 RideStore.nextTurnDegrees = event.turn.degrees
                 RideStore.nextTurnM = event.distanceM
+                RideStore.nextTurnPopupVisible = true
                 speak(Phrases.turnApproachAt(maneuverFor(event.turn.degrees), event.distanceM))
+                turnActive = true
+                startBeeps()
+                updateNotification(notifSummary())
             }
             is NavEvent.TurnNear -> {
                 val next = event.nextTurnAfter?.let { maneuverFor(it.degrees) }
@@ -450,25 +478,43 @@ class NavigationService : Service() {
                 RideStore.nextTurnM = event.distanceM
                 RideStore.nextTurnAfterDegrees = event.nextTurnAfter?.degrees
                 RideStore.nextTurnAfterM = event.metersToNextAfter
+                RideStore.nextTurnPopupVisible = true
                 speak(Phrases.turnNear(
                     maneuverFor(event.turn.degrees),
                     event.distanceM,
                     next,
                     event.metersToNextAfter,
                 ))
+                turnActive = true
+                startBeeps()
+                updateNotification(notifSummary())
             }
             is NavEvent.TurnNow -> {
                 RideStore.nextTurnDegrees = event.turn.degrees
                 RideStore.nextTurnM = 0.0
+                RideStore.nextTurnPopupVisible = true
                 speak(Phrases.turnNow(maneuverFor(event.turn.degrees)))
+                turnActive = true
+                startBeeps()
+                updateNotification(notifSummary())
             }
-            is NavEvent.TurnPassed -> Unit
+            is NavEvent.TurnPassed -> {
+                RideStore.nextTurnDegrees = null
+                RideStore.nextTurnM = null
+                RideStore.nextTurnAfterDegrees = null
+                RideStore.nextTurnAfterM = null
+                RideStore.nextTurnPopupVisible = false
+                turnActive = false
+                stopBeeps()
+                updateNotification(notifSummary())
+            }
             is NavEvent.GoStraight -> speak(Phrases.goOn(event.distanceToTurnM))
             is NavEvent.OffRoute -> {
                 RideStore.offRouteActive = true
                 RideStore.offRouteM = event.distanceM
                 RideStore.offRouteAcknowledged = false
                 speak(Phrases.offRoute(event.distanceM))
+                updateNotification(notifSummary())
             }
             is NavEvent.OffRouteStill -> {
                 if (RideStore.offRouteAcknowledged) return
@@ -480,10 +526,14 @@ class NavigationService : Service() {
                 RideStore.offRouteM = 0.0
                 RideStore.offRouteAcknowledged = false
                 speak(Phrases.backOnRoute())
+                updateNotification(notifSummary())
             }
             is NavEvent.Arrived -> {
                 arrived.set(true)
+                turnActive = false
+                stopBeeps()
                 speak(Phrases.arrived())
+                updateNotification(notifSummary())
                 mainHandler.postDelayed({
                     if (running.get()) stopRide("Route finished. Nice ride!")
                 }, 3000)
@@ -506,6 +556,87 @@ class NavigationService : Service() {
         val deg = RideStore.nextTurnDegrees ?: return ""
         val m = RideStore.nextTurnM ?: return ""
         return " · ${Phrases.maneuverWord(maneuverFor(deg))} in ${Phrases.formatDistance(m.coerceAtLeast(0.0))}"
+    }
+
+    /** Compact next + next-next turn guidance for the lock-screen notification. */
+    private fun notifSummary(): String {
+        if (RideStore.offRouteActive) {
+            return "Off route · ${Phrases.formatDistance(RideStore.offRouteM)}"
+        }
+        val (title, text) = TurnSummary.lines(
+            nextDegrees = RideStore.nextTurnDegrees,
+            nextM = RideStore.nextTurnM,
+            nextNextDegrees = RideStore.nextTurnAfterDegrees,
+            nextNextM = RideStore.nextTurnAfterM,
+            remainingM = RideStore.remainingM,
+            speedKmh = RideStore.speedKmh,
+        )
+        return if (text.isEmpty()) title else "$title\n$text"
+    }
+
+    // ---- Turn beeps ----
+
+    /** The frequency of a left (low) vs right (high) cue burst. */
+    private val beepToneType: (BeepTone) -> Int = { t ->
+        when (t) {
+            BeepTone.LEFT_LOW -> ToneGenerator.TONE_DTMF_1
+            BeepTone.RIGHT_HIGH -> ToneGenerator.TONE_DTMF_9
+        }
+    }
+
+    private fun startBeeps() {
+        val volume = RideStore.beepVolume
+        if (volume <= 0 || beeping || !turnActive) return
+        // Recreate the tone generator so a volume change mid-ride takes effect.
+        tone?.release()
+        tone = runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, volume) }.getOrNull()
+        beeping = tone != null
+        lastBeepAtMs = 0L
+        if (beeping) mainHandler.post(beepRunnable)
+    }
+
+    private fun stopBeeps() {
+        beeping = false
+        mainHandler.removeCallbacks(beepRunnable)
+    }
+
+    private val beepRunnable = object : Runnable {
+        override fun run() {
+            if (!running.get() || !beeping || !turnActive) {
+                beeping = false
+                return
+            }
+            val deg = RideStore.nextTurnDegrees
+            val dist = RideStore.nextTurnM
+            if (deg == null || dist == null || dist > BeepPlanner.WINDOW_M) {
+                // Turn still far or gone; re-check shortly.
+                mainHandler.postDelayed(this, 200)
+                return
+            }
+            val signal = BeepPlanner.signal(deg, dist)
+            if (signal != null) {
+                val now = SystemClock.elapsedRealtime()
+                if (lastBeepAtMs == 0L || now - lastBeepAtMs >= signal.intervalMs) {
+                    lastBeepAtMs = now
+                    playBeep(signal)
+                }
+            }
+            mainHandler.postDelayed(this, 120)
+        }
+    }
+
+    /** Play one beep event: single burst for right, a low double burst for left. */
+    private fun playBeep(signal: BeepSignal) {
+        val tg = tone ?: return
+        val type = beepToneType(signal.tone)
+        tg.startTone(type, signal.burstMs)
+        if (signal.repeat >= 2) {
+            mainHandler.postDelayed({
+                // Ignore the second burst if the ride stopped or the generator
+                // was recreated (released) since — startTone would throw.
+                if (running.get() && tone === tg) tg.startTone(type, signal.burstMs)
+            }, signal.gapMs.toLong())
+        }
     }
 
     private fun speechAudioAttributes(): AudioAttributes =
@@ -541,21 +672,27 @@ class NavigationService : Service() {
     }
 
     private fun speak(text: String) {
+        val volume = RideStore.navVolume
+        if (volume <= 0) return
         val t = tts
         if (t != null && ttsReady) {
             if (RideStore.duckMusicEnabled) acquireTransientFocus()
-            t.speak(text, TextToSpeech.QUEUE_FLUSH, null, "crazycapy-nav")
+            val params = Bundle().apply {
+                putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume / 100f)
+            }
+            t.speak(text, TextToSpeech.QUEUE_FLUSH, params, "crazycapy-nav")
         }
     }
 
     private fun saveLastRideState() {
         val nav = engine ?: return
         val t = RideStore.track ?: return
-        RouteStore.saveLastRide(this, t.name, RideStore.reverse, nav.distanceAlongM, RideStore.elapsedSec)
+        RouteStore.saveLastRide(this, t.name, RideStore.reverse, nav.distanceAlongM, RideStore.elapsedSec, RideStore.mode)
         // Mirror into the store so the resume banner shows without a restart.
         RideStore.resumeAlongM = nav.distanceAlongM
         RideStore.resumeElapsedSec = RideStore.elapsedSec
         RideStore.resumeReversed = RideStore.reverse
+        RideStore.resumeMode = RideStore.mode
         RideStore.resumeRouteName = t.name
     }
 
@@ -568,9 +705,14 @@ class NavigationService : Service() {
             RideStore.resumeElapsedSec = null
             RideStore.resumeRouteName = null
             RideStore.resumeReversed = false
+            RideStore.resumeMode = RideMode.GPS
         }
         running.set(false)
         stopTicker()
+        turnActive = false
+        stopBeeps()
+        tone?.release()
+        tone = null
         locationManager?.removeUpdates(locationListener)
         driverThread?.interrupt()
         driverThread = null
@@ -582,6 +724,7 @@ class NavigationService : Service() {
         RideStore.lat = null
         RideStore.lon = null
         RideStore.bearing = null
+        RideStore.speedKmh = 0.0
         RideStore.remainingM = null
         RideStore.nextPoiName = null
         RideStore.nextPoiM = null
@@ -594,6 +737,7 @@ class NavigationService : Service() {
         RideStore.nextTurnAfterDegrees = null
         RideStore.nextTurnAfterM = null
         RideStore.upcomingRoute = emptyList()
+        RideStore.nextTurnPopupVisible = false
         lastNotificationText = null
         updateNotification(message)
         // Guard the late foreground-stop so a ride restarted within this window
@@ -628,6 +772,10 @@ class NavigationService : Service() {
     override fun onDestroy() {
         running.set(false)
         stopTicker()
+        turnActive = false
+        stopBeeps()
+        tone?.release()
+        tone = null
         locationManager?.removeUpdates(locationListener)
         driverThread?.interrupt()
         releaseWakeLock()
@@ -647,14 +795,28 @@ class NavigationService : Service() {
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
     }
 
-    private fun buildNotification(text: String): Notification =
-        NotificationCompat.Builder(this, CHANNEL_ID)
+    private fun buildNotification(text: String): Notification {
+        val title: String
+        val body: String
+        val nl = text.indexOf('\n')
+        if (nl >= 0) {
+            title = text.substring(0, nl)
+            body = text.substring(nl + 1)
+        } else {
+            title = text
+            body = ""
+        }
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_nav_notification)
-            .setContentTitle(getString(R.string.app_name))
-            .setContentText(text)
+            .setContentTitle(title)
+            .setContentText(body.ifEmpty { null })
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
+    }
 
     private fun updateNotification(text: String) {
         try {

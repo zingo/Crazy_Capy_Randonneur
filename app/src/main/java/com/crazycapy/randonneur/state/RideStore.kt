@@ -48,6 +48,9 @@ object RideStore {
     /** Reverse flag of the last ride, for the resume prompt. */
     var resumeReversed: Boolean by mutableStateOf(false)
 
+    /** Mode (GPS or ghost) of the last ride, so resume starts the same way. */
+    var resumeMode: RideMode by mutableStateOf(RideMode.GPS)
+
     /** Name of the route the last ride used. */
     var resumeRouteName: String? by mutableStateOf(null)
 
@@ -62,6 +65,12 @@ object RideStore {
     /** Request audio focus so other apps pause while guidance speaks. */
     var duckMusicEnabled: Boolean by mutableStateOf(true)
 
+    /** Turn-beep loudness (0 = off). 0-100 scale. */
+    var beepVolume: Int by mutableStateOf(32)
+
+    /** Spoken-guidance loudness (0 = off). 0-100 scale. */
+    var navVolume: Int by mutableStateOf(80)
+
     // ---- Live off-route state ----
 
     var offRouteActive: Boolean by mutableStateOf(false)
@@ -71,6 +80,8 @@ object RideStore {
     var offRouteAcknowledged: Boolean by mutableStateOf(false)
 
     // ---- Next-turn corner popup cache (updated by the service per fix) ----
+
+    var nextTurnPopupVisible: Boolean by mutableStateOf(false)
 
     var nextTurnDegrees: Double? by mutableStateOf(null)
     var nextTurnM: Double? by mutableStateOf(null)
@@ -146,5 +157,6 @@ object RideStore {
         nextTurnAfterDegrees = null
         nextTurnAfterM = null
         upcomingRoute = emptyList()
+        nextTurnPopupVisible = false
     }
 }
