@@ -2,6 +2,14 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * GpxWriter — Track -> GPX 1.1 XML serialization
+ *
+ *   Track + waypoints -> Writer -> GPX XML (trkseg + wpt elements)
+ *
+ * Used by RouteStore to persist tracks to the on-device route library.
+ * Round-trips through GpxParser without data loss.
+ */
 package com.crazycapy.randonneur.gpx
 
 import java.io.Writer

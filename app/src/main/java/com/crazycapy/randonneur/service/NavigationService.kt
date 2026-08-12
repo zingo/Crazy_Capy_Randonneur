@@ -2,6 +2,26 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * NavigationService — foreground service lifecycle
+ *
+ *   onCreate()
+ *       |
+ *       v
+ *   startRide(track) ---> acquire wake lock
+ *       |                     |
+ *       v                     v
+ *   ticker loop ----------> GPS / ghost-ride driver
+ *       |                     |
+ *       v                     v
+ *   turn events ----------> NavEngine.onGpsFix()
+ *       |                     |
+ *       v                     v
+ *   TTS / beeps ----------> RideStore update
+ *       |
+ *       v
+ *   stopRide() ---> release wake lock ---> onDestroy()
+ */
 package com.crazycapy.randonneur.service
 
 import android.Manifest

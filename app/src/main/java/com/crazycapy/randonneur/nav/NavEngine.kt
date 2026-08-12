@@ -2,11 +2,36 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * NavEngine — track-following state-machine navigation lifecycle
+ *
+ *   ┌──────┐   loadTrack    ┌───────────┐   turn     ┌──────────────┐
+ *   │ IDLE │ ─────────────> │ GPS/GHOST │ ────────>  │ TurnApproach │
+ *   └──────┘ <───────────── └───────────┘ <───────── └──────────────┘
+ *      ^         arrived          |      turn passed     |
+ *      |                          v                      v
+ *      └───────────────────── ARRIVED ◄──── TurnPassed ◄─┘
+ *
+ *  ┌─ OffRoute ─────────────────────────────────────┐
+ *  │  last fix was off the polyline                  │
+ *  │  → emits OffRoute( distance )                   │
+ *  │  → periodic OffRouteStill while still off       │
+ *  │  → BackOnRoute when rider returns to polyline   │
+ *  └──────────────────────────────────────────────────┘
+ *
+ * Pure Kotlin, no Android deps, fully unit-testable.
+ */
 package com.crazycapy.randonneur.nav
 
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.gpx.TrackPoint
 import kotlin.math.cos
+
+private const val KMH_TO_MS = 3.6
+private const val TURN_PASSED_BUFFER_M = 10.0
+private const val LOOKAHEAD_BUFFER_M = 5.0
+private const val SNAP_WINDOW_SEGMENTS = 120
+private const val TURN_PREVIEW_AFTER_M = 55.0
 
 /** Track-following navigation engine. Pure Kotlin (no Android deps). */
 class NavEngine(initialTrack: Track? = null) {
@@ -31,12 +56,12 @@ class NavEngine(initialTrack: Track? = null) {
     private var segmentIndex = 0
     private var turnCursor = 0
     private var nextTurnPos = -1
-    private val announcedLeads = HashMap<Int, MutableSet<Int>>()
-    private var nearAnnounced = HashSet<Int>()
-    private var nowAnnounced = HashSet<Int>()
+    private val announcedLeadSecondsByTurn = HashMap<Int, MutableSet<Int>>()
+    private var nearAnnouncedTurns = HashSet<Int>()
+    private var nowAnnouncedTurns = HashSet<Int>()
     private var arrived = false
-    private var wasOffRoute = false
-    private var offRouteFixCount = 0
+    private var offRoute = false
+    private var offRouteUpdateCount = 0
     private var lastGoStraightAtM = 0.0
 
     /** Distance beyond which we consider ourselves off the route. */
@@ -46,13 +71,13 @@ class NavEngine(initialTrack: Track? = null) {
     var offRouteRepeatEveryFixes = 8
 
     /** Time-based advance notices (seconds before the turn), speed dependent. */
-    var approachLeadsS = listOf(50, 20)
+    var approachLeadSeconds = listOf(50, 20)
 
     /** Meters before a turn that trigger the near-turn notice (with distance to the next). */
     var nearWindowM = 200.0
 
     /** Seconds before a turn (at current speed) that trigger the final "turn now". */
-    var nowLeadS = 3.0
+    var nowAdvanceSeconds = 3.0
 
     /** Lower bound for the "turn now" window so slow riding still warns before the turn. */
     var nowWindowMinM = 15.0
@@ -95,13 +120,13 @@ class NavEngine(initialTrack: Track? = null) {
         this.turnCursor = 0
         this.nextTurnPos = -1
         this.distanceAlongM = 0.0
-        this.announcedLeads.clear()
-        this.nearAnnounced.clear()
-        this.nowAnnounced.clear()
+        this.announcedLeadSecondsByTurn.clear()
+        this.nearAnnouncedTurns.clear()
+        this.nowAnnouncedTurns.clear()
         this.lastGoStraightAtM = -goStraightEveryM
         this.arrived = false
-        this.wasOffRoute = false
-        this.offRouteFixCount = 0
+        this.offRoute = false
+        this.offRouteUpdateCount = 0
     }
 
     fun addListener(listener: (NavEvent) -> Unit) {
@@ -117,29 +142,29 @@ class NavEngine(initialTrack: Track? = null) {
         val offTrack = snap.distM > offRouteThresholdM
 
         if (offTrack) {
-            if (!wasOffRoute) {
-                wasOffRoute = true
-                offRouteFixCount = 0
+            if (!offRoute) {
+                offRoute = true
+                offRouteUpdateCount = 0
                 listeners.forEach { it(NavEvent.OffRoute(lat, lon, snap.nearest, snap.distM)) }
             } else {
-                offRouteFixCount++
-                if (offRouteFixCount >= offRouteRepeatEveryFixes) {
-                    offRouteFixCount = 0
+                offRouteUpdateCount++
+                if (offRouteUpdateCount >= offRouteRepeatEveryFixes) {
+                    offRouteUpdateCount = 0
                     listeners.forEach { it(NavEvent.OffRouteStill(lat, lon, snap.nearest, snap.distM)) }
                 }
             }
             return
         }
 
-        if (wasOffRoute) {
-            wasOffRoute = false
-            offRouteFixCount = 0
+        if (offRoute) {
+            offRoute = false
+            offRouteUpdateCount = 0
             listeners.forEach { it(NavEvent.BackOnRoute(lat, lon)) }
         }
 
         if (snap.alongM > distanceAlongM) distanceAlongM = snap.alongM
 
-        if (!arrived && distanceAlongM >= track.lengthMeters - 10.0) {
+        if (!arrived && distanceAlongM >= track.lengthMeters - TURN_PASSED_BUFFER_M) {
             arrived = true
             listeners.forEach { it(NavEvent.Arrived(lat, lon)) }
         }
@@ -151,10 +176,10 @@ class NavEngine(initialTrack: Track? = null) {
             // Time-based advance notices: when within N seconds (at current speed)
             // of the turn, announce the approach. Speed gates the distance.
             if (speedKmh > 0.0) {
-                val announced = announcedLeads.getOrPut(next.index) { HashSet() }
-                for (leadS in approachLeadsS) {
+                val announced = announcedLeadSecondsByTurn.getOrPut(next.index) { HashSet() }
+                for (leadS in approachLeadSeconds) {
                     if (announced.contains(leadS)) continue
-                    val leadM = speedKmh * leadS / 3.6
+                    val leadM = speedKmh * leadS / KMH_TO_MS
                     if (dist > nowWindowM && dist <= leadM + 1.0) {
                         announced.add(leadS)
                         listeners.forEach { it(NavEvent.TurnApproachAt(next, leadS, dist.coerceAtLeast(0.0))) }
@@ -163,7 +188,7 @@ class NavEngine(initialTrack: Track? = null) {
             }
 
             // Near-turn notice: within a fixed window, plus the gap to the next turn.
-            if (dist <= nearWindowM && nearAnnounced.add(next.index)) {
+            if (dist <= nearWindowM && nearAnnouncedTurns.add(next.index)) {
                 val after = peekTurnAfter(next.position)
                 val gap = after?.let { it.distAlongM - next.distAlongM }
                 listeners.forEach { it(NavEvent.TurnNear(next, dist.coerceAtLeast(0.0), after, gap)) }
@@ -173,11 +198,11 @@ class NavEngine(initialTrack: Track? = null) {
             // current speed), not a fixed distance, so it never fires across a
             // previous turn on routes with tight consecutive turns.
             val nowWin = if (speedKmh > 0.0) {
-                (speedKmh * nowLeadS / 3.6).coerceIn(nowWindowMinM, nowWindowM)
+                (speedKmh * nowAdvanceSeconds / KMH_TO_MS).coerceIn(nowWindowMinM, nowWindowM)
             } else {
                 nowWindowM
             }
-            if (dist <= nowWin && nowAnnounced.add(next.index)) {
+            if (dist <= nowWin && nowAnnouncedTurns.add(next.index)) {
                 listeners.forEach { it(NavEvent.TurnNow(next)) }
             }
 
@@ -193,7 +218,7 @@ class NavEngine(initialTrack: Track? = null) {
 
         // Fire TurnPassed for any turn we've now left behind, even if it wasn't
         // picked up by peekNextTurn above.
-        while (turnCursor < turns.size && distanceAlongM - turns[turnCursor].distAlongM >= 10.0) {
+        while (turnCursor < turns.size && distanceAlongM - turns[turnCursor].distAlongM >= TURN_PASSED_BUFFER_M) {
             val passed = turns[turnCursor]
             turnCursor++
             listeners.forEach { it(NavEvent.TurnPassed(passed)) }
@@ -223,27 +248,27 @@ class NavEngine(initialTrack: Track? = null) {
         var i = 0
         while (i < t.points.size - 1 && t.distanceAt(i + 1) < d) i++
         segmentIndex = i
-        val firstAhead = turns.indexOfFirst { it.distAlongM > d + 5.0 }
+        val firstAhead = turns.indexOfFirst { it.distAlongM > d + LOOKAHEAD_BUFFER_M }
         turnCursor = if (firstAhead < 0) turns.size else firstAhead
         for (j in turnCursor - 1 downTo 0) {
             val tr = turns[j]
-            nearAnnounced.add(tr.index)
-            nowAnnounced.add(tr.index)
-            announcedLeads[tr.index] = HashSet(approachLeadsS)
+            nearAnnouncedTurns.add(tr.index)
+            nowAnnouncedTurns.add(tr.index)
+            announcedLeadSecondsByTurn[tr.index] = HashSet(approachLeadSeconds)
         }
         // Baseline the go-straight cadence so no boilerplate fires right after
         // the resume; the next "go on for x.x km" comes a full window later.
         lastGoStraightAtM = d
         arrived = false
-        wasOffRoute = false
-        offRouteFixCount = 0
+        offRoute = false
+        offRouteUpdateCount = 0
     }
 
     fun peekNextTurn(): Turn? {
         val t = activeTrack ?: return null
         for (i in turnCursor until turns.size) {
             val tr = turns[i]
-            if (tr.distAlongM > distanceAlongM + 5.0) {
+            if (tr.distAlongM > distanceAlongM + LOOKAHEAD_BUFFER_M) {
                 nextTurnPos = i
                 return tr
             }
@@ -288,19 +313,19 @@ class NavEngine(initialTrack: Track? = null) {
      *  the junction stays in view at any approach distance (zooms in as you get close). */
     fun turnPreview(maxPoints: Int = 22): List<TrackPoint> {
         val turn = peekNextTurn() ?: return emptyList()
-        val span = (turn.distAlongM - distanceAlongM).coerceAtLeast(0.0) + 55.0
+        val span = (turn.distAlongM - distanceAlongM).coerceAtLeast(0.0) + TURN_PREVIEW_AFTER_M
         return upcomingRoute(metersAhead = span, stepM = (span / maxPoints).coerceAtLeast(2.0), maxPoints = maxPoints)
     }
 
     /** Whether the rider is currently outside the route corridor. */
     val isOffRoute: Boolean
-        get() = wasOffRoute
+        get() = offRoute
 
     private class SnapResult(val seg: Int, val alongM: Double, val distM: Double, val nearest: Pair<Double, Double>)
 
     private fun snapToRoute(track: Track, lat: Double, lon: Double): SnapResult {
         val n = track.points.size
-        val window = 120
+        val window = SNAP_WINDOW_SEGMENTS
         var lo = (segmentIndex - window).coerceAtLeast(0)
         var hi = (segmentIndex + window + 1).coerceAtMost(n - 1)
         if (distanceAlongM == 0.0) {

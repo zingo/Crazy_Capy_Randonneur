@@ -2,6 +2,17 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * RouteStore — on-device route library + settings + last-ride persistence
+ *
+ *   saveTrack(track)  -> GPX file in app-private dir
+ *   listSaved()       -> GPX filenames with metadata
+ *   loadTrack(uri)    -> Track object
+ *   Settings: beepVolume / navVolume / lastRideState -> JSON preferences
+ *
+ * Last-ride resume: saves the active track URI + progress so the next
+ * cold start can offer "Continue last ride".
+ */
 package com.crazycapy.randonneur.state
 
 import android.content.Context
@@ -36,6 +47,9 @@ data class LastRide(
  * indexes) so no Room/DataStore dependency is needed. All IO is best-effort.
  */
 object RouteStore {
+
+    // 10-meter minimum; shorter = at the start, not worth resuming
+    private const val LAST_RIDE_MIN_RESUME_M = 10.0
 
     var routes: List<SavedRoute> by mutableStateOf(emptyList())
 
@@ -80,6 +94,10 @@ object RouteStore {
 
     /** Store a route (by name, deduped) and return its [SavedRoute]. */
     fun saveTrack(context: Context, track: Track): SavedRoute {
+        if (track.lengthMeters < LAST_RIDE_MIN_RESUME_M) {
+            return routes.firstOrNull { it.id == routeId(track.name) }
+                ?: SavedRoute(routeId(track.name), track.name, System.currentTimeMillis(), track.lengthMeters)
+        }
         val existing = routes.firstOrNull { it.id == routeId(track.name) }
         val sr = existing ?: SavedRoute(
             id = routeId(track.name),

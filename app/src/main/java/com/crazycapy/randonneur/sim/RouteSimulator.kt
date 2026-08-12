@@ -2,6 +2,15 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * RouteSimulator — ghost-ride driver for the emulator
+ *
+ *   Loads a Track -> walks its points faster than real time ->
+ *   emits synthetic Location fixes at configurable speed multiplier
+ *
+ * Used in both unit tests (headless) and the instrumented ghost-ride
+ * test suite that validates the full NavigationService pipeline.
+ */
 package com.crazycapy.randonneur.sim
 
 import com.crazycapy.randonneur.gpx.Track

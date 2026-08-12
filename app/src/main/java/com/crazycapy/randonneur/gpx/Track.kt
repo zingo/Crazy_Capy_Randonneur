@@ -2,6 +2,15 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * Track — route model for navigation
+ *
+ *   Ordered list of TrackPoint  +  cumulativeMetersulative distance array
+ *   pointAtDistance(m)          +  reverse()  +  waypoints
+ *
+ * The core data structure that both NavEngine and the GPX loader/writer
+ * operate on. Distances are pre-computed on construction for fast lookup.
+ */
 package com.crazycapy.randonneur.gpx
 
 import com.crazycapy.randonneur.nav.Geo
@@ -19,7 +28,7 @@ class Track(
         require(points.size >= 2) { "Track needs at least two points" }
     }
 
-    private val cum: DoubleArray by lazy {
+    private val cumulativeMeters: DoubleArray by lazy {
         DoubleArray(points.size).also { arr ->
             for (i in 1 until points.size) {
                 val a = points[i - 1]
@@ -30,10 +39,10 @@ class Track(
     }
 
     /** Cumulative arc distance along the track, in meters. */
-    fun distanceAt(index: Int): Double = cum[index]
+    fun distanceAt(index: Int): Double = cumulativeMeters[index]
 
     /** Total length in meters. */
-    val lengthMeters: Double get() = cum[points.size - 1]
+    val lengthMeters: Double get() = cumulativeMeters[points.size - 1]
 
     /** Endpoint of segment [index]->[index+1]. */
     fun segmentEnd(index: Int): TrackPoint = points[index + 1]
@@ -46,10 +55,10 @@ class Track(
         var hi = points.size - 1
         while (lo < hi - 1) {
             val mid = (lo + hi) / 2
-            if (cum[mid] <= dist) lo = mid else hi = mid
+            if (cumulativeMeters[mid] <= dist) lo = mid else hi = mid
         }
-        val segDist = dist - cum[lo]
-        val segLen = cum[lo + 1] - cum[lo]
+        val segDist = dist - cumulativeMeters[lo]
+        val segLen = cumulativeMeters[lo + 1] - cumulativeMeters[lo]
         val f = if (segLen <= 0) 0.0 else segDist / segLen
         val a = points[lo]
         val b = points[lo + 1]
@@ -68,9 +77,8 @@ class Track(
         Track("$name (reverse)", points.asReversed(), waypoints.asReversed())
 
     /**
-     * Closest distance along the route (in meters) to a raw coordinate that may
-     * sit beside the polyline. Returns -1 if nothing projects within sensible
-     * range (used for off-track waypoints).
+     * Closest distance along the route in meters to a raw coordinate.
+     * Returns -1 if nothing projects within sensible range (used for off-track waypoints).
      */
     fun routeDistanceTo(lat: Double, lon: Double, maxHitMeters: Double = 2000.0): Double? {
         var best = Double.MAX_VALUE
@@ -95,8 +103,4 @@ class Track(
         }
         return if (best < maxHitMeters) bestAlong else null
     }
-}
-
-class GeoPoint(val lat: Double, val lon: Double) {
-    override fun toString(): String = "GeoPoint($lat,$lon)"
 }

@@ -2,6 +2,14 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * TurnSummary — formats next-turn + following-turn for the notification
+ *
+ *   nextTurn (distance + maneuver + street)  +  following (distance + maneuver)
+ *
+ * Produces the compact two-line string shown in the persistent notification
+ * and optionally spoken by TTS after the primary turn instruction.
+ */
 package com.crazycapy.randonneur.voice
 
 import com.crazycapy.randonneur.nav.maneuverFor
@@ -16,7 +24,7 @@ import kotlin.math.roundToInt
 object TurnSummary {
 
     /** Only include the next-next turn when it is closer than this, to stay condensed. */
-    const val NEXT_NEXT_WINDOW_M = 5000.0
+    const val FOLLOWING_TURN_WINDOW_METERS = 5000.0
 
     /**
      * @return (title, text) for the notification. The title is the next maneuver,
@@ -39,7 +47,7 @@ object TurnSummary {
         val title = maneuver.replaceFirstChar { it.uppercase() } + " in " + Phrases.formatShort(m)
         val after = nextNextDegrees
         val afterM = nextNextM
-        val then = if (after != null && afterM != null && afterM <= NEXT_NEXT_WINDOW_M) {
+            val then = if (after != null && afterM != null && afterM <= FOLLOWING_TURN_WINDOW_METERS) {
             val w = Phrases.maneuverWord(maneuverFor(after))
             " · then $w in " + Phrases.formatShort(afterM)
         } else {

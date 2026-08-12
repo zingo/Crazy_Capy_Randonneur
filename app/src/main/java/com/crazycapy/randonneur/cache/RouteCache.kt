@@ -2,6 +2,17 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * RouteCache — pre-renders turn previews and warms corridor tiles
+ *
+ * At load time:
+ *   1. Walk every turn in the track
+ *   2. Render a MapSnapshotter bitmap for each (PNG in app cache dir)
+ *   3. Record lat/lon anchor points for bilinear projection
+ *   4. Warm corridor tile cache so the main map has fewer fetches
+ *
+ * Fallback: if no cached image exists, NextTurnCard uses live snapshotting.
+ */
 package com.crazycapy.randonneur.cache
 
 import android.content.Context
@@ -10,6 +21,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.crazycapy.randonneur.CACHED_IMG_PX
 import com.crazycapy.randonneur.STYLE_DARK
 import com.crazycapy.randonneur.STYLE_LIGHT
 import com.crazycapy.randonneur.gpx.Track
@@ -17,13 +29,10 @@ import com.crazycapy.randonneur.nav.TurnFinder
 import com.crazycapy.randonneur.voice.Phrases
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
-import com.crazycapy.randonneur.roadBrightenOverrides
 import org.maplibre.android.MapLibre
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.snapshotter.MapSnapshotter
-import org.maplibre.android.style.layers.LineLayer
-import org.maplibre.android.style.layers.PropertyFactory
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -181,7 +190,7 @@ object RouteCache {
         }).start()
     }
 
-    /** Corridor around a turn (once into 55 m past it), for the preview bounds. */
+    /** Corridor around a turn (up to 55 m past it), for the preview bounds. */
     private fun boundsForTurn(track: Track, atM: Double): LatLngBounds {
         val builder = LatLngBounds.Builder()
         val start = (atM - 150.0).coerceAtLeast(0.0)
@@ -209,24 +218,14 @@ object RouteCache {
         runCatching {
             val snap = MapSnapshotter(
                 context.applicationContext,
-                MapSnapshotter.Options(IMG_PX, IMG_PX)
+                MapSnapshotter.Options(CACHED_IMG_PX, CACHED_IMG_PX)
                     .withStyle(style)
                     .withRegion(bounds)
-                    .withPadding(IMG_PX / 7, IMG_PX / 7, IMG_PX / 7, IMG_PX / 7)
+                    .withPadding(CACHED_IMG_PX / 7, CACHED_IMG_PX / 7, CACHED_IMG_PX / 7, CACHED_IMG_PX / 7)
                     .withLogo(false)
                     .withAttribution(false),
             )
-            if (dark) {
-                snap.setObserver(object : MapSnapshotter.Observer {
-                    override fun onDidFinishLoadingStyle() {
-                        for ((id, color) in roadBrightenOverrides) {
-                            (snap.getLayer(id) as? LineLayer)
-                                ?.setProperties(PropertyFactory.lineColor(color))
-                        }
-                    }
-                    override fun onStyleImageMissing(name: String) {}
-                })
-            }
+            if (dark) snap.brightenDarkRoads()
             snapshotSynchronous(snap)?.let { shot ->
                 val routeId = RouteStore.routeId(track.name)
                 val png = turnFile(context, routeId, dark, turnIndex)
@@ -275,7 +274,7 @@ object RouteCache {
             }
             val snap = MapSnapshotter(
                 context.applicationContext,
-                MapSnapshotter.Options(IMG_PX, IMG_PX)
+                MapSnapshotter.Options(CACHED_IMG_PX, CACHED_IMG_PX)
                     .withStyle(style)
                     .withRegion(builder.build())
                     .withLogo(false)
@@ -287,7 +286,6 @@ object RouteCache {
         }
     }
 
-    private const val IMG_PX = 320
     private const val CORRIDOR_STEP_M = 1000.0
     private const val MAX_CORRIDOR = 90
 }

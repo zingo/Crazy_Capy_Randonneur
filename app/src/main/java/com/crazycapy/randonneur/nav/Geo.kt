@@ -2,6 +2,15 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * Geo — pure geodesic math toolbox
+ *
+ *   haversine distance  |  initial bearing  |  turn degrees
+ *   point-segment proj  |  midpoint  |  destination from bearing+distance
+ *
+ * All functions operate on raw lat/lon doubles. No Android dependencies;
+ * every method is unit-testable pure Kotlin.
+ */
 package com.crazycapy.randonneur.nav
 
 import kotlin.math.atan2
@@ -13,15 +22,17 @@ import kotlin.math.sqrt
 object Geo {
 
     private const val EARTH_RADIUS_M = 6_371_008.8
+    private const val METERS_PER_DEG_EQ = 111_320.0
+    private const val ZERO_LEN_EPSILON = 1.0e-12
 
     fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val dLat = Math.toRadians(lat2 - lat1)
         val dLon = Math.toRadians(lon2 - lon1)
-        val s1 = sin(dLat / 2)
-        val s2 = sin(dLon / 2)
-        val a = s1 * s1 + cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * s2 * s2
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        return EARTH_RADIUS_M * c
+        val halfDLatSin = sin(dLat / 2)
+        val halfDLonSin = sin(dLon / 2)
+        val havA = halfDLatSin * halfDLatSin + cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * halfDLonSin * halfDLonSin
+        val centralAngle = 2 * atan2(sqrt(havA), sqrt(1 - havA))
+        return EARTH_RADIUS_M * centralAngle
     }
 
     /** Initial bearing from p1 to p2, degrees in [0,360). */
@@ -42,15 +53,15 @@ object Geo {
     }
 
     /** Distance in meters from point p to the line segment a->b (equirectangular approx). */
-    fun pointSegmentDistance(px: Double, py: Double, ax: Double, ay: Double, bx: Double, by: Double): Double {
-        val xScale = 111_320.0 * cos(Math.toRadians(ay))
-        val yScale = 111_320.0
-        val pX = (px - ax) * xScale
-        val pY = (py - ay) * yScale
-        val abX = (bx - ax) * xScale
-        val abY = (by - ay) * yScale
+    fun pointSegmentDistance(pLat: Double, pLon: Double, aLat: Double, aLon: Double, bLat: Double, bLon: Double): Double {
+        val metersPerDegLon = METERS_PER_DEG_EQ * cos(Math.toRadians(aLon))
+        val metersPerDegLat = METERS_PER_DEG_EQ
+        val pX = (pLon - aLon) * metersPerDegLon
+        val pY = (pLat - aLat) * metersPerDegLat
+        val abX = (bLon - aLon) * metersPerDegLon
+        val abY = (bLat - aLat) * metersPerDegLat
         val len2 = abX * abX + abY * abY
-        val t = if (len2 < 1e-12) 0.0 else ((pX * abX + pY * abY) / len2).coerceIn(0.0, 1.0)
+        val t = if (len2 < ZERO_LEN_EPSILON) 0.0 else ((pX * abX + pY * abY) / len2).coerceIn(0.0, 1.0)
         val projX = t * abX
         val projY = t * abY
         val dx = pX - projX

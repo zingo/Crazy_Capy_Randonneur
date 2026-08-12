@@ -2,6 +2,15 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * TurnAnalyzer — turn detection from track geometry
+ *
+ *   Track points -> bearing change per vertex -> Turn data class -> sorted list
+ *
+ * A "turn" is any vertex where the absolute bearing change exceeds the
+ * configured threshold. The result is a sorted list of Turn objects used
+ * by NavEngine for approach/near/now/passed events.
+ */
 package com.crazycapy.randonneur.nav
 
 import com.crazycapy.randonneur.gpx.Track
@@ -32,18 +41,18 @@ object TurnFinder {
      */
     fun find(track: Track): List<Turn> {
         val pts = track.points
-        val pre = ArrayList<Turn>()
+        val candidateTurns = ArrayList<Turn>()
         for (i in 1 until pts.size - 1) {
-            val a = pts[i - 1]
-            val b = pts[i]
-            val c = pts[i + 1]
-            val inBearing = Geo.bearingDegrees(a.lat, a.lon, b.lat, b.lon)
-            val outBearing = Geo.bearingDegrees(b.lat, b.lon, c.lat, c.lon)
-            val d = Geo.turnDegrees(inBearing, outBearing)
-            if (kotlin.math.abs(d) >= MIN_TURN_DEGREES) {
-                pre.add(Turn(i, track.distanceAt(i), inBearing, outBearing, d))
+            val prev = pts[i - 1]
+            val curr = pts[i]
+            val next = pts[i + 1]
+            val inBearing = Geo.bearingDegrees(prev.lat, prev.lon, curr.lat, curr.lon)
+            val outBearing = Geo.bearingDegrees(curr.lat, curr.lon, next.lat, next.lon)
+            val turnDegrees = Geo.turnDegrees(inBearing, outBearing)
+            if (kotlin.math.abs(turnDegrees) >= MIN_TURN_DEGREES) {
+                candidateTurns.add(Turn(i, track.distanceAt(i), inBearing, outBearing, turnDegrees))
             }
         }
-        return pre.mapIndexed { pos, t -> t.copy(position = pos) }
+        return candidateTurns.mapIndexed { pos, t -> t.copy(position = pos) }
     }
 }

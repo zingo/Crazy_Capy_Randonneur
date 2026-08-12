@@ -2,6 +2,15 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * TurnProjection — pure 3x3 bilinear anchor interpolation
+ *
+ *   Given a cached turn-preview bitmap with 3x3 lat/lon anchor grid,
+ *   project a live GPS lat/lon onto the pixel coordinate of the bitmap
+ *   via bilinear interpolation between the four nearest anchors.
+ *
+ * Pure Kotlin, no Android deps. Unit-testable.
+ */
 package com.crazycapy.randonneur.cache
 
 import kotlin.math.floor

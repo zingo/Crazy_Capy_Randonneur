@@ -2,6 +2,15 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * BeepPlanner — left/right beep timing and interval computation
+ *
+ *   Approach distance  ->  beep cadence (slow -> medium -> fast)
+ *   Turn direction     ->  LEFT_LOW tone  or  RIGHT_HIGH tone
+ *
+ * Beeps are decoupled from the turn popup via a turnActive flag in
+ * NavigationService. Volume controlled by RideStore.beepVolume (0 = off).
+ */
 package com.crazycapy.randonneur.voice
 
 import kotlin.math.roundToInt

@@ -2,6 +2,16 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * Phrases — human-readable distance/speed/maneuver for TTS and display
+ *
+ *   formatDistance(m)    -> "2.3 km"  or  "450 m"
+ *   formatShort(m)       -> "2.3k"  or "450"
+ *   formatManeuver(m)    -> "Turn left"  /  "Keep right"
+ *   formatNextTurn(...)  -> "In 300 m, turn right onto Main St"
+ *
+ * Pure Kotlin, no Android deps. Every method unit-testable.
+ */
 package com.crazycapy.randonneur.voice
 
 import com.crazycapy.randonneur.nav.Maneuver

@@ -2,6 +2,16 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * GpxParser — GPX / TCX / KML parsing into Track + waypoints
+ *
+ *   InputStream -> XmlPullParser -> Track (trkpt list) + List<Waypoint> (wpts)
+ *
+ * Supports:
+ *   GPX 1.0 / 1.1  (trkseg / trkpt / wpt)
+ *   TCX (Course / Track)
+ *   KML (LineString / Placemark coordinates)
+ */
 package com.crazycapy.randonneur.gpx
 
 import org.kxml2.io.KXmlParser
@@ -9,7 +19,8 @@ import org.xmlpull.v1.XmlPullParser
 
 /**
  * Minimal GPX (v1.0/v1.1) parser: reads `<trk><trkseg><trkpt>`, falls back to
- * `<rte><rtept>`, and collects `<wpt>` elements (POIs). Based on KXmlParser so
+ * `<rte><rtept>`, and collects `<wpt>` elements (POIs). Also handles basic TCX
+ * and KML sharing the same track-point extraction logic. Based on KXmlParser so
  * it works in both the Android runtime and plain JVM unit tests.
  */
 class GpxParser {

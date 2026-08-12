@@ -2,6 +2,18 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * NextTurnCard — TurnPreview composable overlay
+ *
+ *   ┌──────────────────────┐
+ *   │  [MapSnapshot]       │  Live MapSnapshotter or cached image
+ *   │  "In 300 m"          │  with anchor projection for rider dot
+ *   │  Turn right          │
+ *   └──────────────────────┘
+ *
+ * Shows the upcoming junction with a north-up map preview of the turn
+ * area. Falls back to live rendering when no cached version exists.
+ */
 package com.crazycapy.randonneur.ui
 
 import androidx.compose.foundation.Canvas
@@ -46,18 +58,15 @@ import com.crazycapy.randonneur.cache.TurnProjection
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.voice.Phrases
+import com.crazycapy.randonneur.CACHED_IMG_PX
 import com.crazycapy.randonneur.STYLE_DARK
 import com.crazycapy.randonneur.STYLE_LIGHT
-import com.crazycapy.randonneur.roadBrightenOverrides
+import com.crazycapy.randonneur.cache.brightenDarkRoads
 import org.maplibre.android.MapLibre
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.snapshotter.MapSnapshot
 import org.maplibre.android.snapshotter.MapSnapshotter
-import org.maplibre.android.style.layers.LineLayer
-import org.maplibre.android.style.layers.PropertyFactory
-
-const val CACHED_IMG_PX = 320
 
 /**
  * Zoomed-in junction map: draws a cached turn image if one was prepared at load
@@ -114,17 +123,7 @@ internal fun TurnPreview(modifier: Modifier = Modifier) {
                         .withAttribution(false)
                 )
                 snapshotterRef = snap
-                if (darkMap) {
-                    snap.setObserver(object : MapSnapshotter.Observer {
-                        override fun onDidFinishLoadingStyle() {
-                            for ((id, color) in roadBrightenOverrides) {
-                                (snap.getLayer(id) as? LineLayer)
-                                    ?.setProperties(PropertyFactory.lineColor(color))
-                            }
-                        }
-                        override fun onStyleImageMissing(name: String) {}
-                    })
-                }
+                if (darkMap) snap.brightenDarkRoads()
                 snap.start({ snapshot = it }, { snapshot = null })
             }
         }
@@ -160,18 +159,7 @@ internal fun TurnPreview(modifier: Modifier = Modifier) {
                         val rxs = rx * scaleX
                         val rys = ry * scaleY
                         if (rxs in 0f..size.width && rys in 0f..size.height) {
-                            val a = 16f
-                            val arrowPath = Path().apply {
-                                moveTo(0f, -a)
-                                lineTo(-a * 0.55f, a * 0.15f)
-                                lineTo(-a * 0.22f, a * 0.15f)
-                                lineTo(-a * 0.22f, a * 0.72f)
-                                lineTo(a * 0.22f, a * 0.72f)
-                                lineTo(a * 0.22f, a * 0.15f)
-                                lineTo(a * 0.55f, a * 0.15f)
-                                close()
-                                translate(Offset(rxs, rys))
-                            }
+                            val arrowPath = Path().riderArrow(rxs, rys)
                             rotate((RideStore.bearing ?: 0.0).toFloat(), pivot = Offset(rxs, rys)) {
                                 drawPath(arrowPath, color = arrow)
                                 drawPath(arrowPath, color = Color.White, style = Stroke(width = 1.5f, cap = StrokeCap.Round))
@@ -192,18 +180,7 @@ internal fun TurnPreview(modifier: Modifier = Modifier) {
                     if (rLat != null && rLon != null) {
                         val r = s.pixelForLatLng(LatLng(rLat, rLon))
                         if (r.x in 0f..size.width && r.y in 0f..size.height) {
-                            val a = 16f
-                            val arrowPath = Path().apply {
-                                moveTo(0f, -a)
-                                lineTo(-a * 0.55f, a * 0.15f)
-                                lineTo(-a * 0.22f, a * 0.15f)
-                                lineTo(-a * 0.22f, a * 0.72f)
-                                lineTo(a * 0.22f, a * 0.72f)
-                                lineTo(a * 0.22f, a * 0.15f)
-                                lineTo(a * 0.55f, a * 0.15f)
-                                close()
-                                translate(Offset(r.x, r.y))
-                            }
+                            val arrowPath = Path().riderArrow(r.x, r.y)
                             rotate((RideStore.bearing ?: 0.0).toFloat(), pivot = Offset(r.x, r.y)) {
                                 drawPath(arrowPath, color = arrow)
                                 drawPath(arrowPath, color = Color.White, style = Stroke(width = 1.5f, cap = StrokeCap.Round))
@@ -228,6 +205,21 @@ private data class CachedTurnData(
     val bitmap: android.graphics.Bitmap,
     val anchors: List<com.crazycapy.randonneur.cache.Anchor>,
 )
+
+/** Create the rider-direction arrow path translated to [x],[y]. */
+private fun Path.riderArrow(x: Float, y: Float): Path {
+    val a = 16f
+    moveTo(0f, -a)
+    lineTo(-a * 0.55f, a * 0.15f)
+    lineTo(-a * 0.22f, a * 0.15f)
+    lineTo(-a * 0.22f, a * 0.72f)
+    lineTo(a * 0.22f, a * 0.72f)
+    lineTo(a * 0.22f, a * 0.15f)
+    lineTo(a * 0.55f, a * 0.15f)
+    close()
+    translate(Offset(x, y))
+    return this
+}
 
 /** Acknowledgment chip while off the route: dismisses the repeat reminders. */
 @Composable

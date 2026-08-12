@@ -2,6 +2,22 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * NavEvent — sealed class for all navigation events emitted by NavEngine
+ *
+ *   OnTrack(turn, distToTurn, distRemaining)  — regular fix update
+ *   TurnApproachAt(turn, seconds, meters)     — timed advance notice
+ *   TurnNear(turn, meters, nextTurn?, meters) — close enough to see the turn
+ *   TurnNow(turn)                              — "turn now"
+ *   TurnPassed(turn)                            — rider just went past it
+ *   GoStraight(meters)                         — "go on for X.X km"
+ *   OffRoute(meters)                           — strayed off the polyline
+ *   OffRouteStill()                             — still off route, repeat reminder
+ *   BackOnRoute()                              — returned to the polyline
+ *   Arrived()                                  — at the final point
+ *
+ * These flow from NavEngine -> NavigationService -> UI + Voice layers.
+ */
 package com.crazycapy.randonneur.nav
 
 /** Events produced by the [NavEngine] for the UI/voice layer. */

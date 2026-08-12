@@ -2,15 +2,24 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * RideStore — shared app state: data flow from service through store to UI
+ *
+ *   NavigationService writes  ->  RideStore (mutableStateOf)  ->  UI reads
+ *        |                           |                              |
+ *   GPS fixes / events      lat/lon/speed/dist           recomposition
+ *   turn events             beep/nav volume               turn cards
+ *   HR data                 HR bpm                        HUD fields
+ *
+ * Single-writer (the Service thread), multiple readers (Compose UI, TTS).
+ * Persistence handled by RouteStore.
+ */
 package com.crazycapy.randonneur.state
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.gpx.Track
-
-/** Ride mode: what is driving navigation right now. */
-enum class RideMode { IDLE, GPS, GHOST }
 
 /**
  * App-level state shared between the Activity (share target), the foreground

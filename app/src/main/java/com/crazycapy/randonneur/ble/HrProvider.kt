@@ -2,6 +2,15 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * HrProvider — BLE heart-rate sensor abstraction
+ *
+ *   HrProvider (interface):
+ *     isConnected  +  heartRate (flow)  +  connect()  +  disconnect()
+ *
+ *   StubHrProvider: always disconnected, emits 0 bpm
+ *   (Coros BLE + standard BLE HR Service 0x180D land here later)
+ */
 package com.crazycapy.randonneur.ble
 
 /**

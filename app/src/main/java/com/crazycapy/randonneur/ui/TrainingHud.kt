@@ -2,6 +2,19 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * TrainingHud — 2x2 training stats grid + turn preview card
+ *
+ *   ┌────────┬────────┐
+ *   │ Speed  │ Covered│     Top-left overlay on the map
+ *   │ 32.0   │ 12.4 km│
+ *   ├────────┼────────┤     TurnPreview sits to the right
+ *   │ Avg    │ Left   │
+ *   │ 28.5   │ 5.2 km │
+ *   └────────┴────────┘
+ *
+ * Reads from RideStore (mutableStateOf) and recomposes on state changes.
+ */
 package com.crazycapy.randonneur.ui
 
 import androidx.compose.foundation.background

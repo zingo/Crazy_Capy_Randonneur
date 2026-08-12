@@ -2,6 +2,14 @@
  * Copyright (c) 2026 Crazy Capy Randonneur contributors
  * SPDX-License-Identifier: Apache-2.0
  */
+/*
+ * PoiTracker — POI / waypoint tracker.
+ *
+ * Projects each named waypoint from the loaded GPX onto the route
+ * polyline so the [NavigationService] can announce them as the rider
+ * approaches.  Does NOT emit events itself — the caller polls `next()`
+ * in each fix cycle.
+ */
 package com.crazycapy.randonneur.nav
 
 import com.crazycapy.randonneur.gpx.Track
@@ -14,12 +22,13 @@ import com.crazycapy.randonneur.gpx.Waypoint
  */
 class PoiTracker(track: Track) {
 
-    private data class Placed(val name: String, val alongM: Double)
+    /** Waypoint projected onto the route polyline */
+    private data class ProjectedWaypoint(val name: String, val alongM: Double)
 
-    private val placed: List<Placed> = track.waypoints
-        .mapNotNull { wpt ->
-            track.routeDistanceTo(wpt.lat, wpt.lon)
-                ?.let { Placed(wpt.name, it) }
+    private val placed: List<ProjectedWaypoint> = track.waypoints
+        .mapNotNull { waypoint ->
+            track.routeDistanceTo(waypoint.lat, waypoint.lon)
+                ?.let { ProjectedWaypoint(waypoint.name, it) }
         }
         .sortedBy { it.alongM }
 
