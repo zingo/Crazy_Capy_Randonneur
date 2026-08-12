@@ -83,8 +83,8 @@ CrazyCapyRouting/
 - **M1–M4 done & verified**, M5 polish largely shipped. 67 unit tests +
   instrumented ghost-ride tests pass on Capy17 (Android 17 AVD) via
   `./gradlew :app:connectedDebugAndroidTest`.
-- Shipped: TrainingHud → compact 2×2 top-left HUD (speed | distance covered /
-  average | distance remaining) with a north-up next-turn junction preview
+- Shipped: TrainingHud → compact 3×2 top-left HUD (speed | covered | elapsed /
+  avg | left | tap-to-cycle ETA/left/total) with a north-up next-turn junction preview
   (real MapLibre snapshot zoomed to the route-ahead, matching the main map's
   style/tiles/brightened roads, rendered once per turn; direction arrow +
   route line drawn in geo-projected positions); POI waypoints
@@ -92,8 +92,9 @@ CrazyCapyRouting/
   (dark default for OLED); StubHrProvider hooked into the service loop.
 - Turn guidance: speed-aware advance + near-turn notices that also announce the
   following turn, "go on for x.x km" heads-up, off-route / back-on-route prompts,
-  and gentle **turn beeps** that shorten as the turn nears (decoupled from the
-  popup via a `turnActive` flag; volume slider, 0 = off).
+  and gentle **turn beeps** that shorten as the turn nears (relaxed 2 s minimum
+  interval, 150 m window; decoupled from the popup via a `turnActive` flag;
+  volume slider, 0 = off).
 - Settings: toggles for next-turn popup, per-second live notification, and audio
   ducking; separate **turn-beep** and **navigation-voice** volume sliders;
   saved-routes manager; ghost-ride launcher; about + open-source licenses.

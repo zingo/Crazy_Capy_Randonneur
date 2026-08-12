@@ -14,9 +14,9 @@ Android. It focuses on:
   right in 500 meters” at ~50 s before the turn), a near-turn notice that also
   announces the following turn, periodic “go on for x.x km” heads-up, and
   off-route / back-on-route prompts.
-- **Training HUD** – a compact top-left box with speed, distance covered,
-  average speed and distance remaining, plus a live preview of the route ahead
-  around the next turn while you ride.
+- **Training HUD** – a compact top-left 3×2 grid with speed, distance covered,
+  elapsed time, average speed, distance remaining and a tap-to-cycle ETA/time-left/
+  total-time readout, plus a live preview of the route ahead around the next turn.
 - **POI / waypoint head-up** – waypoints from your GPX are projected onto the
   route and announced as you approach.
 - **Map** – MapLibre with free OpenFreeMap tile styles (dark by default to save
@@ -41,10 +41,14 @@ Android. It focuses on:
   you can tap to acknowledge; reminders stay quiet until you do.
 - **Ghost ride controls** – live ×speed and target-speed buttons while
   ghosting, so you can race through a route or crawl to study it.
+- **Distance phrasing** – spoken announcements rounded to 10 m granularity
+  (e.g. "120 m" instead of "100 m"); HUD shows live exact meters for the
+  first and last kilometre, 1‑decimal km beyond that.
 - **Audio ducking** – guidance announcements pause other apps’ audio
   (like Google Maps), not the other way round; toggleable.
-- **Turn beeps** – gentle left/right audio cues that shorten as the turn nears,
-  with a volume slider (0 = off), separate from the spoken voice volume.
+- **Turn beeps** – gentle left/right audio cues that shorten as the turn nears
+  (relaxed pacing, never faster than every 2 s), with a volume slider (0 = off),
+  separate from the spoken voice volume.
 - **Battery-aware notifications** – the ride notification refreshes every
   second (great on the lock screen too) with next-turn guidance; turn it off
   (or the popup) in Settings to save battery.
@@ -59,13 +63,13 @@ Android. It focuses on:
 Captured with the on-device ghost-ride simulator – no real riding needed. Light
 and dark map styles are both shown.
 
-| Ghost ride with HUD (light map) | Turn preview up close (light map) | Lock-screen notification |
+| Ghost ride with HUD (light map, 3×2 grid) | Turn preview up close (light map) | Lock-screen notification |
 | --- | --- | --- |
-| ![Ghost ride with HUD, light map](docs/screenshots/2026-08-12-12-ghost-ride-hud-light.png) | ![Turn preview, light map](docs/screenshots/2026-08-12-11-ghost-ride-turn-preview-light.png) | ![Lock-screen notification](docs/screenshots/2026-08-12-06-notification.png) |
+| ![Ghost ride with HUD, light map](docs/screenshots/2026-08-13-02-hud-light.png) | ![Turn preview, light map](docs/screenshots/2026-08-12-11-ghost-ride-turn-preview-light.png) | ![Lock-screen notification](docs/screenshots/2026-08-12-06-notification.png) |
 
-| Ghost ride with HUD (dark map) | Turn preview up close (dark map) | Settings (pre-cache toggle) |
+| Ghost ride with HUD (dark map, 3×2 grid) | Turn preview up close (dark map) | Settings (pre-cache toggle) |
 | --- | --- | --- |
-| ![Ghost ride with HUD, dark map](docs/screenshots/2026-08-12-14-ghost-ride-hud-dark.png) | ![Turn preview, dark map](docs/screenshots/2026-08-12-13-ghost-ride-turn-preview-dark.png) | ![Settings](docs/screenshots/2026-08-12-18-settings-cache.png) |
+| ![Ghost ride with HUD, dark map](docs/screenshots/2026-08-13-01-hud-dark.png) | ![Turn preview, dark map](docs/screenshots/2026-08-12-13-ghost-ride-turn-preview-dark.png) | ![Settings](docs/screenshots/2026-08-12-18-settings-cache.png) |
 
 | Saved routes library (cache status) | Mid-ride resume offer | Route loaded on the map |
 | --- | --- | --- |
