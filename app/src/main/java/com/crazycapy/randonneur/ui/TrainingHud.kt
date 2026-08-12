@@ -59,8 +59,8 @@ fun TrainingHud(modifier: Modifier = Modifier) {
     val leftM = RideStore.remainingM ?: total
     val previewM = RideStore.nextTurnM
 
-    val coveredFmt = Phrases.formatDistance(covered)
-    val leftFmt = Phrases.formatDistance(leftM)
+    val coveredFmt = Phrases.formatShort(covered)
+    val leftFmt = Phrases.formatShort(leftM)
     val showPreview = RideStore.nextTurnPopupEnabled &&
         RideStore.nextTurnPopupVisible &&
         RideStore.upcomingRoute.isNotEmpty()
