@@ -40,9 +40,7 @@ object Phrases {
         return if (m < 1000) {
             val rounded = when {
                 m <= 0.0 -> 0
-                m < 90 -> 50
-                m < 200 -> 100
-                else -> ((m + 50) / 100).roundToInt() * 100
+                else -> ((m / 10).roundToInt().coerceAtLeast(1)) * 10
             }
             "$rounded $METERS"
         } else {

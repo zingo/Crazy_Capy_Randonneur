@@ -13,10 +13,10 @@ class PhrasesTest {
 
     @Test
     fun formatDistanceShort() {
-        assertEquals("50 m", Phrases.formatDistance(10.0))
-        assertEquals("100 m", Phrases.formatDistance(120.0))
-        assertEquals("500 m", Phrases.formatDistance(480.0))
-        assertEquals("900 m", Phrases.formatDistance(870.0))
+        assertEquals("10 m", Phrases.formatDistance(10.0))
+        assertEquals("120 m", Phrases.formatDistance(120.0))
+        assertEquals("480 m", Phrases.formatDistance(480.0))
+        assertEquals("870 m", Phrases.formatDistance(870.0))
     }
 
     @Test
@@ -54,7 +54,7 @@ class PhrasesTest {
     @Test
     fun turnApproachComposes() {
         assertEquals(
-            "turn right in 100 m",
+            "turn right in 110 m",
             Phrases.turnApproachAt(Maneuver.TURN_RIGHT, 108.0),
         )
         assertEquals("turn left now", Phrases.turnNow(Maneuver.TURN_LEFT))
@@ -66,12 +66,12 @@ class PhrasesTest {
     @Test
     fun turnNearComposes() {
         assertEquals(
-            "turn right in 100 m, then turn left in 500 m",
+            "turn right in 180 m, then turn left in 490 m",
             Phrases.turnNear(Maneuver.TURN_RIGHT, 183.0, Maneuver.TURN_LEFT, 487.0),
         )
         // Without a known following turn, just the near-turn phrase.
         assertEquals(
-            "turn right in 100 m",
+            "turn right in 180 m",
             Phrases.turnNear(Maneuver.TURN_RIGHT, 183.0, null, null),
         )
     }
@@ -79,14 +79,14 @@ class PhrasesTest {
     @Test
     fun goOnComposes() {
         assertEquals("Go on for 2.5 km", Phrases.goOn(2460.0))
-        assertEquals("Go on for 900 m", Phrases.goOn(870.0))
+        assertEquals("Go on for 870 m", Phrases.goOn(870.0))
     }
 
     @Test
     fun offRouteWording() {
         assertTrue(Phrases.offRoute(120.0).contains("off the route"))
-        assertTrue(Phrases.offRoute(120.0).contains("100 m"))
-        assertTrue(Phrases.offRoute(80.0).contains("50 m"))
+        assertTrue(Phrases.offRoute(120.0).contains("120 m"))
+        assertTrue(Phrases.offRoute(80.0).contains("80 m"))
         assertEquals("Still off the route", Phrases.offRouteStill())
         assertEquals("Portions of the route reversed", Phrases.routeReversed())
         assertEquals("Riding the original direction", Phrases.routeOriginalDirection())
@@ -96,7 +96,7 @@ class PhrasesTest {
     fun nearTurnDropTheFollowingManeuverFormat() {
         // The combined "then" form uses the maneuver-first distance wording.
         assertEquals(
-            "turn right in 100 m, then turn left in 500 m",
+            "turn right in 180 m, then turn left in 490 m",
             Phrases.turnNear(Maneuver.TURN_RIGHT, 183.0, Maneuver.TURN_LEFT, 487.0),
         )
     }
