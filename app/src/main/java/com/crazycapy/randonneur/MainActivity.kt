@@ -69,8 +69,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.gpx.TrackLoader
+import com.crazycapy.randonneur.nav.TurnFinder
 import com.crazycapy.randonneur.service.NavigationService
 import com.crazycapy.randonneur.state.RideMode
 import com.crazycapy.randonneur.state.RideStore
@@ -173,8 +175,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private const val STYLE_LIGHT = "https://tiles.openfreemap.org/styles/liberty"
-private const val STYLE_DARK = "https://tiles.openfreemap.org/styles/dark"
+internal const val STYLE_LIGHT = "https://tiles.openfreemap.org/styles/liberty"
+internal const val STYLE_DARK = "https://tiles.openfreemap.org/styles/dark"
 private const val DEFAULT_LAT = 59.329
 private const val DEFAULT_LON = 18.069
 private const val TAG = "CrazyCapyRandonneur"
@@ -212,6 +214,7 @@ fun NavigationMapScreen(
     // Saved-routes picker + pre-start direction dialog.
     var showRoutes by remember { mutableStateOf(false) }
     var pendingStart by remember { mutableStateOf<RideMode?>(null) }
+    var askPrecacheFor by remember { mutableStateOf<Track?>(null) }
 
     // Poll the shared store for text changes. Only sync while the screen is on
     // and the app is in front, so a background ride doesn't cause recompositions.
@@ -518,8 +521,8 @@ fun NavigationMapScreen(
             AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
             TrainingHud(
                 Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 8.dp)
+                    .align(Alignment.TopStart)
+                    .padding(top = 8.dp, start = 8.dp)
             )
             if (RideStore.active && RideStore.offRouteActive && !RideStore.offRouteAcknowledged) {
                 OffRouteAck(
@@ -564,6 +567,7 @@ fun NavigationMapScreen(
     }
     if (showRoutes) {
         RoutesDialog(
+            context = context,
             onDismiss = { showRoutes = false },
             onLoad = onLoadSavedRoute,
             onDelete = { RouteStore.deleteRoute(context, it) },
@@ -595,6 +599,40 @@ fun NavigationMapScreen(
                 } else {
                     permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                 }
+            },
+        )
+    }
+
+    // Pre-cache ask dialog: if a route was just loaded and pre-cache is due.
+    LaunchedEffect(RideStore.track) {
+        val t = RideStore.track
+        if (t != null && RideStore.precacheEnabled && !RideStore.active
+            && !RouteCache.isCached(context, RouteStore.routeId(t.name), t, RideStore.darkMap)) {
+            val turns = TurnFinder.find(t).size
+            if (turns > 0) askPrecacheFor = t
+        }
+    }
+    askPrecacheFor?.let { track ->
+        val turns = TurnFinder.find(track).size
+        val estMb = (turns * 4 * 50 + 512) / 1024
+        AlertDialog(
+            onDismissRequest = { askPrecacheFor = null },
+            title = { Text("Pre-cache route?") },
+            text = {
+                Column {
+                    Text("Render turn previews and warm tiles for ${track.name} ahead of time — saves battery on the ride.", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text("~${estMb} MB (best on Wi-Fi while charging) · ${turns} turns", style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    askPrecacheFor = null
+                    RouteCache.preCache(context, track)
+                }) { Text("Pre-cache") }
+            },
+            dismissButton = {
+                TextButton(onClick = { askPrecacheFor = null }) { Text("Not now") }
             },
         )
     }
@@ -740,11 +778,14 @@ private fun StartRideDialog(
 /** Saved-routes library: reload or delete previously imported routes. */
 @Composable
 private fun RoutesDialog(
+    context: android.content.Context,
     onDismiss: () -> Unit,
     onLoad: (String) -> Unit,
     onDelete: (String) -> Unit,
     onImport: () -> Unit,
 ) {
+    // Bump this key to refresh displayed sizes after a cache or delete operation.
+    val cacheKey = RouteCache.activeRouteId
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Saved routes") },
@@ -754,6 +795,7 @@ private fun RoutesDialog(
             } else {
                 Column {
                     RouteStore.routes.forEach { route ->
+                        val bytes = remember(cacheKey, route.id) { RouteCache.routeBytes(context, route.id) }
                         Row(
                             Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -764,8 +806,20 @@ private fun RoutesDialog(
                                     Phrases.formatDistance(route.lengthM),
                                     style = MaterialTheme.typography.bodySmall,
                                 )
+                                Text(
+                                    if (bytes > 0) "${bytes / 1024} kB cached" else "not cached",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (bytes > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                )
                             }
                             TextButton(onClick = { onLoad(route.id); onDismiss() }) { Text("Load") }
+                            TextButton(onClick = {
+                                val t = RouteStore.loadTrack(context, route.id)
+                                if (t != null) RouteCache.preCache(context, t)
+                            }) { Text("Cache") }
+                            if (bytes > 0) {
+                                TextButton(onClick = { RouteCache.deleteRoute(context, route.id) }) { Text("Del") }
+                            }
                             TextButton(onClick = { onDelete(route.id) }) { Text("Delete") }
                         }
                         HorizontalDivider(Modifier.padding(vertical = 2.dp))
@@ -850,6 +904,26 @@ private fun SettingsDialog(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Saved routes", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = { onShowRoutes(); onDismiss() }) { Text("Manage") }
+                }
+                SettingSwitch(
+                    checked = RideStore.precacheEnabled,
+                    onCheckedChange = {
+                        RideStore.precacheEnabled = it
+                        RouteStore.saveSettings(context)
+                    },
+                    title = "Pre-cache routes",
+                    subtitle = "Ask to pre-render turn previews and warm tiles when a route loads",
+                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    val totalBytes = remember { RouteCache.totalBytes(context) }
+                    Text(
+                        if (totalBytes > 0) "Route caches: ${totalBytes / 1024} kB" else "Route caches: empty",
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (totalBytes > 0) {
+                        TextButton(onClick = { RouteCache.deleteAll(context) }) { Text("Clear all") }
+                    }
                 }
                 Spacer(Modifier.height(12.dp))
                 Text("Demo", style = MaterialTheme.typography.titleSmall)
@@ -974,24 +1048,26 @@ private fun LicensesDialog(onDismiss: () -> Unit) {
 
 /** Lighten the road network of OpenFreeMap's dark style for better contrast on OLED. */
 private fun brightenDarkRoads(style: Style) {
-    val overrides = mapOf(
-        // Major roads (primary/secondary/tertiary/trunk) and their casing outline.
-        "highway_major_inner" to 0xFF838383.toInt(),
-        "highway_major_casing" to 0xFF4A4A4A.toInt(),
-        "highway_major_subtle" to 0xFF5A5A5A.toInt(),
-        // Motorways and their casing.
-        "highway_motorway_inner" to 0xFF8E8E8E.toInt(),
-        "highway_motorway_casing" to 0xFF505050.toInt(),
-        "highway_motorway_subtle" to 0xFF5A5A5A.toInt(),
-        // Minor roads, service roads, tracks.
-        "highway_minor" to 0xFF6E6E6E.toInt(),
-        // Foot/bike paths (slightly lifted, still distinct from roads).
-        "highway_path" to 0xFF3A3A3C.toInt(),
-    )
-    for ((id, color) in overrides) {
+    for ((id, color) in roadBrightenOverrides) {
         (style.getLayer(id) as? LineLayer)?.setProperties(PropertyFactory.lineColor(color))
     }
 }
+
+/** Shared road-color overrides used by both the big map and the turn preview. */
+internal val roadBrightenOverrides = mapOf(
+    // Major roads (primary/secondary/tertiary/trunk) and their casing outline.
+    "highway_major_inner" to 0xFF838383.toInt(),
+    "highway_major_casing" to 0xFF4A4A4A.toInt(),
+    "highway_major_subtle" to 0xFF5A5A5A.toInt(),
+    // Motorways and their casing.
+    "highway_motorway_inner" to 0xFF8E8E8E.toInt(),
+    "highway_motorway_casing" to 0xFF505050.toInt(),
+    "highway_motorway_subtle" to 0xFF5A5A5A.toInt(),
+    // Minor roads, service roads, tracks.
+    "highway_minor" to 0xFF6E6E6E.toInt(),
+    // Foot/bike paths (slightly lifted, still distinct from roads).
+    "highway_path" to 0xFF3A3A3C.toInt(),
+)
 
 /** Replace the route polyline and waypoint markers on the map. */
 private fun refreshRoute(map: MapLibreMap, track: Track?) {

@@ -14,8 +14,9 @@ Android. It focuses on:
   right in 500 meters” at ~50 s before the turn), a near-turn notice that also
   announces the following turn, periodic “go on for x.x km” heads-up, and
   off-route / back-on-route prompts.
-- **Training HUD** – speed, average speed, distance covered/remaining, elapsed
-  time, and BLE heart-rate as overlays while you ride.
+- **Training HUD** – a compact top-left box with speed, distance covered,
+  average speed and distance remaining, plus a live preview of the route ahead
+  around the next turn while you ride.
 - **POI / waypoint head-up** – waypoints from your GPX are projected onto the
   route and announced as you approach.
 - **Map** – MapLibre with free OpenFreeMap tile styles (dark by default to save
@@ -28,16 +29,25 @@ Android. It focuses on:
   dialog or mid-ride with a single toggle.
 - **Mid-route resume** – stop the ride and the app offers to keep going from
   exactly where you left off (also remembers it across restarts).
-- **Next-turn corner popup** – a corner overlay with a direction arrow and a
-  zoomed, heading-up preview of the route ahead around each turn.
+- **Turn preview** – a compact corner with a direction arrow and a real,
+  zoomed, north-up map of the route ahead around each turn, built into the HUD
+  (same style/tiles as the main map, rendered once per turn to save battery).
+- **Pre-cache routes** – when a route is loaded the app offers to render
+  all turn previews ahead of time (at home, on Wi-Fi, while charging) and warm
+  the tile cache along the route corridor. Saves battery and network on the
+  ride; the HUD pops up instantly from cached images, falling back to a live
+  render when no cache exists.
 - **Off-route ack** – when you stray, the app announces it and shows a chip
   you can tap to acknowledge; reminders stay quiet until you do.
 - **Ghost ride controls** – live ×speed and target-speed buttons while
   ghosting, so you can race through a route or crawl to study it.
 - **Audio ducking** – guidance announcements pause other apps’ audio
   (like Google Maps), not the other way round; toggleable.
+- **Turn beeps** – gentle left/right audio cues that shorten as the turn nears,
+  with a volume slider (0 = off), separate from the spoken voice volume.
 - **Battery-aware notifications** – the ride notification refreshes every
-  second; turn it off (or the popup) in Settings to save battery.
+  second (great on the lock screen too) with next-turn guidance; turn it off
+  (or the popup) in Settings to save battery.
 
 > Required: Android **17 (API 37)**. This is deliberate – the project targets
 > the newest platform only.
@@ -46,16 +56,20 @@ Android. It focuses on:
 
 ## Screenshots
 
-Captured on a Pixel 7 Pro (Android 17) with the on-device ghost-ride
-simulator – no real riding needed.
+Captured with the on-device ghost-ride simulator – no real riding needed. Light
+and dark map styles are both shown.
 
-| Ghost ride with next-turn popup | Saved routes library | Start dialog (reverse) |
+| Ghost ride with HUD (light map) | Turn preview up close (light map) | Lock-screen notification |
 | --- | --- | --- |
-| ![Ghost ride with next-turn popup](docs/screenshots/2026-08-10-03-ghost-ride-next-turn-popup.png) | ![Saved routes](docs/screenshots/2026-08-10-05-saved-routes.png) | ![Start dialog with reverse direction](docs/screenshots/2026-08-10-02-start-ride-dialog.png) |
+| ![Ghost ride with HUD, light map](docs/screenshots/2026-08-12-12-ghost-ride-hud-light.png) | ![Turn preview, light map](docs/screenshots/2026-08-12-11-ghost-ride-turn-preview-light.png) | ![Lock-screen notification](docs/screenshots/2026-08-12-06-notification.png) |
 
-| Mid-ride resume offer | Settings (battery toggles) | Route loaded on the map |
+| Ghost ride with HUD (dark map) | Turn preview up close (dark map) | Settings (pre-cache toggle) |
 | --- | --- | --- |
-| ![Mid-ride resume offer](docs/screenshots/2026-08-10-04-resume-offer.png) | ![Settings](docs/screenshots/2026-08-10-06-settings.png) | ![Route loaded](docs/screenshots/2026-08-10-01-route-loaded.png) |
+| ![Ghost ride with HUD, dark map](docs/screenshots/2026-08-12-14-ghost-ride-hud-dark.png) | ![Turn preview, dark map](docs/screenshots/2026-08-12-13-ghost-ride-turn-preview-dark.png) | ![Settings](docs/screenshots/2026-08-12-18-settings-cache.png) |
+
+| Saved routes library (cache status) | Mid-ride resume offer | Route loaded on the map |
+| --- | --- | --- |
+| ![Saved routes](docs/screenshots/2026-08-12-17-saved-routes-cache.png) | ![Mid-ride resume offer](docs/screenshots/2026-08-12-07-resume-offer.png) | ![Route loaded](docs/screenshots/2026-08-12-01-route-loaded.png) |
 
 Screenshot files are dated `YYYY-MM-DD-…` so stale captures are easy to spot.
 
@@ -98,9 +112,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 3. Import a route: share a `.gpx`/`.tcx`/`.kml` file with the app, or tap
    **Import**. You should see the route line on the map. Later reloads are one
    tap under **Routes** (your saved library).
-4. Tap **Navigate** to start real GPS navigation, or **Ghost** to simulate
-   riding the route so you can hear the voice guidance without moving. In the
-   start dialog you can flip **Reverse direction** to ride it backwards.
+4. Tap **Navigate** to start real GPS navigation, or use **Settings → Ghost
+   ride** to simulate riding the route so you can hear the voice guidance
+   without moving. In the start dialog you can flip **Reverse direction** to
+   ride it backwards.
 
 While ghosting, use **Slower/Faster** and the **Slow/28 km/h/Fast** speed
 buttons to tune the pace, hit **Reverse dir** to turn around mid-ride, and
@@ -148,13 +163,15 @@ fix pipeline and asserts arrival with turn announcements.
 - **Real ride:** import a route, hit **Navigate**, ride. With the screen on you
   see your position arrow + track; put the display to sleep and voice keeps
   guiding.
-- **Ghost ride**: tap **Ghost** – the map follows the fast simulated rider so
-  you can watch the heading arrow move, and the camera only recentres when you
-  drift ~30% from the screen centre. Speed it up/down, flip direction, or
-  resume a stopped ride from the banner.
-- **Settings**: the gear icon (top-right) toggles the next-turn popup and the
-  per-second notification (battery savers), the audio-ducking behaviour, and
-  opens the app-version/about section (name, version number, build type) and
+- **Ghost ride**: from **Settings → Ghost ride** – the map follows the fast
+  simulated rider so you can watch the heading arrow move, and the camera only
+  recentres when you drift ~30% from the screen centre. Speed it up/down, flip
+  direction, or resume a stopped ride from the banner.
+- **Settings**: the gear icon (top-right) opens ride options: toggle the
+  next-turn popup, the per-second notification (battery savers) and audio
+  ducking; set the **turn-beep** and **navigation-voice** volumes (0 = off);
+  toggle the **pre-cache** prompt; clear all route caches; manage your saved
+  routes; start a **ghost ride**; and reach the app-version/about section plus
   the **Open-source licenses** viewer.
 
 ### 4. Golden screenshot verification (hacker option)
@@ -175,8 +192,9 @@ rendering via `adb exec-out screencap` and pixel analysis (see
 | `app/src/main/java/.../service` | Foreground `NavigationService`: GPS, ghost-ride driver, TTS (audio-focus ducking), wake lock, living notification |
 | `app/src/main/java/.../state` | `RideStore` (shared app state), `RouteStore` (on-device route library + settings/last-ride persistence), `RideMode` |
 | `app/src/main/java/.../ble` | BLE heart-rate provider (stub by default) |
+| `app/src/main/java/.../cache` | Pre-cache: turn-image generation, storage, corridor tile warm, anchor projection |
 | `app/src/main/java/.../sim` | Ghost ride simulator |
-| `app/src/main/java/.../ui` | Compose overlays: HUD, next-turn popup + route preview, off-route ack, dialogs |
+| `app/src/main/java/.../ui` | Compose overlays: HUD + next-turn preview, off-route ack, dialogs |
 | `app/src/androidTest` | Instrumented ghost-ride test + assets |
 | `PLAN.md` | Live development plan / status |
 

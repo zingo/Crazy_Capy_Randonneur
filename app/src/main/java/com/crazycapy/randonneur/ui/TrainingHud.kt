@@ -62,7 +62,7 @@ fun TrainingHud(modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 2x2 stats grid: Speed | ridden over Avg | total.
+        // 2x2 stats grid: Speed | ridden over Avg | left.
         Column(Modifier.width(IntrinsicSize.Min)) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -72,14 +72,12 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                 Metric(
                     value = if (speed > 0) formatKmh(speed) else "--",
                     unit = "km/h",
-                    label = "Speed",
                     valueColor = if (RideStore.darkMap) Color(0xFF7CC29A) else Color(0xFF2E5D46),
                     modifier = Modifier.weight(1f),
                 )
                 Metric(
                     value = coveredFmt.substringBefore(" "),
                     unit = coveredFmt.substringAfter(" "),
-                    label = "ridden",
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -91,13 +89,11 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                 Metric(
                     value = if (avg > 0) formatKmh(avg) else "--",
                     unit = "km/h",
-                    label = "Avg",
                     modifier = Modifier.weight(1f),
                 )
                 Metric(
                     value = leftFmt.substringBefore(" "),
                     unit = leftFmt.substringAfter(" "),
-                    label = "left",
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -108,7 +104,7 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                TurnPreview(Modifier.size(84.dp))
+                TurnPreview(Modifier.size(100.dp))
                 Text(
                     text = "${(previewM ?: 0.0).coerceAtLeast(0.0).roundToInt()} m",
                     color = if (RideStore.darkMap) Color(0xFFE9E9E9) else Color(0xFF1A1A1A),
@@ -125,7 +121,6 @@ private fun Metric(
     modifier: Modifier = Modifier,
     value: String,
     unit: String,
-    label: String,
     valueColor: Color = if (RideStore.darkMap) Color.White else Color(0xFF1A1A1A),
 ) {
     Column(
@@ -144,12 +139,6 @@ private fun Metric(
             color = if (RideStore.darkMap) Color(0xFFBABABA) else Color(0xFF666666),
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-        )
-        Text(
-            label,
-            color = if (RideStore.darkMap) Color(0xFF9A9A9A) else Color(0xFF888888),
-            fontSize = 9.sp,
             maxLines = 1,
         )
     }

@@ -80,9 +80,9 @@ object RouteStore {
 
     /** Store a route (by name, deduped) and return its [SavedRoute]. */
     fun saveTrack(context: Context, track: Track): SavedRoute {
-        val existing = routes.firstOrNull { it.id == trackId(track.name) }
+        val existing = routes.firstOrNull { it.id == routeId(track.name) }
         val sr = existing ?: SavedRoute(
-            id = trackId(track.name),
+            id = routeId(track.name),
             name = track.name,
             savedAtMs = System.currentTimeMillis(),
             lengthM = track.lengthMeters,
@@ -112,7 +112,8 @@ object RouteStore {
             f.inputStream().use { GpxParser().parse(name, it) }
         }.getOrNull()
 
-    private fun trackId(name: String): String =
+    /** Stable storage id derived from the route name (matches the save key). */
+    internal fun routeId(name: String): String =
         "route-" + (name.trim().hashCode() and 0x7fffffff).toString(16)
 
     // ---- Configurable toggles ----
@@ -134,6 +135,7 @@ object RouteStore {
         map["navVolume"]?.toIntOrNull()?.let { RideStore.navVolume = it }
         map["beeps"]?.toBooleanStrictOrNull()?.let { RideStore.beepVolume = if (it) RideStore.beepVolume else 0 }
         map["darkMap"]?.toBooleanStrictOrNull()?.let { RideStore.darkMap = it }
+        map["precacheEnabled"]?.toBooleanStrictOrNull()?.let { RideStore.precacheEnabled = it }
         map["ghostTimeScale"]?.toDoubleOrNull()?.let { RideStore.ghostTimeScale = it }
         map["ghostSpeedKmh"]?.toDoubleOrNull()?.let { RideStore.ghostSpeedKmh = it }
     }
@@ -146,6 +148,7 @@ object RouteStore {
             "beepVolume=${RideStore.beepVolume}",
             "navVolume=${RideStore.navVolume}",
             "darkMap=${RideStore.darkMap}",
+            "precacheEnabled=${RideStore.precacheEnabled}",
             "ghostTimeScale=${RideStore.ghostTimeScale}",
             "ghostSpeedKmh=${RideStore.ghostSpeedKmh}",
         )

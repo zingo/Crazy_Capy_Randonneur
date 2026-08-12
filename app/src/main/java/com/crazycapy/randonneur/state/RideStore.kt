@@ -71,6 +71,14 @@ object RideStore {
     /** Spoken-guidance loudness (0 = off). 0-100 scale. */
     var navVolume: Int by mutableStateOf(80)
 
+    /** Ask to pre-cache a route's turn previews (and warm its tiles) after loading it. */
+    var precacheEnabled: Boolean by mutableStateOf(true)
+
+    // ---- Next-turn preview ----
+
+    /** Index (into TurnFinder.find's sorted turn list) of the upcoming turn, for cache lookup. */
+    var nextTurnIndex: Int? by mutableStateOf(null)
+
     // ---- Live off-route state ----
 
     var offRouteActive: Boolean by mutableStateOf(false)

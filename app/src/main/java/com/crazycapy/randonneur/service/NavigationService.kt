@@ -42,6 +42,7 @@ import com.crazycapy.randonneur.nav.maneuverFor
 import com.crazycapy.randonneur.sim.RouteSimulator
 import com.crazycapy.randonneur.state.RideMode
 import com.crazycapy.randonneur.state.RideStore
+import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.voice.BeepPlanner
 import com.crazycapy.randonneur.voice.BeepSignal
@@ -157,6 +158,7 @@ class NavigationService : Service() {
         if (running.get()) {
             stopRide("Ride restarted")
         }
+        RouteCache.cancel()
 
         running.set(true)
         arrived.set(false)
@@ -184,6 +186,7 @@ class NavigationService : Service() {
         RideStore.nextTurnM = null
         RideStore.nextTurnAfterDegrees = null
         RideStore.nextTurnAfterM = null
+        RideStore.nextTurnIndex = null
         RideStore.upcomingRoute = emptyList()
         RideStore.nextTurnPopupVisible = false
 
@@ -460,6 +463,7 @@ class NavigationService : Service() {
                     val nav = engine
                     if (nav != null) {
                         RideStore.upcomingRoute = nav.turnPreview().map { it.lat to it.lon }
+                        RideStore.nextTurnIndex = nav.peekNextTurn()?.position
                     }
                 }
             }
@@ -467,6 +471,7 @@ class NavigationService : Service() {
                 RideStore.nextTurnDegrees = event.turn.degrees
                 RideStore.nextTurnM = event.distanceM
                 RideStore.nextTurnPopupVisible = true
+                RideStore.nextTurnIndex = event.turn.position
                 speak(Phrases.turnApproachAt(maneuverFor(event.turn.degrees), event.distanceM))
                 turnActive = true
                 startBeeps()
@@ -479,6 +484,7 @@ class NavigationService : Service() {
                 RideStore.nextTurnAfterDegrees = event.nextTurnAfter?.degrees
                 RideStore.nextTurnAfterM = event.metersToNextAfter
                 RideStore.nextTurnPopupVisible = true
+                RideStore.nextTurnIndex = event.turn.position
                 speak(Phrases.turnNear(
                     maneuverFor(event.turn.degrees),
                     event.distanceM,
@@ -493,6 +499,7 @@ class NavigationService : Service() {
                 RideStore.nextTurnDegrees = event.turn.degrees
                 RideStore.nextTurnM = 0.0
                 RideStore.nextTurnPopupVisible = true
+                RideStore.nextTurnIndex = event.turn.position
                 speak(Phrases.turnNow(maneuverFor(event.turn.degrees)))
                 turnActive = true
                 startBeeps()
@@ -504,6 +511,7 @@ class NavigationService : Service() {
                 RideStore.nextTurnAfterDegrees = null
                 RideStore.nextTurnAfterM = null
                 RideStore.nextTurnPopupVisible = false
+                RideStore.nextTurnIndex = null
                 turnActive = false
                 stopBeeps()
                 updateNotification(notifSummary())
@@ -736,6 +744,7 @@ class NavigationService : Service() {
         RideStore.nextTurnM = null
         RideStore.nextTurnAfterDegrees = null
         RideStore.nextTurnAfterM = null
+        RideStore.nextTurnIndex = null
         RideStore.upcomingRoute = emptyList()
         RideStore.nextTurnPopupVisible = false
         lastNotificationText = null

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "command": {
+    "flash": {
+      "description": "Build the debug APK and install it on the phone (or emulator).",
+      "template": "@.agents/commands/flash.md"
+    },
+    "test": {
+      "description": "Run the full test suite (unit tests, lint, instrumented tests).",
+      "template": "@.agents/commands/test.md"
+    }
+  }
+}
