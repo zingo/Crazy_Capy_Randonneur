@@ -39,18 +39,17 @@ data class BeepSignal(
 object BeepPlanner {
 
     /** Beeps only start inside this window (≈ the first turn announcement). */
-    const val WINDOW_M = 400.0
+    const val WINDOW_M = 150.0
 
     val TONE_LEFT = BeepTone.LEFT_LOW
     val TONE_RIGHT = BeepTone.RIGHT_HIGH
 
     /**
-     * Beep pacing far away vs right at the turn. Deliberately gentle even at the
-     * closest point: the interval never drops below ~1.2s so the cues stay
-     * calm instead of feeling like an alarm.
+     * Beep pacing far away vs right at the turn. Intervals stay relaxed so the
+     * cues don't feel annoying at any speed — especially noticeable when walking.
      */
-    private const val INTERVAL_FAR_MS = 3200
-    private const val INTERVAL_NEAR_MS = 1200
+    private const val INTERVAL_FAR_MS = 4500
+    private const val INTERVAL_NEAR_MS = 2000
 
     /** Single-burst length far away vs right at the turn. */
     private const val BURST_FAR_MS = 170

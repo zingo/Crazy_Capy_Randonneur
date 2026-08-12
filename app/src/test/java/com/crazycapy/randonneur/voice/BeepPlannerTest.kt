@@ -41,8 +41,8 @@ class BeepPlannerTest {
 
     @Test
     fun beepsGrowShorterAndFasterAsTurnNears() {
-        val far = BeepPlanner.signal(-45.0, 350.0)!!
-        val near = BeepPlanner.signal(-45.0, 50.0)!!
+        val far = BeepPlanner.signal(-45.0, 200.0)!!
+        val near = BeepPlanner.signal(-45.0, 30.0)!!
         // Closer = shorter bursts, shorter gaps, shorter interval.
         assertTrue("burst should shorten, was ${far.burstMs} -> ${near.burstMs}", near.burstMs < far.burstMs)
         assertTrue("gap should shorten, was ${far.gapMs} -> ${near.gapMs}", near.gapMs < far.gapMs)
