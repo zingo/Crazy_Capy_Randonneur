@@ -18,6 +18,9 @@ package com.crazycapy.randonneur.cache
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Handler
+import android.os.HandlerThread
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -29,6 +32,7 @@ import com.crazycapy.randonneur.nav.TurnFinder
 import com.crazycapy.randonneur.voice.Phrases
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
+import com.crazycapy.randonneur.cache.brightenDarkRoads
 import org.maplibre.android.MapLibre
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
@@ -156,10 +160,10 @@ object RouteCache {
         cancelRequested.set(false)
         activeRouteId = routeId
 
-        Thread(Runnable {
-            Thread.currentThread().name = "route-precache"
+        val thread = HandlerThread("route-precache")
+        thread.start()
+        Handler(thread.looper).post {
             try {
-                MapLibre.getInstance(context.applicationContext)
                 val turns = TurnFinder.find(track)
                 val darkBase = RideStore.darkMap
                 for (dark in listOf(false, true)) {
@@ -178,16 +182,21 @@ object RouteCache {
                 }
                 if (!cancelRequested.get() && !RideStore.active) {
                     warmCorridor(context, track, if (darkBase) STYLE_DARK else STYLE_LIGHT)
+                    generateOverview(context, track, if (darkBase) STYLE_DARK else STYLE_LIGHT)
                     status = "Pre-cached ${track.name} ✓"
                 }
-            } catch (_: Exception) {
-                if (!cancelRequested.get()) status = "Pre-cache failed for ${track.name}"
+            } catch (e: Exception) {
+                if (!cancelRequested.get()) {
+                    Log.e("RouteCache", "pre-cache failed", e)
+                    status = "Pre-cache failed: ${e.message ?: e.javaClass.simpleName}"
+                }
             } finally {
                 progress = null
                 activeRouteId = null
                 cancelRequested.set(false)
+                thread.quitSafely()
             }
-        }).start()
+        }
     }
 
     /** Corridor around a turn (up to 55 m past it), for the preview bounds. */
@@ -215,44 +224,51 @@ object RouteCache {
         turnIndex: Int,
         bounds: LatLngBounds,
     ) {
-        runCatching {
-            val snap = MapSnapshotter(
-                context.applicationContext,
-                MapSnapshotter.Options(CACHED_IMG_PX, CACHED_IMG_PX)
-                    .withStyle(style)
-                    .withRegion(bounds)
-                    .withPadding(CACHED_IMG_PX / 7, CACHED_IMG_PX / 7, CACHED_IMG_PX / 7, CACHED_IMG_PX / 7)
-                    .withLogo(false)
-                    .withAttribution(false),
-            )
-            if (dark) snap.brightenDarkRoads()
-            snapshotSynchronous(snap)?.let { shot ->
-                val routeId = RouteStore.routeId(track.name)
-                val png = turnFile(context, routeId, dark, turnIndex)
-                shot.bitmap.compress(Bitmap.CompressFormat.PNG, 100, png.outputStream())
-                val anchors = TurnProjection.gridLatLon(
-                    bounds.latitudeSouth, bounds.longitudeWest,
-                    bounds.latitudeNorth, bounds.longitudeEast,
-                ).map { (lat, lon) ->
-                    val p = shot.pixelForLatLng(LatLng(lat, lon))
-                    Anchor(lat, lon, p.x, p.y)
-                }
-                anchorFile(context, routeId, dark, turnIndex)
-                    .writeText(anchors.joinToString("\n") { "${it.lat} ${it.lon} ${it.x} ${it.y}" })
-                if (cancelRequested.get()) png.delete()
-            }
+        val options = MapSnapshotter.Options(CACHED_IMG_PX, CACHED_IMG_PX)
+            .withStyle(style)
+            .withRegion(bounds)
+            .withPadding(CACHED_IMG_PX / 7, CACHED_IMG_PX / 7, CACHED_IMG_PX / 7, CACHED_IMG_PX / 7)
+            .withLogo(false)
+            .withAttribution(false)
+        val shot = snapshotSynchronous(context.applicationContext, options, dark) ?: return
+        val routeId = RouteStore.routeId(track.name)
+        val png = turnFile(context, routeId, dark, turnIndex)
+        shot.bitmap.compress(Bitmap.CompressFormat.PNG, 100, png.outputStream())
+        val anchors = TurnProjection.gridLatLon(
+            bounds.latitudeSouth, bounds.longitudeWest,
+            bounds.latitudeNorth, bounds.longitudeEast,
+        ).map { (lat, lon) ->
+            val p = shot.pixelForLatLng(LatLng(lat, lon))
+            Anchor(lat, lon, p.x, p.y)
         }
+        anchorFile(context, routeId, dark, turnIndex)
+            .writeText(anchors.joinToString("\n") { "${it.lat} ${it.lon} ${it.x} ${it.y}" })
+        if (cancelRequested.get()) png.delete()
     }
 
-    private fun snapshotSynchronous(snap: MapSnapshotter): org.maplibre.android.snapshotter.MapSnapshot? {
+    private fun snapshotSynchronous(
+        appContext: Context,
+        options: MapSnapshotter.Options,
+        dark: Boolean,
+    ): org.maplibre.android.snapshotter.MapSnapshot? {
         var result: org.maplibre.android.snapshotter.MapSnapshot? = null
         val latch = java.util.concurrent.CountDownLatch(1)
-        snap.start(
-            { s -> result = s; latch.countDown() },
-            { latch.countDown() },
-        )
+        // MapLibre requires all interactions (create, start) on the UI thread.
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            try {
+                MapLibre.getInstance(appContext)
+                val snap = MapSnapshotter(appContext, options)
+                if (dark) snap.brightenDarkRoads()
+                snap.start(
+                    { s -> result = s; latch.countDown() },
+                    { latch.countDown() },
+                )
+            } catch (e: Exception) {
+                Log.e("RouteCache", "snapshot create failed", e)
+                latch.countDown()
+            }
+        }
         runCatching { latch.await(45, java.util.concurrent.TimeUnit.SECONDS) }
-        snap.cancel()
         return result
     }
 
@@ -272,20 +288,66 @@ object RouteCache {
                 builder.include(LatLng(p.lat, p.lon))
                 dd += 20.0
             }
-            val snap = MapSnapshotter(
-                context.applicationContext,
-                MapSnapshotter.Options(CACHED_IMG_PX, CACHED_IMG_PX)
-                    .withStyle(style)
-                    .withRegion(builder.build())
-                    .withLogo(false)
-                    .withAttribution(false),
-            )
-            snapshotSynchronous(snap)
+            val opts = MapSnapshotter.Options(CACHED_IMG_PX, CACHED_IMG_PX)
+                .withStyle(style)
+                .withRegion(builder.build())
+                .withLogo(false)
+                .withAttribution(false)
+            snapshotSynchronous(context.applicationContext, opts, dark = false)
             d += CORRIDOR_STEP_M
             fired++
         }
     }
 
+    // ── Route overview thumbnail ──────────────────────────────────────
+
+    /** Path to the full-route overview thumbnail image. */
+    private fun overviewFile(context: Context, routeId: String): File =
+        File(routeDir(context, routeId), "overview.png")
+
+    /** Generate a small overview map of the full route and save it as PNG. */
+    private fun generateOverview(context: Context, track: Track, styleUrl: String) {
+        val routeId = RouteStore.routeId(track.name)
+        val png = overviewFile(context, routeId)
+        if (png.exists()) return
+        status = "Rendering overview  ${Phrases.formatDistance(track.lengthMeters)}"
+        val builder = LatLngBounds.Builder()
+        for (p in track.points) builder.include(LatLng(p.lat, p.lon))
+        val bounds = builder.build()
+        val opts = MapSnapshotter.Options(OVERVIEW_W, OVERVIEW_H)
+            .withStyle(styleUrl)
+            .withRegion(bounds)
+            .withPadding(8, 8, 8, 8)
+            .withLogo(false)
+            .withAttribution(false)
+        val shot = snapshotSynchronous(context.applicationContext, opts, dark = false) ?: return
+        // Draw the route line on the snapshot bitmap
+        val bmp = shot.bitmap.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = android.graphics.Canvas(bmp)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.rgb(0x33, 0x99, 0xFF)
+            strokeWidth = 4f
+            strokeCap = android.graphics.Paint.Cap.ROUND
+            this.style = android.graphics.Paint.Style.STROKE
+        }
+        val path = android.graphics.Path()
+        for (i in track.points.indices) {
+            val p = shot.pixelForLatLng(LatLng(track.points[i].lat, track.points[i].lon))
+            if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+        }
+        canvas.drawPath(path, paint)
+        bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, png.outputStream())
+        bmp.recycle()
+    }
+
+    /** Load the route overview thumbnail, or null if not generated yet. */
+    fun loadOverview(context: Context, routeId: String): android.graphics.Bitmap? = runCatching {
+        val f = overviewFile(context, routeId)
+        if (!f.exists()) null else android.graphics.BitmapFactory.decodeFile(f.absolutePath)
+    }.getOrNull()
+
+    private const val OVERVIEW_W = 240
+    private const val OVERVIEW_H = 160
     private const val CORRIDOR_STEP_M = 1000.0
     private const val MAX_CORRIDOR = 90
 }

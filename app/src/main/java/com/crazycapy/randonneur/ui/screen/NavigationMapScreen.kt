@@ -274,6 +274,8 @@ internal fun NavigationMapScreen(
                         when { RideStore.active -> status ?: "Riding…"; track != null -> status ?: "Route ready"; else -> status ?: "Import a GPX or share one to this app" },
                         style = MaterialTheme.typography.bodyMedium,
                     )
+                    val cacheStatus = RouteCache.status
+                    if (cacheStatus != null) Text(cacheStatus, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     if (RideStore.active && RideStore.mode == RideMode.GHOST) GhostControls()
                     if (!RideStore.active && showResumeOffer(track)) {
                         ResumeBanner(

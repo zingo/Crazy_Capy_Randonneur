@@ -16,6 +16,7 @@
  */
 package com.crazycapy.randonneur.ui
 
+import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -87,8 +88,13 @@ internal fun TurnPreview(modifier: Modifier = Modifier) {
     LaunchedEffect(routeId, darkMap, turnIdx, pts) {
         if (routeId != null && turnIdx != null) {
             val ct = RouteCache.loadTurn(context, routeId, darkMap, turnIdx)
-            if (ct != null) cached.value = CachedTurnData(ct.bitmap, ct.anchors)
-            else cached.value = null
+            if (ct != null) {
+                Log.d("TurnPreview", "cached: $routeId turn $turnIdx")
+                cached.value = CachedTurnData(ct.bitmap, ct.anchors)
+            } else {
+                Log.d("TurnPreview", "cache miss: $routeId turn $turnIdx")
+                cached.value = null
+            }
         } else cached.value = null
     }
 
@@ -107,6 +113,7 @@ internal fun TurnPreview(modifier: Modifier = Modifier) {
             snapshot = null
             if (cached.value != null) return@LaunchedEffect
             if (pts.size < 2) return@LaunchedEffect
+            Log.d("TurnPreview", "live fallback — no cached image")
             val builder = LatLngBounds.Builder()
             pts.forEach { builder.include(LatLng(it.first, it.second)) }
             RideStore.lat?.let { lat -> RideStore.lon?.let { lon -> builder.include(LatLng(lat, lon)) } }
