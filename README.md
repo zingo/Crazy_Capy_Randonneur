@@ -1,60 +1,56 @@
 # Crazy Capy Randonneur
 
-**Crazy Capy Randonneur** is an open source, voice-first GPS bike navigator for
-Android. It focuses on:
+**Ride all day on one charge.** Crazy Capy Randonneur is an open-source,
+voice-first bike GPS for Android that treats battery life as a first-class
+feature. You load your own GPX route, slip the phone in your pocket, and let
+your ears do the navigating — no accounts, no cloud, no ads.
 
-- **Voice-first, battery-extreme** – spoken turn-by-turn guidance keeps working
-  with the screen off. A partial wake lock and a foreground service power the
-  GPS, the navigation engine and the TTS voice, while the display can sleep to
-  save battery on OLED screens.
-- **Your own routes** – import GPX (or TCX, KML, XML…) by sharing any file to
-  the app, or from the in-app import picker. No accounts, no cloud, no route
-  servers.
-- **Turn-by-turn voice guidance** – speed-aware advance notices (e.g. “turn
-  right in 500 meters” at ~50 s before the turn), a near-turn notice that also
-  announces the following turn, periodic “go on for x.x km” heads-up, and
-  off-route / back-on-route prompts.
+> Required: Android **17 (API 37)** — the project deliberately targets the
+> newest platform only.
+
+## Why it sips battery
+
+- **Screen off while riding** – guidance is voice-first. A foreground service
+  and a light wake lock keep GPS, navigation and speech running while the
+  display sleeps — the single biggest win on an OLED phone.
+- **Gentle GPS cadence** – a steady 3-second fix interval (no Play Services
+  fused location, no cloud round-trips) is plenty for turn-by-turn guidance.
+- **Pre-cached turn previews** – the app offers to render every turn preview and
+  warm the map tiles along the route *before* you leave (on Wi-Fi, at home).
+  On the ride the HUD pops up instantly from those cached images with zero tile
+  fetches — and no live rendering, so your radio stays quiet.
+- **Dark OLED map by default** – the dark tile style is the default; light is
+  one tap away.
+- **Toggleable extras** – the per-second live notification and the corner popup
+  can each be switched off in Settings when you don't need them.
+
+## Highlights
+
+- **Voice turn-by-turn** – speed-aware advance notices ("turn right in 500
+  meters" ~50 s before the turn), a near-turn notice that also names the
+  following turn, periodic "go on for x.x km" heads-up, and off-route /
+  back-on-route prompts.
+- **Turn beeps, too** – not many navigators do this: alongside the voice,
+  gentle left/right beeps cue the next turn, quickening as it nears (never
+  faster than every 2 s). Separate volume sliders for beeps and voice.
+- **Your own routes** – import GPX, TCX, KML… by sharing a file to the app or
+  via the in-app picker. Routes are stored on-device in a one-tap library; ride
+  any of them in reverse.
 - **Training HUD** – a compact top-left 3×2 grid with speed, distance covered,
-  elapsed time, average speed, distance remaining and a tap-to-cycle ETA/time-left/
-  total-time readout, plus a live preview of the route ahead around the next turn.
-- **POI / waypoint head-up** – waypoints from your GPX are projected onto the
-  route and announced as you approach.
-- **Map** – MapLibre with free OpenFreeMap tile styles (dark by default to save
-  OLED power), route polyline, heading arrow for your position, a “ghost ride”
-  simulator to try navigation without leaving your home.
-- **Saved routes library** – every route you import is stored on-device as GPX
-  and listed with its length, so reloading a favourite is one tap. No accounts,
-  no cloud.
-- **Reverse direction** – ride any route in reverse, either from the start
-  dialog or mid-ride with a single toggle.
-- **Mid-route resume** – stop the ride and the app offers to keep going from
-  exactly where you left off (also remembers it across restarts).
-- **Turn preview** – a compact corner with a direction arrow and a real,
-  zoomed, north-up map of the route ahead around each turn, built into the HUD
-  (same style/tiles as the main map, rendered once per turn to save battery).
-- **Pre-cache routes** – when a route is loaded the app offers to render
-  all turn previews ahead of time (at home, on Wi-Fi, while charging) and warm
-  the tile cache along the route corridor. Saves battery and network on the
-  ride; the HUD pops up instantly from cached images, falling back to a live
-  render when no cache exists.
-- **Off-route ack** – when you stray, the app announces it and shows a chip
-  you can tap to acknowledge; reminders stay quiet until you do.
-- **Ghost ride controls** – live ×speed and target-speed buttons while
-  ghosting, so you can race through a route or crawl to study it.
-- **Distance phrasing** – spoken announcements rounded to 10 m granularity
-  (e.g. "120 m" instead of "100 m"); HUD shows live exact meters for the
-  first and last kilometre, 1‑decimal km beyond that.
-- **Audio ducking** – guidance announcements pause other apps’ audio
-  (like Google Maps), not the other way round; toggleable.
-- **Turn beeps** – gentle left/right audio cues that shorten as the turn nears
-  (relaxed pacing, never faster than every 2 s), with a volume slider (0 = off),
-  separate from the spoken voice volume.
-- **Battery-aware notifications** – the ride notification refreshes every
-  second (great on the lock screen too) with next-turn guidance; turn it off
-  (or the popup) in Settings to save battery.
+  elapsed time, average speed, distance left and a tap-to-cycle ETA / time-left /
+  total-time readout, beside a live preview of the route ahead at the next turn.
+- **Waypoint head-up** – POIs baked into your GPX are projected onto the route
+  and announced as you approach.
+- **Mid-route resume** – stop the ride and the app offers to continue exactly
+  where you left off, even across restarts.
+- **Audio ducking** – guidance pauses other apps' audio (like Google Maps),
+  not the other way round.
+- **Living lock-screen notification** – refreshes every second with next-turn
+  guidance while your screen is off.
 
-> Required: Android **17 (API 37)**. This is deliberate – the project targets
-> the newest platform only.
+### Testing
+- **Ghost ride simulator** – try any route without leaving home: follow a
+  simulated rider on the map, hear the full guidance, and control the pace.
 
 ---
 
