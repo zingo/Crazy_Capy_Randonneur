@@ -20,6 +20,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.Looper
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,11 +33,13 @@ import com.crazycapy.randonneur.nav.TurnFinder
 import com.crazycapy.randonneur.voice.Phrases
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
-import com.crazycapy.randonneur.cache.brightenDarkRoads
+import com.crazycapy.randonneur.roadBrightenOverrides
 import org.maplibre.android.MapLibre
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.snapshotter.MapSnapshotter
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.PropertyFactory
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -168,27 +171,49 @@ object RouteCache {
         val thread = HandlerThread("route-precache")
         thread.start()
         Handler(thread.looper).post {
+            val renderer = ReusedSnapshotter(context)
             try {
+                renderer.create()
                 val turns = TurnFinder.find(track)
                 val darkBase = RideStore.darkMap
+                val colorName = { dark: Boolean -> if (dark) "dark" else "light" }
                 for (dark in listOf(false, true)) {
+                    if (cancelRequested.get() || RideStore.active) break
                     val style = if (dark) STYLE_DARK else STYLE_LIGHT
                     var done = 0
+                    val missed = ArrayList<Int>()
                     for ((i, turn) in turns.withIndex()) {
                         if (cancelRequested.get() || RideStore.active) break
                         if (!turnFile(context, routeId, dark, i).exists()) {
-                            status = "Pre-caching ${track.name} · turn ${i + 1}/${turns.size} (${if (dark) "dark" else "light"})"
-                            renderAndStore(context, track, turn.distAlongM, dark, style, i, boundsForTurn(track, turn.distAlongM))
+                            status = "Pre-caching ${track.name} · turn ${i + 1}/${turns.size} (${colorName(dark)})"
+                            if (!renderAndStore(context, renderer, track, turn.distAlongM, dark, style, i, boundsForTurn(track, turn.distAlongM))) {
+                                missed.add(i)
+                            }
                         }
                         done++
                         progress = (done.toFloat() + (if (dark) turns.size else 0)) / (turns.size * 2f)
                     }
-                    if (cancelRequested.get() || RideStore.active) break
+                    // Give turns that timed out a second chance in the same run: the
+                    // interactive map's tile prefetch often settles by then.
+                    for (i in missed) {
+                        if (cancelRequested.get() || RideStore.active) break
+                        status = "Retrying turn ${i + 1}/${turns.size} (${colorName(dark)})"
+                        renderAndStore(context, renderer, track, turns[i].distAlongM, dark, style, i, boundsForTurn(track, turns[i].distAlongM))
+                    }
                 }
                 if (!cancelRequested.get() && !RideStore.active) {
-                    warmCorridor(context, track, if (darkBase) STYLE_DARK else STYLE_LIGHT)
-                    generateOverview(context, track, if (darkBase) STYLE_DARK else STYLE_LIGHT)
-                    status = "Pre-cached ${track.name} ✓"
+                    warmCorridor(renderer, track, if (darkBase) STYLE_DARK else STYLE_LIGHT)
+                    generateOverview(context, renderer, track, if (darkBase) STYLE_DARK else STYLE_LIGHT)
+                    val missing = turns.indices.count { i ->
+                        !turnFile(context, routeId, false, i).exists() ||
+                            !turnFile(context, routeId, true, i).exists()
+                    }
+                    status = if (missing == 0) {
+                        "Pre-cached ${track.name} ✓"
+                    } else {
+                        val cached = turns.size - missing
+                        "Pre-cached ${cached}/${turns.size} turns · rest on next load"
+                    }
                 }
             } catch (e: Exception) {
                 if (!cancelRequested.get()) {
@@ -196,6 +221,7 @@ object RouteCache {
                     status = "Pre-cache failed: ${e.message ?: e.javaClass.simpleName}"
                 }
             } finally {
+                renderer.dispose()
                 if (jobGeneration.get() == gen) {
                     progress = null
                     activeRouteId = null
@@ -224,20 +250,16 @@ object RouteCache {
 
     private fun renderAndStore(
         context: Context,
+        renderer: ReusedSnapshotter,
         track: Track,
         atM: Double,
         dark: Boolean,
         style: String,
         turnIndex: Int,
         bounds: LatLngBounds,
-    ) {
-        val options = MapSnapshotter.Options(CACHED_IMG_PX, CACHED_IMG_PX)
-            .withStyle(style)
-            .withRegion(bounds)
-            .withPadding(CACHED_IMG_PX / 7, CACHED_IMG_PX / 7, CACHED_IMG_PX / 7, CACHED_IMG_PX / 7)
-            .withLogo(false)
-            .withAttribution(false)
-        val shot = snapshotSynchronous(context.applicationContext, options, dark) ?: return
+    ): Boolean {
+        val shot = renderer.render(style, dark, bounds, CACHED_IMG_PX, CACHED_IMG_PX, CACHED_IMG_PX / 7, TURN_RENDER_TIMEOUT_MS)
+            ?: return false
         val routeId = RouteStore.routeId(track.name)
         val png = turnFile(context, routeId, dark, turnIndex)
         shot.bitmap.compress(Bitmap.CompressFormat.PNG, 100, png.outputStream())
@@ -251,36 +273,11 @@ object RouteCache {
         anchorFile(context, routeId, dark, turnIndex)
             .writeText(anchors.joinToString("\n") { "${it.lat} ${it.lon} ${it.x} ${it.y}" })
         if (cancelRequested.get()) png.delete()
-    }
-
-    private fun snapshotSynchronous(
-        appContext: Context,
-        options: MapSnapshotter.Options,
-        dark: Boolean,
-    ): org.maplibre.android.snapshotter.MapSnapshot? {
-        var result: org.maplibre.android.snapshotter.MapSnapshot? = null
-        val latch = java.util.concurrent.CountDownLatch(1)
-        // MapLibre requires all interactions (create, start) on the UI thread.
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            try {
-                MapLibre.getInstance(appContext)
-                val snap = MapSnapshotter(appContext, options)
-                if (dark) snap.brightenDarkRoads()
-                snap.start(
-                    { s -> result = s; latch.countDown() },
-                    { latch.countDown() },
-                )
-            } catch (e: Exception) {
-                Log.e("RouteCache", "snapshot create failed", e)
-                latch.countDown()
-            }
-        }
-        runCatching { latch.await(45, java.util.concurrent.TimeUnit.SECONDS) }
-        return result
+        return true
     }
 
     /** Cheap coast-to-coast snapshots along the route that only populate the shared tile cache. */
-    private fun warmCorridor(context: Context, track: Track, style: String) {
+    private fun warmCorridor(renderer: ReusedSnapshotter, track: Track, style: String) {
         if (RideStore.active || cancelRequested.get()) return
         var d = 0.0
         var fired = 0
@@ -295,12 +292,7 @@ object RouteCache {
                 builder.include(LatLng(p.lat, p.lon))
                 dd += 20.0
             }
-            val opts = MapSnapshotter.Options(CACHED_IMG_PX, CACHED_IMG_PX)
-                .withStyle(style)
-                .withRegion(builder.build())
-                .withLogo(false)
-                .withAttribution(false)
-            snapshotSynchronous(context.applicationContext, opts, dark = false)
+            renderer.render(style, dark = false, builder.build(), CACHED_IMG_PX, CACHED_IMG_PX, 0, CORRIDOR_TIMEOUT_MS)
             d += CORRIDOR_STEP_M
             fired++
         }
@@ -313,7 +305,7 @@ object RouteCache {
         File(routeDir(context, routeId), "overview.png")
 
     /** Generate a small overview map of the full route and save it as PNG. */
-    private fun generateOverview(context: Context, track: Track, styleUrl: String) {
+    private fun generateOverview(context: Context, renderer: ReusedSnapshotter, track: Track, styleUrl: String) {
         val routeId = RouteStore.routeId(track.name)
         val png = overviewFile(context, routeId)
         if (png.exists()) return
@@ -321,13 +313,7 @@ object RouteCache {
         val builder = LatLngBounds.Builder()
         for (p in track.points) builder.include(LatLng(p.lat, p.lon))
         val bounds = builder.build()
-        val opts = MapSnapshotter.Options(OVERVIEW_W, OVERVIEW_H)
-            .withStyle(styleUrl)
-            .withRegion(bounds)
-            .withPadding(8, 8, 8, 8)
-            .withLogo(false)
-            .withAttribution(false)
-        val shot = snapshotSynchronous(context.applicationContext, opts, dark = false) ?: return
+        val shot = renderer.render(styleUrl, dark = false, bounds, OVERVIEW_W, OVERVIEW_H, 8, TURN_RENDER_TIMEOUT_MS) ?: return
         // Draw the route line on the snapshot bitmap
         val bmp = shot.bitmap.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = android.graphics.Canvas(bmp)
@@ -357,4 +343,123 @@ object RouteCache {
     private const val OVERVIEW_H = 160
     private const val CORRIDOR_STEP_M = 1000.0
     private const val MAX_CORRIDOR = 90
+    private const val TURN_RENDER_TIMEOUT_MS = 90_000L
+    private const val CORRIDOR_TIMEOUT_MS = 45_000L
+}
+
+/**
+ * One long-lived offscreen renderer retargeted per turn. Creating a fresh
+ * MapSnapshotter per snapshot leaks an EGL context each time (until GC) and
+ * runs straight into the platform's context budget after ~16 renders, which
+ * shows up as "call to OpenGL ES API with no current context" and 45/90 s
+ * timeouts. A single reusable instance avoids that entirely.
+ */
+private class ReusedSnapshotter(context: Context) {
+    private val appContext = context.applicationContext
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val gen = java.util.concurrent.atomic.AtomicInteger(0)
+    private val targetDark = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var snap: MapSnapshotter? = null
+    private var currentStyle: String? = null
+    private var currentWidth = -1
+    private var currentHeight = -1
+    private var currentPadding = -1
+
+    /** Create the renderer on the UI thread (MapLibre requires it). */
+    fun create() {
+        val latch = java.util.concurrent.CountDownLatch(1)
+        mainHandler.post {
+            try {
+                MapLibre.getInstance(appContext)
+                val s = MapSnapshotter(
+                    appContext,
+                    MapSnapshotter.Options(CACHED_IMG_PX, CACHED_IMG_PX)
+                        .withStyle(STYLE_LIGHT)
+                        .withLogo(false)
+                        .withAttribution(false),
+                )
+                s.setObserver(object : MapSnapshotter.Observer {
+                    override fun onDidFinishLoadingStyle() {
+                        if (targetDark.get()) {
+                            for ((id, color) in roadBrightenOverrides) {
+                                (s.getLayer(id) as? LineLayer)
+                                    ?.setProperties(PropertyFactory.lineColor(color))
+                            }
+                        }
+                    }
+                    override fun onStyleImageMissing(name: String) {}
+                })
+                snap = s
+            } catch (e: Exception) {
+                Log.e("RouteCache", "snapshotter create failed", e)
+            } finally {
+                latch.countDown()
+            }
+        }
+        runCatching { latch.await(15, java.util.concurrent.TimeUnit.SECONDS) }
+    }
+
+    /** Render one frame of [bounds] and return the bitmap, or null on timeout. */
+    fun render(
+        style: String,
+        dark: Boolean,
+        bounds: LatLngBounds,
+        width: Int,
+        height: Int,
+        padding: Int,
+        timeoutMs: Long,
+    ): org.maplibre.android.snapshotter.MapSnapshot? {
+        val g = gen.incrementAndGet()
+        var result: org.maplibre.android.snapshotter.MapSnapshot? = null
+        val latch = java.util.concurrent.CountDownLatch(1)
+        targetDark.set(dark)
+        mainHandler.post {
+            val s = snap
+            if (s == null) {
+                if (gen.get() == g) latch.countDown()
+                return@post
+            }
+            try {
+                s.cancel()
+                if (style != currentStyle) {
+                    s.setStyleUrl(style)
+                    currentStyle = style
+                }
+                if (width != currentWidth || height != currentHeight) {
+                    s.setSize(width, height)
+                    currentWidth = width
+                    currentHeight = height
+                }
+                if (padding != currentPadding) {
+                    s.setPadding(padding, padding, padding, padding)
+                    currentPadding = padding
+                }
+                s.setRegion(bounds)
+                s.start(
+                    { shot -> if (gen.get() == g) { result = shot; latch.countDown() } },
+                    { if (gen.get() == g) latch.countDown() },
+                )
+            } catch (e: Exception) {
+                Log.e("RouteCache", "snapshot render failed", e)
+                if (gen.get() == g) latch.countDown()
+            }
+        }
+        val ok = runCatching { latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS) }
+            .getOrDefault(false)
+        if (!ok) {
+            Log.w("RouteCache", "snapshot timed out after ${timeoutMs / 1000}s (${if (dark) "dark" else "light"})")
+            mainHandler.post { runCatching { snap?.cancel() } }
+            return null
+        }
+        return result
+    }
+
+    /** Cancel the pending render and release the native side. */
+    fun dispose() {
+        gen.incrementAndGet()
+        mainHandler.post {
+            runCatching { snap?.cancel() }
+            snap = null
+        }
+    }
 }

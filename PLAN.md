@@ -80,7 +80,7 @@ CrazyCapyRouting/
 
 ## Status
 
-- **M1–M4 done & verified**, M5 polish largely shipped. 70 unit tests +
+- **M1–M4 done & verified**, M5 polish largely shipped. 72 unit tests +
   instrumented ghost-ride tests pass on Capy17 (Android 17 AVD) via
   `./gradlew :app:connectedDebugAndroidTest`.
 - Shipped: TrainingHud → compact 3×2 top-left HUD (speed | covered | elapsed /
@@ -120,6 +120,18 @@ CrazyCapyRouting/
   turn during the ride. Misses (reverse direction, different style) fall back to
   the live `MapSnapshotter` path transparently. 5 JVM unit tests added for the
   pure projection math.
+- **Pre-cache speed/robustness**: per-use snapshot timeouts (90 s turn renders,
+  20 s corridor warming) instead of one shared 45 s budget; a fresh
+  `MapSnapshotter` per snapshot; an in-run retry pass for turns that timed out on
+  the first attempt; and an honest end-of-run status ("Pre-cached 34/347 · rest
+  on next load") when some turns were skipped. Later loads resume where a run
+  left off. Removed the shared snapshotter (reuse after `start` is unsafe).
+- Test helpers fixed this pass: `Geo.pointSegmentDistance` now scales longitude
+  by `cos(latitude)` (regression test added), and `RouteSimulator.speedKmh` /
+  `timeScale` are `@Volatile`.
+- Offline navigation verified on the emulator with the app's network denied at
+  the package level (`cmd connectivity set-package-networking-enabled false`):
+  cached turn previews + tiles render with zero network requests.
 
 ## Next (M5 polish)
 

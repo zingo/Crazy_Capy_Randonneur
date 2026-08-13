@@ -59,7 +59,24 @@ adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
 
 After changing code, run `./gradlew :app:assembleDebug :app:lintDebug` and the
 unit tests; run the instrumented suite when behavior touching the service or
-notification changed. Currently 70 unit tests + 4 instrumented ghost-ride tests.
+notification changed. Currently 72 unit tests + 4 instrumented ghost-ride tests.
+
+Device test notes:
+- The phone's notification is blocked at OS level (`dumpsys notification` shows
+  `AppSettings: com.crazycapy.randonneur importance=NONE`) — a deliberate block,
+  not an app bug; don't re-investigate as one.
+- For no-network tests use the **per-app network deny** on the emulator (rooted),
+  not airplane mode on the phone:
+  `adb -s emulator-5554 shell cmd connectivity set-package-networking-enabled
+  false com.crazycapy.randonneur` (verify with `get-package-networking-enabled` →
+  `:deny`). The emulator app data is root-readable, so clone the phone's routes +
+  pre-cache with `run-as`/`tar` to test offline navigation there.
+- The emulator's software GL renders `MapSnapshotter` unreliably (90 s snapshot
+  timeouts between successes), so full pre-cache runs belong on the phone; use the
+  emulator for offline rides and pure-logic verification.
+- Pre-cache is honest about partial runs: the dialog reports e.g. "Pre-cached
+  34/347 · rest on next load" when some turns were missed, and later loads resume
+  where they left off (skips existing files, retries the rest).
 
 ## Conventions
 
@@ -85,7 +102,7 @@ notification changed. Currently 70 unit tests + 4 instrumented ghost-ride tests.
   `navVolume` (0 = off), persisted by `RouteStore`.
 - Settings UI lives in `MainActivity.kt` (dialogs); new settings need a
   `RideStore` field + a `RouteStore` save/load key.
-- Tests: JUnit for JVM unit tests (currently 70), instrumented ghost-ride tests in
+- Tests: JUnit for JVM unit tests (currently 72), instrumented ghost-ride tests in
   `app/src/androidTest`.
 
 ## User shorthand

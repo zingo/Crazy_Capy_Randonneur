@@ -8,7 +8,7 @@ your ears do the navigating — no accounts, no cloud, no ads.
 > Required: Android **17 (API 37)** — the project deliberately targets the
 > newest platform only.
 
-## Why it sips battery
+## Why it preserve battery
 
 - **Screen off while riding** – guidance is voice-first. A foreground service
   and a light wake lock keep GPS, navigation and speech running while the
@@ -18,7 +18,9 @@ your ears do the navigating — no accounts, no cloud, no ads.
 - **Pre-cached turn previews** – the app offers to render every turn preview and
   warm the map tiles along the route *before* you leave (on Wi-Fi, at home).
   On the ride the HUD pops up instantly from those cached images with zero tile
-  fetches — and no live rendering, so your radio stays quiet.
+  fetches — and no/less live rendering, so your radio stays quieter. If it gets
+  interrupted it reports how many turns were cached ("Pre-cached 34/347
+  · rest on next load") and resumes on the next load, skipping what's done.
 - **Dark OLED map by default** – the dark tile style is the default; light is
   one tap away.
 - **Toggleable extras** – the per-second live notification and the corner popup
