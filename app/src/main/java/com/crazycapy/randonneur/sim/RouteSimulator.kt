@@ -24,8 +24,8 @@ import com.crazycapy.randonneur.gpx.Track
  */
 class RouteSimulator(
     val track: Track,
-    var speedKmh: Double = 25.0,
-    var timeScale: Double = 30.0,
+    @Volatile var speedKmh: Double = 25.0,
+    @Volatile var timeScale: Double = 30.0,
     val stepMeters: Double = 3.0,
     /** Start riding at `startMeters` along the track (mid-route resume). */
     val startMeters: Double = 0.0,

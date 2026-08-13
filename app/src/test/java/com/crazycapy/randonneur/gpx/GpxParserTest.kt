@@ -68,4 +68,74 @@ class GpxParserTest {
             // ok
         }
     }
+
+    @Test fun parsesTcxCourseTrackpoints() {
+        val tcx = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">
+              <Courses>
+                <Course>
+                  <Name>Alpine Pass</Name>
+                  <Lap>
+                    <Track>
+                      <Trackpoint>
+                        <Time>2026-01-01T10:00:00Z</Time>
+                        <Position>
+                          <LatitudeDegrees>46.50</LatitudeDegrees>
+                          <LongitudeDegrees>8.10</LongitudeDegrees>
+                        </Position>
+                        <AltitudeMeters>1500.0</AltitudeMeters>
+                      </Trackpoint>
+                      <Trackpoint>
+                        <Time>2026-01-01T10:01:00Z</Time>
+                        <Position>
+                          <LatitudeDegrees>46.51</LatitudeDegrees>
+                          <LongitudeDegrees>8.10</LongitudeDegrees>
+                        </Position>
+                      </Trackpoint>
+                    </Track>
+                  </Lap>
+                </Course>
+              </Courses>
+            </TrainingCenterDatabase>
+        """.trimIndent()
+
+        val track = GpxParser().parse("fallback", tcx.byteInputStream())
+        assertEquals("Alpine Pass", track.name)
+        assertEquals(2, track.points.size)
+        assertEquals(46.50, track.points[0].lat, 1e-9)
+        assertEquals(8.10, track.points[0].lon, 1e-9)
+        assertEquals(1500.0, track.points[0].ele!!, 1e-9)
+        assertTrue(track.lengthMeters > 1000.0)
+    }
+
+    @Test fun parsesKmlLineString() {
+        val kml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <kml xmlns="http://www.opengis.net/kml/2.2">
+              <Document>
+                <name>Coast Ride</name>
+                <Placemark>
+                  <name>Segment 1</name>
+                  <LineString>
+                    <coordinates>
+                      8.10,46.50,10
+                      8.11,46.50,12
+                      8.12,46.51,15
+                    </coordinates>
+                  </LineString>
+                </Placemark>
+              </Document>
+            </kml>
+        """.trimIndent()
+
+        val track = GpxParser().parse("fallback", kml.byteInputStream())
+        assertEquals("Coast Ride", track.name)
+        assertEquals(3, track.points.size)
+        assertEquals(46.50, track.points[0].lat, 1e-9)
+        assertEquals(8.10, track.points[0].lon, 1e-9)
+        assertEquals(10.0, track.points[0].ele!!, 1e-9)
+        assertEquals(46.51, track.points[2].lat, 1e-9)
+        assertTrue(track.lengthMeters > 500.0)
+    }
 }

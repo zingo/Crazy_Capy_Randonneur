@@ -59,7 +59,7 @@ adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
 
 After changing code, run `./gradlew :app:assembleDebug :app:lintDebug` and the
 unit tests; run the instrumented suite when behavior touching the service or
-notification changed. Currently 67 unit tests + 4 instrumented ghost-ride tests.
+notification changed. Currently 70 unit tests + 4 instrumented ghost-ride tests.
 
 ## Conventions
 
@@ -77,14 +77,15 @@ notification changed. Currently 67 unit tests + 4 instrumented ghost-ride tests.
   Keep `NavigationService` for Android-touching glue only.
 - Distance phrasing: use `Phrases.formatDistance`/`formatShort` (units `m`/`km`,
   `0` → `"0 m"`). Speed shown as e.g. `32.0 km/h` via `formatKmh`.
-- HUD is a 2×2 grid (Speed | distance covered / Average | distance remaining)
-  with a north-up `TurnPreview` beside it. The main map is always north-up.
+- HUD is a 3×2 grid (Speed | distance covered | elapsed / Average | distance
+  remaining | tap-to-cycle ETA mode) with a north-up `TurnPreview` beside it. The
+  main map is always north-up.
 - Beeps are decoupled from the turn popup via a `turnActive` flag in
   `NavigationService`; volume comes from `RideStore.beepVolume` /
   `navVolume` (0 = off), persisted by `RouteStore`.
 - Settings UI lives in `MainActivity.kt` (dialogs); new settings need a
   `RideStore` field + a `RouteStore` save/load key.
-- Tests: JUnit for JVM unit tests (currently 67), instrumented ghost-ride tests in
+- Tests: JUnit for JVM unit tests (currently 70), instrumented ghost-ride tests in
   `app/src/androidTest`.
 
 ## User shorthand

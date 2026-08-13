@@ -59,4 +59,15 @@ class GeoTest {
         val e = Geo.pointSegmentDistance(0.2, 0.0, -0.1, 0.0, 0.1, 0.0)
         assertTrue(e in 11100.0..11200.0) // ~0.1 deg * 111.32 km
     }
+
+    @Test
+    fun pointSegmentDistance_usesLatitudeForLonScale() {
+        // Point on the north-south segment: 0 regardless of scale.
+        assertEquals(0.0, Geo.pointSegmentDistance(50.0001, 0.0, 50.0, 0.0, 50.001, 0.0), 1e-9)
+
+        // ~0.0001 deg east of a north-south segment at lat 50 must scale by cos(50°):
+        // 111320 * 0.0001 * cos(50°) ≈ 7.2 m. A cos(lon) bug returns ~11.1 m here.
+        val d = Geo.pointSegmentDistance(50.0, 0.0001, 50.0, 0.0, 50.001, 0.0)
+        assertTrue(d in 6.9..7.5)
+    }
 }

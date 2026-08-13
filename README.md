@@ -135,7 +135,7 @@ export JAVA_HOME=$HOME/.local/opt/jdk-21.0.12+8
 ./gradlew :app:testDebugUnitTest
 ```
 
-Covers the pure-Kotlin core: GPX/TCX parsing, track math, turn detection,
+Covers the pure-Kotlin core: GPX/TCX/KML parsing, track math, turn detection,
 guidance engine (advance notices, near-turn, go-straight, off/back-on-route,
 arrival), phrase generation and the route simulator. No device needed.
 

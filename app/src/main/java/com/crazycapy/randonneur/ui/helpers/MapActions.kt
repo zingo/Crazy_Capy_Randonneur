@@ -4,6 +4,7 @@
  */
 package com.crazycapy.randonneur.ui.helpers
 
+import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -218,6 +219,7 @@ internal fun centerOnRider(map: MapLibreMap) {
 }
 
 /** Centre on the best known location (used only when starting GPS). */
+@SuppressLint("MissingPermission")
 internal fun MapLibreMap.centerOnLastKnown(context: android.content.Context) {
     runCatching {
         val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager

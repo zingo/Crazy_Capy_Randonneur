@@ -54,7 +54,7 @@ object Geo {
 
     /** Distance in meters from point p to the line segment a->b (equirectangular approx). */
     fun pointSegmentDistance(pLat: Double, pLon: Double, aLat: Double, aLon: Double, bLat: Double, bLon: Double): Double {
-        val metersPerDegLon = METERS_PER_DEG_EQ * cos(Math.toRadians(aLon))
+        val metersPerDegLon = METERS_PER_DEG_EQ * cos(Math.toRadians(aLat))
         val metersPerDegLat = METERS_PER_DEG_EQ
         val pX = (pLon - aLon) * metersPerDegLon
         val pY = (pLat - aLat) * metersPerDegLat

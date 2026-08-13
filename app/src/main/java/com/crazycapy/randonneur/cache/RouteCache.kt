@@ -75,6 +75,10 @@ object RouteCache {
 
     private var cancelRequested = AtomicBoolean(false)
 
+    /** Bumped on every pre-cache start; guards a stale job's finally from
+     *  clearing the shared status/progress/activeRouteId of a newer job. */
+    private val jobGeneration = java.util.concurrent.atomic.AtomicLong(0)
+
     private fun cacheDir(context: Context): File =
         File(context.filesDir, "cache/routecache").apply { mkdirs() }
 
@@ -159,6 +163,7 @@ object RouteCache {
         if (activeRouteId != null) cancel()
         cancelRequested.set(false)
         activeRouteId = routeId
+        val gen = jobGeneration.incrementAndGet()
 
         val thread = HandlerThread("route-precache")
         thread.start()
@@ -191,9 +196,11 @@ object RouteCache {
                     status = "Pre-cache failed: ${e.message ?: e.javaClass.simpleName}"
                 }
             } finally {
-                progress = null
-                activeRouteId = null
-                cancelRequested.set(false)
+                if (jobGeneration.get() == gen) {
+                    progress = null
+                    activeRouteId = null
+                    cancelRequested.set(false)
+                }
                 thread.quitSafely()
             }
         }
