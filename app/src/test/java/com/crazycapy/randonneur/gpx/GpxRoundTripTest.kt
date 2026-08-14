@@ -19,7 +19,7 @@ class GpxRoundTripTest {
                 TrackPoint(50.2, 8.2, 120.0),
                 TrackPoint(50.3, 8.15),
             ),
-            waypoints = listOf(Waypoint("Cafe", 50.15, 8.1)),
+            waypoints = listOf(Waypoint("Cafe", 50.15, 8.1, "Free coffee for riders")),
         )
 
         val sw = StringWriter()
@@ -35,6 +35,7 @@ class GpxRoundTripTest {
         assertEquals(1, parsed.waypoints.size)
         assertEquals("Cafe", parsed.waypoints.first().name)
         assertEquals(50.15, parsed.waypoints.first().lat, 1e-9)
+        assertEquals("Free coffee for riders", parsed.waypoints.first().description)
 
         // Geometry must survive: no length drift.
         assertEquals(track.lengthMeters, parsed.lengthMeters, 1e-6)

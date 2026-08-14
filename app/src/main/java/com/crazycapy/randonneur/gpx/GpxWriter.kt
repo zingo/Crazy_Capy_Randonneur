@@ -32,7 +32,9 @@ object GpxWriter {
         out.write("<gpx version=\"1.1\" creator=\"Crazy Capy Randonneur\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n")
         out.write("  <metadata><name>${esc(track.name)}</name></metadata>\n")
         track.waypoints.forEach { w ->
-            out.write("  <wpt lat=\"${w.lat}\" lon=\"${w.lon}\"><name>${esc(w.name)}</name></wpt>\n")
+            out.write("  <wpt lat=\"${w.lat}\" lon=\"${w.lon}\"><name>${esc(w.name)}</name>")
+            if (w.description != null) out.write("<desc>${esc(w.description)}</desc>")
+            out.write("</wpt>\n")
         }
         out.write("  <trk><name>${esc(track.name)}</name><trkseg>\n")
         track.points.forEach { p ->

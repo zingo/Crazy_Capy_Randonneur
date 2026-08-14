@@ -48,6 +48,14 @@ class PoiTrackerTest {
     }
 
     @Test
+    fun checkpointNumbersAreOneBasedInOrder() {
+        val tracker = PoiTracker(track)
+        assertEquals(1, tracker.nextIndex(0.0))
+        assertEquals(2, tracker.nextIndex(180.0))
+        assertNull(tracker.nextIndex(400.0))
+    }
+
+    @Test
     fun ignoresWaypointsFarOffRoute() {
         val offTrack = Track(
             "straight",

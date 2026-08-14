@@ -80,7 +80,7 @@ CrazyCapyRouting/
 
 ## Status
 
-- **M1–M4 done & verified**, M5 polish largely shipped. 72 unit tests +
+- **M1–M4 done & verified**, M5 polish largely shipped. 77 unit tests +
   instrumented ghost-ride tests pass on Capy17 (Android 17 AVD) via
   `./gradlew :app:connectedDebugAndroidTest`.
 - Shipped: TrainingHud → compact 3×2 top-left HUD (speed | covered | elapsed /
@@ -88,8 +88,18 @@ CrazyCapyRouting/
   (real MapLibre snapshot zoomed to the route-ahead, matching the main map's
   style/tiles/brightened roads, rendered once per turn; direction arrow +
   route line drawn in geo-projected positions); POI waypoints
-  (`<wpt>` parsing + `PoiTracker` route projections); dark/light map toggle
-  (dark default for OLED); StubHrProvider hooked into the service loop.
+  (`<wpt>` parsing + `PoiTracker` route projections, `<desc>/<cmt>` text kept on
+  the model); **checkpoint display** (named markers + labels on the map, tap to
+  read the checkpoint text; HUD distance cell switches to km-left / km-CP-x
+  toward the next checkpoint and the ETA cycle gains an ETA-CP mode); dark/light
+  map toggle (dark default for OLED); StubHrProvider hooked into the service
+  loop.
+- **RWGPS import**: `RwGpsImport` fetches a route from its public JSON
+  (`routes/<id>.json`) and `RwGpsParser` rebuilds it as a `Track`, lifting the
+  route's POIs (incl. brevet `control` POIs) into waypoints — so checkpoints
+  survive even though the GPX download omits them. A user profile
+  (`users/<id>/routes.json`) lists public routes to pick from; both are exposed
+  in the Routes dialog ("RWGPS"), no account or premium required.
 - Turn guidance: speed-aware advance + near-turn notices that also announce the
   following turn, "go on for x.x km" heads-up, off-route / back-on-route prompts,
   and gentle **turn beeps** that shorten as the turn nears (relaxed 2 s minimum
@@ -132,6 +142,14 @@ CrazyCapyRouting/
 - Offline navigation verified on the emulator with the app's network denied at
   the package level (`cmd connectivity set-package-networking-enabled false`):
   cached turn previews + tiles render with zero network requests.
+- **QA (checkpoint markers)**: a checkpoint whose GPX `<wpt>` has no `<desc>`
+  used to produce malformed GeoJSON (a stray quote), so MapLibre rejected the
+  whole POI source and the markers silently vanished while the HUD's km-CP kept
+  working. Markers now use a valid hand-built FeatureCollection fed through
+  `setGeoJson` (labels are pre-rendered icon bitmaps — text-on-geojson glyphs
+  blank the layer on some GL stacks), and the tap popup uses a zoom-aware
+  tolerance (25 px, clamped 60–2000 m) so it opens at route-fit zoom too.
+  Verified on the phone (Pixel 7 Pro) and emulator.
 
 ## Next (M5 polish)
 

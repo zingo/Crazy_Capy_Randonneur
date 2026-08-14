@@ -199,6 +199,7 @@ class NavigationService : Service() {
         RideStore.hr = null
         RideStore.nextPoiName = null
         RideStore.nextPoiM = null
+        RideStore.nextPoiIndex = null
         RideStore.offRouteActive = false
         RideStore.offRouteM = 0.0
         RideStore.offRouteAcknowledged = false
@@ -412,9 +413,11 @@ class NavigationService : Service() {
         if (poi != null) {
             RideStore.nextPoiName = poi.first
             RideStore.nextPoiM = poi.second
+            RideStore.nextPoiIndex = poiTracker?.nextIndex(max(RideStore.coveredM, 0.0))
         } else {
             RideStore.nextPoiName = null
             RideStore.nextPoiM = null
+            RideStore.nextPoiIndex = null
         }
     }
 
@@ -756,6 +759,7 @@ class NavigationService : Service() {
         RideStore.remainingM = null
         RideStore.nextPoiName = null
         RideStore.nextPoiM = null
+        RideStore.nextPoiIndex = null
         RideStore.hr = null
         RideStore.offRouteActive = false
         RideStore.offRouteM = 0.0

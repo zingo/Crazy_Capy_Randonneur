@@ -10,6 +10,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Typeface
 import com.crazycapy.randonneur.DEFAULT_LAT
 import com.crazycapy.randonneur.DEFAULT_LON
 import com.crazycapy.randonneur.RIDING_ZOOM
@@ -18,6 +19,8 @@ import com.crazycapy.randonneur.STYLE_LIGHT
 import com.crazycapy.randonneur.TAG
 import com.crazycapy.randonneur.roadBrightenOverrides
 import com.crazycapy.randonneur.gpx.Track
+import com.crazycapy.randonneur.gpx.Waypoint
+import com.crazycapy.randonneur.nav.Geo
 import com.crazycapy.randonneur.state.RideStore
 import com.google.gson.JsonObject
 import org.maplibre.android.camera.CameraPosition
@@ -35,14 +38,15 @@ import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
-import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import kotlin.math.hypot
 import kotlin.math.min
+import kotlin.math.pow
 
 private const val RECENTER_THRESHOLD = 0.30
 private const val ROUTE_FIT_PADDING = 80
+private const val MAX_POI_CHIPS = 256
 
 /*
  * ┌─────────────────────────────────────────────────────────────────────────┐
@@ -79,12 +83,18 @@ internal fun refreshRoute(map: MapLibreMap, track: Track?) {
         )
 
         if (t.waypoints.isNotEmpty()) {
+            style.removeLayer("poi-label-layer")
             style.removeLayer("poi-layer")
             style.removeSource("poi-source")
-            val features = t.waypoints.map { wpt ->
-                Feature.fromGeometry(Point.fromLngLat(wpt.lon, wpt.lat))
+            var i = 0
+            while (i < MAX_POI_CHIPS && style.getImage("poi-chip-$i") != null) {
+                style.removeImage("poi-chip-$i")
+                i++
             }
-            style.addSource(GeoJsonSource("poi-source", FeatureCollection.fromFeatures(features)))
+            val poiSource = GeoJsonSource("poi-source")
+            style.addSource(poiSource)
+            poiSource.setGeoJson(buildPoiGeoJson(t.waypoints))
+            t.waypoints.forEachIndexed { i, wpt -> if (style.getImage("poi-chip-$i") == null) style.addImage("poi-chip-$i", drawPoiChip(wpt.name)) }
             style.addLayer(
                 CircleLayer("poi-layer", "poi-source").withProperties(
                     PropertyFactory.circleColor(0xFFFFB300.toInt()),
@@ -92,8 +102,83 @@ internal fun refreshRoute(map: MapLibreMap, track: Track?) {
                     PropertyFactory.circleOpacity(0.95f),
                 )
             )
+            style.addLayer(
+                SymbolLayer("poi-label-layer", "poi-source").withProperties(
+                    PropertyFactory.iconImage(Expression.get("icon")),
+                    PropertyFactory.iconSize(0.55f),
+                    PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+                    PropertyFactory.iconAllowOverlap(true),
+                    PropertyFactory.iconIgnorePlacement(true),
+                )
+            )
         }
     }
+}
+
+/** Serializes waypoints to a GeoJSON FeatureCollection string for the POI source. */
+private fun buildPoiGeoJson(waypoints: List<Waypoint>): String {
+    val sb = StringBuilder("{\"type\":\"FeatureCollection\",\"features\":[")
+    for ((i, wpt) in waypoints.withIndex()) {
+        if (i > 0) sb.append(',')
+        sb.append("{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[")
+        sb.append(wpt.lon).append(',').append(wpt.lat)
+        sb.append("]},\"properties\":{\"name\":\"")
+        sb.append(escapeJson(wpt.name))
+        sb.append("\",\"icon\":\"poi-chip-").append(i).append("\"")
+        if (wpt.description != null) {
+            sb.append(",\"desc\":\"")
+            sb.append(escapeJson(wpt.description)).append('"')
+        }
+        sb.append("}}")
+    }
+    sb.append("]}")
+    return sb.toString()
+}
+
+private fun escapeJson(s: String): String =
+    s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r")
+
+/** Renders a checkpoint name into a small amber-on-dark chip image for the map label. */
+private fun drawPoiChip(name: String): Bitmap {
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFB300.toInt()
+        textSize = 34f
+        typeface = Typeface.DEFAULT_BOLD
+    }
+    val padX = 12f
+    val textW = textPaint.measureText(name)
+    val w = (textW + padX * 2 + 8).toInt()
+    val h = 52
+    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val c = Canvas(bmp)
+    val pill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xD0000000.toInt() }
+    c.drawRoundRect(0f, 0f, w.toFloat(), h.toFloat(), 12f, 12f, pill)
+    c.drawText(name, padX, 37f, textPaint)
+    return bmp
+}
+
+/**
+ * Nearest waypoint within a tap's reach of `lat`/`lon`, or null. Tolerance is
+ * small so accidental taps near the route line don't open a checkpoint popup.
+ */
+internal fun nearestWaypoint(track: Track?, lat: Double, lon: Double, maxMeters: Double = 60.0): Waypoint? {
+    val t = track ?: return null
+    var best: Waypoint? = null
+    var bestD = maxMeters
+    for (w in t.waypoints) {
+        val d = Geo.distanceMeters(lat, lon, w.lat, w.lon)
+        if (d <= bestD) {
+            bestD = d
+            best = w
+        }
+    }
+    return best
+}
+
+/** Tap radius in meters matching a ~25 px screen tolerance at `zoom`, clamped 60..2000 m. */
+internal fun tapToleranceMeters(zoom: Double, lat: Double): Double {
+    val metersPerPixel = 156543.03392 * kotlin.math.cos(lat * Math.PI / 180.0) / 2.0.pow(zoom)
+    return (25 * metersPerPixel).coerceIn(60.0, 2000.0)
 }
 
 /*

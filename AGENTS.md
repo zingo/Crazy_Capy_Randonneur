@@ -59,7 +59,7 @@ adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
 
 After changing code, run `./gradlew :app:assembleDebug :app:lintDebug` and the
 unit tests; run the instrumented suite when behavior touching the service or
-notification changed. Currently 72 unit tests + 4 instrumented ghost-ride tests.
+notification changed. Currently 77 unit tests + 4 instrumented ghost-ride tests.
 
 Device test notes:
 - The phone's notification is blocked at OS level (`dumpsys notification` shows

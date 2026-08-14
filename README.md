@@ -38,11 +38,17 @@ your ears do the navigating — no accounts, no cloud, no ads.
 - **Your own routes** – import GPX, TCX, KML… by sharing a file to the app or
   via the in-app picker. Routes are stored on-device in a one-tap library; ride
   any of them in reverse.
+- **RWGPS import** – paste a ridewithgps.com route URL/id or a user profile
+  URL/id to import the route and its brevet controls. Reads the route's public
+  JSON (POIs become checkpoints), so no account or premium needed.
 - **Training HUD** – a compact top-left 3×2 grid with speed, distance covered,
-  elapsed time, average speed, distance left and a tap-to-cycle ETA / time-left /
-  total-time readout, beside a live preview of the route ahead at the next turn.
+  elapsed time, average speed, distance left (switches to distance-to-next
+  checkpoint while riding, e.g. `12.4 km CP 3`) and a tap-to-cycle ETA /
+  time-left / total-time / ETA-CPx readout, beside a live preview of the route
+  ahead at the next turn.
 - **Waypoint head-up** – POIs baked into your GPX are projected onto the route
-  and announced as you approach.
+  and announced as you approach. Named checkpoints are drawn on the map; tap one
+  to read its description.
 - **Mid-route resume** – stop the ride and the app offers to continue exactly
   where you left off, even across restarts.
 - **Audio ducking** – guidance pauses other apps' audio (like Google Maps),
@@ -69,9 +75,9 @@ and dark map styles are both shown.
 | --- | --- | --- |
 | ![Ghost ride with HUD, dark map](docs/screenshots/2026-08-13-01-hud-dark.png) | ![Turn preview, dark map](docs/screenshots/2026-08-12-13-ghost-ride-turn-preview-dark.png) | ![Settings](docs/screenshots/2026-08-12-18-settings-cache.png) |
 
-| Saved routes library (cache status) | Mid-ride resume offer | Route loaded on the map |
+| Saved routes library (cache status) | Checkpoint info popup (phone) | Route loaded with checkpoint markers (phone) |
 | --- | --- | --- |
-| ![Saved routes](docs/screenshots/2026-08-12-17-saved-routes-cache.png) | ![Mid-ride resume offer](docs/screenshots/2026-08-12-07-resume-offer.png) | ![Route loaded](docs/screenshots/2026-08-12-01-route-loaded.png) |
+| ![Saved routes](docs/screenshots/2026-08-12-17-saved-routes-cache.png) | ![Checkpoint info popup](docs/screenshots/2026-08-14-02-cp-popup.png) | ![Route loaded with checkpoint markers](docs/screenshots/2026-08-14-01-route-with-cps-phone.png) |
 
 Screenshot files are dated `YYYY-MM-DD-…` so stale captures are easy to spot.
 

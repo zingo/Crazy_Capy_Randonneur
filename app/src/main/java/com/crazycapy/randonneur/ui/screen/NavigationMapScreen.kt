@@ -59,6 +59,7 @@ import com.crazycapy.randonneur.DEFAULT_LON
 import com.crazycapy.randonneur.TAG
 import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.gpx.Track
+import com.crazycapy.randonneur.gpx.Waypoint
 import com.crazycapy.randonneur.nav.TurnFinder
 import com.crazycapy.randonneur.service.NavigationService
 import com.crazycapy.randonneur.state.RideMode
@@ -78,7 +79,9 @@ import com.crazycapy.randonneur.ui.helpers.centerOnRider
 import com.crazycapy.randonneur.ui.helpers.fitRoute
 import com.crazycapy.randonneur.ui.helpers.loadMapStyle
 import com.crazycapy.randonneur.ui.helpers.moveAndCenter
+import com.crazycapy.randonneur.ui.helpers.nearestWaypoint
 import com.crazycapy.randonneur.ui.helpers.refreshRoute
+import com.crazycapy.randonneur.ui.helpers.tapToleranceMeters
 import com.crazycapy.randonneur.ui.helpers.updateIdleDot
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -138,6 +141,7 @@ internal fun NavigationMapScreen(
     var showRoutes by remember { mutableStateOf(false) }
     var pendingStart by remember { mutableStateOf<RideMode?>(null) }
     var askPrecacheFor by remember { mutableStateOf<Track?>(null) }
+    var cpPopup by remember { mutableStateOf<Waypoint?>(null) }
 
     // Poll RideStore for text changes while the screen is visible.
     LaunchedEffect(Unit) {
@@ -193,7 +197,20 @@ internal fun NavigationMapScreen(
         val m = map ?: return@LaunchedEffect
         if (!RideStore.mapVisible) return@LaunchedEffect
         refreshRoute(m, track)
+        cpPopup = null
         if (track != null && !RideStore.active) fitRoute(m, track)
+    }
+
+    // Tap a checkpoint marker to open its text popup.
+    DisposableEffect(map) {
+        val m = map ?: return@DisposableEffect onDispose { }
+        val listener = MapLibreMap.OnMapClickListener { latLng ->
+            val maxMeters = tapToleranceMeters(m.cameraPosition.zoom, latLng.latitude)
+            val wpt = nearestWaypoint(RideStore.track, latLng.latitude, latLng.longitude, maxMeters)
+            if (wpt != null) { cpPopup = wpt; true } else false
+        }
+        m.addOnMapClickListener(listener)
+        onDispose { m.removeOnMapClickListener(listener) }
     }
 
     // Follow the rider while the screen is on.
@@ -317,6 +334,14 @@ internal fun NavigationMapScreen(
     // Dialogs triggered by state flags.
     if (showSettings) SettingsDialog(onDismiss = { showSettings = false }, onShowLicenses = { showLicenses = true }, onShowRoutes = { showRoutes = true }, onStartGhost = { pendingStart = RideMode.GHOST }, ghostAvailable = track != null, versionName = BuildConfig.VERSION_NAME, versionCode = BuildConfig.VERSION_CODE, buildType = BuildConfig.BUILD_TYPE)
     if (showLicenses) LicensesDialog(onDismiss = { showLicenses = false })
+    cpPopup?.let { wpt ->
+        AlertDialog(
+            onDismissRequest = { cpPopup = null },
+            title = { Text(wpt.name) },
+            text = { Text(wpt.description ?: "Checkpoint", style = MaterialTheme.typography.bodyMedium) },
+            confirmButton = { TextButton(onClick = { cpPopup = null }) { Text("OK") } },
+        )
+    }
     if (showRoutes) RoutesDialog(context = context, onDismiss = { showRoutes = false }, onLoad = onLoadSavedRoute, onDelete = { RouteStore.deleteRoute(context, it) }, onImport = onImportRequest)
     pendingStart?.let { mode ->
         StartRideDialog(mode = mode, onDismiss = { pendingStart = null }, onStart = { reverseOn ->

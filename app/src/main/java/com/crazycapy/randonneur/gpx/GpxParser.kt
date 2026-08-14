@@ -48,6 +48,8 @@ class GpxParser {
     private var wptLat = 0.0
     private var wptLon = 0.0
     private var wptNameBuilder: StringBuilder? = null
+    private var wptDescBuilder: StringBuilder? = null
+    private var inWptDesc = false
 
     /** Raw text of a numeric leaf (ele, LatitudeDegrees, AltitudeMeters…). */
     private var doubleText: StringBuilder? = null
@@ -77,6 +79,8 @@ class GpxParser {
                         wptLat = num(root, "lat")
                         wptLon = num(root, "lon")
                         wptNameBuilder = null
+                        wptDescBuilder = null
+                        inWptDesc = false
                         inWpt = true
                     }
                     "name" -> if (inWpt) {
@@ -84,6 +88,10 @@ class GpxParser {
                         wptNameBuilder = StringBuilder()
                     } else if (trackName == null) {
                         trackName = root.nextText()
+                    }
+                    "desc", "cmt" -> if (inWpt && !inWptDesc) {
+                        inWptDesc = true
+                        wptDescBuilder = StringBuilder()
                     }
                     "trkpt" -> if (inTrkSeg) {
                         lat = num(root, "lat")
@@ -118,6 +126,7 @@ class GpxParser {
                 }
                 XmlPullParser.TEXT -> {
                     if (inWptName) wptNameBuilder?.append(root.text)
+                    else if (inWptDesc) wptDescBuilder?.append(root.text)
                     else if (doubleText != null) doubleText!!.append(root.text)
                     else if (coordsText != null) coordsText!!.append(root.text)
                 }
@@ -141,10 +150,14 @@ class GpxParser {
                         coordsText = null
                     }
                     "name" -> if (inWpt) inWptName = false
+                    "desc", "cmt" -> if (inWpt) inWptDesc = false
                     "wpt" -> {
                         val n = wptNameBuilder?.toString()?.trim()?.takeIf { it.isNotEmpty() }
-                        waypoints.add(Waypoint(n ?: "Waypoint", wptLat, wptLon))
+                        val d = wptDescBuilder?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+                        waypoints.add(Waypoint(n ?: "Waypoint", wptLat, wptLon, d))
                         wptNameBuilder = null
+                        wptDescBuilder = null
+                        inWptDesc = false
                         inWpt = false
                     }
                     "trk" -> inTrk = false
@@ -175,6 +188,9 @@ class GpxParser {
         ele = null
         wptLat = 0.0
         wptLon = 0.0
+        wptNameBuilder = null
+        wptDescBuilder = null
+        inWptDesc = false
         doubleText = null
         coordsText = null
     }

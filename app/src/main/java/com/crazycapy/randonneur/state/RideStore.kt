@@ -144,6 +144,9 @@ object RideStore {
     /** Distance along the route to the next waypoint, metres. */
     var nextPoiM: Double? by mutableStateOf(null)
 
+    /** 1-based checkpoint number of the next waypoint, or null. */
+    var nextPoiIndex: Int? by mutableStateOf(null)
+
     /** True while the map should keep drawing updates (screen on + app in front). */
     var mapVisible: Boolean by mutableStateOf(false)
 
@@ -165,6 +168,7 @@ object RideStore {
         hr = null
         nextPoiName = null
         nextPoiM = null
+        nextPoiIndex = null
         status = null
         offRouteActive = false
         offRouteM = 0.0

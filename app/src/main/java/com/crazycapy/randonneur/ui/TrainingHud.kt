@@ -72,7 +72,19 @@ fun TrainingHud(modifier: Modifier = Modifier) {
     val previewM = RideStore.nextTurnM
 
     val coveredFmt = Phrases.formatShort(covered)
-    val leftFmt = Phrases.formatShort(leftM)
+    val cpM = RideStore.nextPoiM
+    val cpIndex = RideStore.nextPoiIndex
+    val leftValue: String
+    val leftUnit: String
+    if (cpM != null && cpIndex != null) {
+        val d = Phrases.formatShort(cpM)
+        leftValue = d.substringBefore(" ")
+        leftUnit = "${d.substringAfter(" ")} CP $cpIndex"
+    } else {
+        val d = Phrases.formatShort(leftM)
+        leftValue = d.substringBefore(" ")
+        leftUnit = "${d.substringAfter(" ")} left"
+    }
 
     val elapsed = RideStore.elapsedSec
     val timeFmt = formatElapsed(elapsed)
@@ -85,12 +97,15 @@ fun TrainingHud(modifier: Modifier = Modifier) {
         }
     }
 
-    var etaMode by remember { mutableStateOf(EtaMode.TOTAL_TIME) }
-    val etaDisplay = formatEta(etaMode, leftM, avg, elapsed)
-    val etaUnit = when (etaMode) {
+    var etaMode by remember { mutableStateOf(EtaMode.TIME_LEFT) }
+    val etaModes = if (cpM != null && cpIndex != null) EtaMode.entries else EtaMode.entries.filter { it != EtaMode.ETA_CP }
+    val etaCurrent = if (etaModes.contains(etaMode)) etaMode else EtaMode.TIME_LEFT
+    val etaDisplay = formatEta(etaCurrent, leftM, cpM, avg, elapsed)
+    val etaUnit = when (etaCurrent) {
         EtaMode.TIME_LEFT -> "left"
         EtaMode.TOTAL_TIME -> "total"
         EtaMode.ETA -> "ETA"
+        EtaMode.ETA_CP -> if (cpIndex != null) "ETA CP$cpIndex" else "ETA CP"
     }
 
     val showPreview = RideStore.nextTurnPopupEnabled &&
@@ -142,14 +157,17 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                     modifier = Modifier.weight(1f),
                 )
                 Metric(
-                    value = leftFmt.substringBefore(" "),
-                    unit = leftFmt.substringAfter(" "),
+                    value = leftValue,
+                    unit = leftUnit,
                     modifier = Modifier.weight(1f),
                 )
                 Metric(
                     value = etaDisplay,
                     unit = etaUnit,
-                    onClick = { etaMode = EtaMode.entries[(etaMode.ordinal + 1) % EtaMode.entries.size] },
+                    onClick = {
+                        val i = etaModes.indexOf(etaCurrent)
+                        etaMode = etaModes[(i + 1) % etaModes.size]
+                    },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -221,15 +239,20 @@ private fun computeEta(leftM: Double, avgKmh: Double): String {
     return "${zdt.hour.toString().padStart(2, '0')}:${zdt.minute.toString().padStart(2, '0')}"
 }
 
-private enum class EtaMode { TIME_LEFT, TOTAL_TIME, ETA }
+private enum class EtaMode { TIME_LEFT, TOTAL_TIME, ETA, ETA_CP }
 
-private fun formatEta(mode: EtaMode, leftM: Double, avgKmh: Double, elapsedSec: Long): String {
-    if (avgKmh <= 0 || leftM <= 0) return "--:--"
-    val remainingSec = (leftM / (avgKmh / 3.6)).roundToInt().coerceAtLeast(1).toLong()
+private fun formatEta(mode: EtaMode, leftM: Double, cpM: Double?, avgKmh: Double, elapsedSec: Long): String {
+    if (avgKmh <= 0) return "--:--"
+    val dist = when (mode) {
+        EtaMode.ETA_CP -> cpM ?: leftM
+        else -> leftM
+    }
+    if (dist <= 0) return "--:--"
+    val remainingSec = (dist / (avgKmh / 3.6)).roundToInt().coerceAtLeast(1).toLong()
     return when (mode) {
         EtaMode.TIME_LEFT -> formatDuration(remainingSec)
         EtaMode.TOTAL_TIME -> formatDuration(elapsedSec + remainingSec)
-        EtaMode.ETA -> computeEta(leftM, avgKmh)
+        EtaMode.ETA, EtaMode.ETA_CP -> computeEta(dist, avgKmh)
     }
 }
 

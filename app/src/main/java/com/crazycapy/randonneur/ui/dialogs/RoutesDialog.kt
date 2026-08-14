@@ -6,6 +6,7 @@ package com.crazycapy.randonneur.ui.dialogs
 
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.Image
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,19 +30,27 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.crazycapy.randonneur.cache.RouteCache
+import com.crazycapy.randonneur.gpx.RwGpsParser
+import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
+import com.crazycapy.randonneur.state.RwGpsImport
 import com.crazycapy.randonneur.voice.Phrases
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /*
  * ┌─────────────────────────────────────────────────────────────────────────┐
@@ -61,6 +71,7 @@ internal fun RoutesDialog(
     onImport: () -> Unit,
 ) {
     val busyId = RouteCache.activeRouteId
+    var showRwgps by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Saved routes") },
@@ -164,10 +175,125 @@ internal fun RoutesDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onImport(); onDismiss() }) { Text("Import") }
+            Row {
+                TextButton(onClick = { onImport(); onDismiss() }) { Text("Import") }
+                TextButton(onClick = { showRwgps = true }) { Text("RWGPS") }
+            }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Close") }
+        },
+    )
+    if (showRwgps) {
+        RwGpsImportDialog(
+            context = context,
+            onDone = { showRwgps = false; onDismiss() },
+            onCancel = { showRwgps = false },
+        )
+    }
+}
+
+@Composable
+private fun RwGpsImportDialog(
+    context: Context,
+    onDone: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var url by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var routes by remember { mutableStateOf<List<RwGpsParser.RouteSummary>?>(null) }
+
+    val doImport: (String) -> Unit = { target ->
+        scope.launch {
+            busy = true; error = null
+            val track = withContext(Dispatchers.IO) { RwGpsImport.fetchTrack(target) }
+            busy = false
+            if (track != null) {
+                RideStore.track = track
+                RideStore.status = "Route loaded: ${track.name}"
+                RouteStore.saveTrack(context, track)
+                onDone()
+            } else {
+                error = "Couldn't fetch that route. Check the URL and that you're online."
+            }
+        }
+    }
+    val doList: (String) -> Unit = { target ->
+        scope.launch {
+            busy = true; error = null
+            val list = withContext(Dispatchers.IO) { RwGpsImport.listRoutes(target) }
+            busy = false
+            if (list.isEmpty()) error = "No public routes found for that profile."
+            else {
+                routes = list
+                url = target
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onCancel() },
+        title = { Text(if (routes == null) "Import from ridewithgps" else "Select a route") },
+        text = {
+            Column {
+                if (routes != null) {
+                    routes!!.forEach { route ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = !busy) { doImport(route.id) }
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(route.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                                Text(Phrases.formatDistance(route.distanceM), style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text(if (busy) "…" else "→", color = MaterialTheme.colorScheme.primary)
+                        }
+                        HorizontalDivider()
+                    }
+                    if (busy) {
+                        Spacer(Modifier.height(8.dp))
+                        Text("Working…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    } else if (error != null) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(error!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                } else {
+                    Text(
+                        "Paste a ridewithgps.com route URL (or its numeric id), or a user profile URL/id to pick from their public routes.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = url,
+                        onValueChange = { url = it; error = null },
+                        placeholder = { Text("https://ridewithgps.com/routes/37482029") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    if (busy) {
+                        Text("Working…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    } else if (error != null) {
+                        Text(error!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (routes == null) {
+                Row {
+                    TextButton(enabled = !busy && url.isNotBlank(), onClick = { doImport(url) }) { Text("Import") }
+                    TextButton(enabled = !busy && url.isNotBlank(), onClick = { doList(url) }) { Text("List routes") }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { if (!busy) onCancel() }) { Text("Close") }
         },
     )
 }

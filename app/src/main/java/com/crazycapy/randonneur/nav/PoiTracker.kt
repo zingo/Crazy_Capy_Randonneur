@@ -40,6 +40,15 @@ class PoiTracker(track: Track) {
         return null
     }
 
+    /** 1-based index of the next waypoint strictly ahead of `alongM`, or null. */
+    fun nextIndex(alongM: Double): Int? {
+        val placed = placed
+        for (i in placed.indices) {
+            if (placed[i].alongM > alongM + 5.0) return i + 1
+        }
+        return null
+    }
+
     /** Number of waypoints that successfully projected onto the route. */
     val count: Int get() = placed.size
 

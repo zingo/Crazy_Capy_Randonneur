@@ -5,9 +5,10 @@
 /*
  * Waypoint — a named POI along the route (GPX <wpt>)
  *
- *   name  +  lat  +  lon  +  optional elevation
+ *   name  +  lat  +  lon  +  optional description (<desc>/<cmt>)
  *
- * Used by PoiTracker for proximity alerts (e.g. "water fountain ahead").
+ * Used by PoiTracker for proximity alerts (e.g. "water fountain ahead") and by
+ * the map for checkpoint markers whose text is shown on tap.
  */
 package com.crazycapy.randonneur.gpx
 
@@ -16,4 +17,6 @@ data class Waypoint(
     val name: String,
     val lat: Double,
     val lon: Double,
+    /** Checkpoint info to show in the map popup (`<desc>`, else `<cmt>`). */
+    val description: String? = null,
 )
