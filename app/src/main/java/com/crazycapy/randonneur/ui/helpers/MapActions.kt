@@ -187,8 +187,10 @@ internal fun tapToleranceMeters(zoom: Double, lat: Double): Double {
  * │                                                                         │
  * │  moveAndCenter:                                                         │
  * │    1. Updates the rider arrow position and rotation on the map          │
- * │    2. Recentres the camera when the rider drifts >30% from viewport     │
- * │       centre (project screen-space check).                              │
+ * │    2. When `follow` (default), recentres the camera as the rider        │
+ * │       drifts >30% from viewport centre (project screen-space check).   │
+ * │       When the user has taken the camera (follow = false) it only       │
+ * │       moves the rider marker.                                           │
  * └─────────────────────────────────────────────────────────────────────────┘
  */
 
@@ -198,8 +200,10 @@ internal fun moveAndCenter(
     lat: Double,
     lon: Double,
     bearing: Double?,
+    follow: Boolean = true,
 ) {
     updateMeMarker(map, lat, lon, bearing)
+    if (!follow) return
 
     val center = map.cameraPosition?.target
     if (center == null || mapView.width <= 0 || mapView.height <= 0) {

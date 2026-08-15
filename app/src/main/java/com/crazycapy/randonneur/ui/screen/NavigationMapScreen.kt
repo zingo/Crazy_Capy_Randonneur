@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.BrightnessLow
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
@@ -142,6 +143,7 @@ internal fun NavigationMapScreen(
     var pendingStart by remember { mutableStateOf<RideMode?>(null) }
     var askPrecacheFor by remember { mutableStateOf<Track?>(null) }
     var cpPopup by remember { mutableStateOf<Waypoint?>(null) }
+    var followRider by remember { mutableStateOf(true) }
 
     // Poll RideStore for text changes while the screen is visible.
     LaunchedEffect(Unit) {
@@ -213,13 +215,31 @@ internal fun NavigationMapScreen(
         onDispose { m.removeOnMapClickListener(listener) }
     }
 
-    // Follow the rider while the screen is on.
+    // Take over the camera when a ride starts; a manual pan releases it.
+    LaunchedEffect(RideStore.active) {
+        if (RideStore.active) followRider = true
+    }
+
+    // Follow the rider while the screen is on (and follow hasn't been released).
     LaunchedEffect(RideStore.lat, RideStore.lon, RideStore.bearing, RideStore.mapVisible) {
         if (!RideStore.mapVisible) return@LaunchedEffect
         val lat = RideStore.lat ?: return@LaunchedEffect
         val lon = RideStore.lon ?: return@LaunchedEffect
         val m = map ?: return@LaunchedEffect
-        moveAndCenter(m, mapView, lat, lon, RideStore.bearing)
+        moveAndCenter(m, mapView, lat, lon, RideStore.bearing, followRider)
+    }
+
+    // A user gesture (pan/pinch) stops following so the map stays where they
+    // put it until the center button re-engages follow.
+    DisposableEffect(map) {
+        val m = map ?: return@DisposableEffect onDispose { }
+        val listener = MapLibreMap.OnCameraMoveStartedListener { reason ->
+            if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE && RideStore.active && followRider) {
+                followRider = false
+            }
+        }
+        m.addOnCameraMoveStartedListener(listener)
+        onDispose { m.removeOnCameraMoveStartedListener(listener) }
     }
 
     // Idle-position dot: passive location listener.
@@ -273,6 +293,22 @@ internal fun NavigationMapScreen(
     Scaffold(
         floatingActionButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                if (RideStore.active && !followRider) {
+                    FloatingActionButton(
+                        onClick = {
+                            followRider = true
+                            val la = RideStore.lat
+                            val lo = RideStore.lon
+                            val zoom = map?.cameraPosition?.zoom ?: 15.0
+                            if (la != null && lo != null) map?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(la, lo), zoom))
+                        },
+                        modifier = Modifier.size(48.dp),
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ) {
+                        Icon(Icons.Filled.MyLocation, contentDescription = "Center on me")
+                    }
+                }
                 FloatingActionButton(onClick = { map?.animateCamera(CameraUpdateFactory.zoomIn()) }, modifier = Modifier.size(44.dp), containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) {
                     Icon(Icons.Filled.Add, contentDescription = "Zoom in")
                 }
