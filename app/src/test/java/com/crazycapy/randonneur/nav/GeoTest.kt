@@ -45,6 +45,32 @@ class GeoTest {
     }
 
     @Test
+    fun destinationMeters_movesAlongBearing() {
+        // 100 m due north from the equator: latitude increases, longitude unchanged.
+        val (lat, lon) = Geo.destinationMeters(0.0, 10.0, 0.0, 100.0)
+        assertTrue(lat in 0.0008..0.0009)
+        assertEquals(10.0, lon, 1e-9)
+
+        // 100 m due east: longitude increases; latitude stays ~unchanged (great-circle
+        // path is only *initially* due east, so lat shifts ~1 mm — tolerate that).
+        val (latE, lonE) = Geo.destinationMeters(50.0, 10.0, 90.0, 100.0)
+        assertTrue(Math.abs(latE - 50.0) < 1e-7)
+        assertTrue(lonE in 10.0012..10.0016) // ~100 m / (111320 * cos 50°)
+
+        // Round trip: destination then distance back ≈ 100 m.
+        val (lat2, lon2) = Geo.destinationMeters(50.0, 10.0, 45.0, 100.0)
+        val back = Geo.distanceMeters(50.0, 10.0, lat2, lon2)
+        assertTrue(back in 99.0..101.0)
+        // And the bearing from the start to that point is ~45°.
+        assertEquals(45.0, Geo.bearingDegrees(50.0, 10.0, lat2, lon2), 0.5)
+
+        // Behind = bearing + 180.
+        val (latB, lonB) = Geo.destinationMeters(50.0, 10.0, 180.0, 100.0)
+        assertTrue(latB in 49.99908..49.99911)
+        assertEquals(10.0, lonB, 1e-9)
+    }
+
+    @Test
     fun pointSegmentDistance() {
         // Point exactly on a segment
         assertEquals(0.0, Geo.pointSegmentDistance(0.0, 0.0, 0.0, 0.0, 0.0, 1.0), 1e-9)

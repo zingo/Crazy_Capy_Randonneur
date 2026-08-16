@@ -1,0 +1,147 @@
+# Integration plan — android-bike-radar-overlay
+
+Goal: let Crazy Capy Randonneur consume live rear-radar data from the
+[android-bike-radar-overlay](https://github.com/partymola/android-bike-radar-overlay)
+app (package `es.jjrh.bikeradar`, GPL-3.0) when both are installed, so a
+real Varia-class rear radar's targets, battery and tail-light state can be
+shown and controlled from inside CrazyCapy.
+
+The integration is two-sided: a small IPC surface added to the overlay app,
+and a consumer + UI in CrazyCapy. This plan scopes the CrazyCapy side and
+defines the wire contract. The two apps are developed separately and signed
+differently, so the interface must be agreed as a *contract*, never copied
+code (see licensing below).
+
+android-bike-radar-overlay overlay is good and can be used but it would be
+nice to be able to turn it on/off it might also be nice to be able to controll
+backling with a button or maybe in the future automatic from sunset/sunrise data
+and maybe weather date if that is included in the app.
+
+It might also be nice to show cars behind you on the map view along the route
+so you don't need to look at diffeernt places in the app whn focused following
+a route and maybe closing in on a turn.
+
+android-bike-radar-overlay has no IPC surface exists today: the foreground
+service, all receivers, the FileProvider and dev services are `exported="false"`;
+`MainActivity` is launcher-only. The only outbound data path is Home Assistant MQTT.
+
+## Interface choice
+
+**Decision: one exported bound service in the overlay app, exposed via AIDL.**
+
+- Commands + queries (tail-light mode, overlay show/hide, battery %): plain
+  AIDL methods with a result — intents cannot return a value.
+- Streaming (targets at ~5 Hz): a registered `oneway` AIDL listener backed by
+  `RemoteCallbackList`; the overlay app pushes snapshot parcelables and the
+  consumer unregisters when its screen goes away. This is the native Android
+  pattern (cf. `LocationManager`), parcel-based (no JSON/socket cost), and fits
+  CrazyCapy's battery-extreme ethos.
+- Intents (exported broadcast receivers) are rejected for the stream: no
+  request/response, no backpressure, a broadcast per frame is heavier than a
+  held binder channel. They remain an acceptable *fallback* for the two
+  fire-and-forget commands only.
+
+Rejected alternatives: localhost HTTP/WebSocket server in the overlay app
+(extra socket + serialization per frame, weaker than a parcel, and needs the
+server bound to `127.0.0.1`); a ContentProvider (fine for battery snapshots,
+no streaming).
+
+### Contract sketch (CrazyCapy side — written clean-room)
+
+A question is if the interface should support multiple connected radars? 
+e.g. should a "radar-id" be part of all calls in the API? (and a query/list also added).
+
+AIDL interface + parcelables live in `app/src/aidl/.../radar/`:
+
+```
+IRadarService
+  // snapshots
+  int getBatteryPercent();                 // -1 = unknown
+  boolean isConnected();
+  // commands
+  void setRadarLightMode(int mode);        // mode enum mirror of RadarLightMode type bytes
+  void setOverlayVisible(boolean visible);
+  // streaming
+  void registerTargetListener(IRadarTargetListener l);
+  void unregisterTargetListener(IRadarTargetListener l);
+  boolean registerTargetListener(IRadarTargetListener l); // false if radar not present
+
+oneway IRadarTargetListener
+  void onRadarState(RadarStateParcel state);   // pushed at ~5 Hz while registered
+
+parcelable RadarVehicleParcel { int id; int distanceM; int closingKmh;
+  int size; float lateralPos; float rangeXm; boolean isBehind; }
+parcelable RadarStateParcel { long timestamp; RadarVehicleParcel[] vehicles;
+  float bikeSpeedMs; boolean isClear; }
+```
+
+Data shapes mirror `RadarState.kt` / `Vehicle` so the simulator used for the
+map-layer work is drop-in replaceable by the real stream (see Phase 1).
+
+## Security
+
+- The two apps are signed by different keys, so a `signature`-level permission
+  is impossible. Use a custom permission declared by the overlay app
+  (`protectionLevel="dangerous"` or `normal`) that CrazyCapy requests via
+  `<uses-permission>`; the user approves it at install.
+- The overlay app must keep the service `exported="true"` **only** with that
+  permission enforced (`android:permission="..."` on the service), so a random
+  installed app cannot subscribe to your rear-radar stream or flip your light.
+- Bind explicitly by component (`Intent.setComponent`), never action-based.
+
+## Licensing
+
+- Overlay app: **GPL-3.0-or-later**. CrazyCapy: **Apache-2.0**. These are not
+  link-compatible; the two APKs stay separate processes and communicate over
+  binder with no shared code.
+- The AIDL contract, parcelables and any constants describing the wire format
+  (UUIDs, mode type bytes, parcel field layout) are **factual interface data**
+  and are written clean-room in CrazyCapy's repo. Do NOT copy the overlay
+  repo's `.aidl`/`.kt` files or comments; re-derive field meanings from the
+  published protocol or the values observed on the wire.
+- No GPL code is imported into the CrazyCapy APK.
+
+## Phase 0 — validate the UI with a simulator (DONE in this work)
+
+Before any IPC work, prove the idea in-app using the existing ghost ride:
+
+- Pure `sim.RadarSimulator` spawns fake cars/trucks/bikes 175 m behind the
+  rider, faster than the rider's current speed, closing until they pass and
+  then disappearing (a rear radar only looks back).
+- Speed bands: cars/trucks 30–100 km/h, bikes 20–45 km/h; a target slower than
+  or equal to the rider is never shown.
+- Targets drawn on the map as colored dots behind the rider, driven from
+  `RideStore.radarTargets`; toggle in the ghost-ride start popup, persisted in
+  settings.
+- Deliverable: a decision on whether the map is a sensible surface for rear
+  radar info (lane/lateral resolution, range legibility at riding zoom).
+
+## Phase 1 — consume the real stream
+
+- Write the clean-room AIDL contract into the repo (above).
+- Create an optional `RadarClient` (bind, subscribe, expose a `StateFlow` of
+  radar state) that is inert when the overlay app is absent.
+- Map the `RadarStateParcel` stream onto the same layer plumbing built in
+  Phase 0 (rename sim types to a shared `radar.RadarVehicle` model).
+- Decide whether the sim remains a debug-only fallback when the overlay app is
+  missing.
+
+## Phase 2 — battery + tail light + overlay control
+
+- Add `getBatteryPercent` and `setRadarLightMode` to the HUD/settings UI
+  (radar battery chip, tail-light off/on button).
+- Add `setOverlayVisible` triggered from a CrazyCapy control if the overlay
+  app exposes it.
+- Maybe show a graceful "rear radar not available" state when the overlay
+  app is expected/selectd but not installed or permission is not granted.
+
+## Phase 3 — the overlay app's IPC surface
+
+Owned by the overlay app's maintainer (not this repo): an exported,
+permission-gated bound service implementing the agreed contract, plus the
+`setOverlayVisible` hook. CrazyCapy only carries the client side.
+
+## Status
+
+- Phase 0: in progress (this change set).
+- Phases 1–3: not started.

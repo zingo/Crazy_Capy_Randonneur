@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.gpx.Track
+import com.crazycapy.randonneur.sim.RadarTarget
 
 /**
  * App-level state shared between the Activity (share target), the foreground
@@ -153,6 +154,14 @@ object RideStore {
     /** Preferred map style: dark by default (OLED screens drain less). */
     var darkMap: Boolean by mutableStateOf(true)
 
+    // ---- Rear-radar (simulated in ghost rides, real stream later) ----
+
+    /** Spawn fake overtaking traffic during ghost rides. */
+    var radarSimEnabled: Boolean by mutableStateOf(true)
+
+    /** Latest rear-radar targets (empty when inactive or disabled). */
+    var radarTargets: List<RadarTarget> by mutableStateOf(emptyList())
+
     fun reset() {
         active = false
         mode = RideMode.IDLE
@@ -179,5 +188,6 @@ object RideStore {
         nextTurnAfterM = null
         upcomingRoute = emptyList()
         nextTurnPopupVisible = false
+        radarTargets = emptyList()
     }
 }

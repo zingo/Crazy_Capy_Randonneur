@@ -19,9 +19,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.crazycapy.randonneur.state.RideMode
 import com.crazycapy.randonneur.state.RideStore
+import com.crazycapy.randonneur.state.RouteStore
 
 /**
  * Pre-start dialog: choose the riding direction before launching a ride.
@@ -32,7 +34,9 @@ internal fun StartRideDialog(
     onDismiss: () -> Unit,
     onStart: (reverse: Boolean) -> Unit,
 ) {
+    val context = LocalContext.current
     var reverse by remember { mutableStateOf(RideStore.reverse) }
+    var radarSim by remember { mutableStateOf(RideStore.radarSimEnabled) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (mode == RideMode.GHOST) "Start ghost ride" else "Start navigation") },
@@ -53,10 +57,32 @@ internal fun StartRideDialog(
                     modifier = Modifier.align(Alignment.Start),
                     style = MaterialTheme.typography.bodySmall,
                 )
+                if (mode == RideMode.GHOST) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Cars, trucks and bikes overtaking behind you (simulated rear radar)",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Switch(
+                        checked = radarSim,
+                        onCheckedChange = { radarSim = it },
+                        modifier = Modifier.align(Alignment.Start),
+                    )
+                    Text(
+                        "Simulate traffic behind",
+                        modifier = Modifier.align(Alignment.Start),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onStart(reverse) }) { Text(if (mode == RideMode.GHOST) "Start ghost" else "Navigate") }
+            TextButton(onClick = {
+                RideStore.radarSimEnabled = radarSim
+                if (mode == RideMode.GHOST) RouteStore.saveSettings(context)
+                onStart(reverse)
+            }) { Text(if (mode == RideMode.GHOST) "Start ghost" else "Navigate") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

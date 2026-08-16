@@ -19,10 +19,13 @@ their Android device.
    ./gradlew :app:assembleDebug
    ```
 
-3. Install to the target serial:
+3. Install to the target device. Prefer `adb -d` (the single USB-connected
+   phone) when only one is attached; fall back to the serial otherwise:
 
    ```bash
-   /home/zingo/Android/Sdk/platform-tools/adb -s SERIAL install -r app/build/outputs/apk/debug/app-debug.apk
+   adb -d install -r app/build/outputs/apk/debug/app-debug.apk
+   # or, if several devices are attached:
+   adb -s SERIAL install -r app/build/outputs/apk/debug/app-debug.apk
    ```
 
 4. Confirm with `Success`. If the physical phone isn't connected, tell the

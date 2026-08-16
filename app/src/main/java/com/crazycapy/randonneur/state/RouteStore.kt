@@ -156,6 +156,7 @@ object RouteStore {
         map["precacheEnabled"]?.toBooleanStrictOrNull()?.let { RideStore.precacheEnabled = it }
         map["ghostTimeScale"]?.toDoubleOrNull()?.let { RideStore.ghostTimeScale = it }
         map["ghostSpeedKmh"]?.toDoubleOrNull()?.let { RideStore.ghostSpeedKmh = it }
+        map["radarSim"]?.toBooleanStrictOrNull()?.let { RideStore.radarSimEnabled = it }
     }
 
     fun saveSettings(context: Context) {
@@ -169,6 +170,7 @@ object RouteStore {
             "precacheEnabled=${RideStore.precacheEnabled}",
             "ghostTimeScale=${RideStore.ghostTimeScale}",
             "ghostSpeedKmh=${RideStore.ghostSpeedKmh}",
+            "radarSim=${RideStore.radarSimEnabled}",
         )
         runCatching { settingsFile(context).writeText(lines.joinToString("\n")) }
     }

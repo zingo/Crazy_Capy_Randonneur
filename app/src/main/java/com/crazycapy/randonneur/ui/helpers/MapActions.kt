@@ -21,6 +21,8 @@ import com.crazycapy.randonneur.roadBrightenOverrides
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.gpx.Waypoint
 import com.crazycapy.randonneur.nav.Geo
+import com.crazycapy.randonneur.sim.RadarTarget
+import com.crazycapy.randonneur.sim.RadarTargetType
 import com.crazycapy.randonneur.state.RideStore
 import com.google.gson.JsonObject
 import org.maplibre.android.camera.CameraPosition
@@ -38,6 +40,7 @@ import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import kotlin.math.hypot
@@ -359,6 +362,51 @@ internal fun updateIdleDot(map: MapLibreMap, lat: Double?, lon: Double?, show: B
                 PropertyFactory.circleStrokeWidth(2f),
             )
         )
+    }
+}
+
+/*
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │  Simulated rear-radar traffic layer                                     │
+ * │                                                                         │
+ * │  updateRadarTargets redraws the colour-coded dots behind the rider      │
+ * │  during a ghost ride.  Fed by the same RadarTarget shape a live         │
+ * │  rear-radar stream will use later, so this layer is ready for it.       │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ */
+
+internal fun updateRadarTargets(map: MapLibreMap, targets: List<RadarTarget>, show: Boolean) {
+    runCatching {
+        val style = map.getStyle() ?: return
+        if (!show || targets.isEmpty()) {
+            style.removeLayer("radar-layer")
+            style.removeSource("radar-source")
+            return
+        }
+        val features = targets.map { t ->
+            val color = when (t.type) {
+                RadarTargetType.CAR -> "#E53935"
+                RadarTargetType.TRUCK -> "#FF9800"
+                RadarTargetType.BIKE -> "#42A5F5"
+            }
+            val props = JsonObject().apply { addProperty("color", color) }
+            Feature.fromGeometry(Point.fromLngLat(t.lon, t.lat), props)
+        }
+        val existing = style.getSource("radar-source") as? GeoJsonSource
+        if (existing == null) {
+            style.addSource(GeoJsonSource("radar-source", FeatureCollection.fromFeatures(features)))
+            style.addLayer(
+                CircleLayer("radar-layer", "radar-source").withProperties(
+                    PropertyFactory.circleColor(Expression.get("color")),
+                    PropertyFactory.circleRadius(5f),
+                    PropertyFactory.circleOpacity(0.95f),
+                    PropertyFactory.circleStrokeColor(0xFFFFFFFF.toInt()),
+                    PropertyFactory.circleStrokeWidth(1.5f),
+                )
+            )
+        } else {
+            existing.setGeoJson(FeatureCollection.fromFeatures(features))
+        }
     }
 }
 

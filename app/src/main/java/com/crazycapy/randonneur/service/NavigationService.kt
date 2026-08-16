@@ -50,6 +50,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.crazycapy.randonneur.KMH_TO_MS
 import com.crazycapy.randonneur.R
 import com.crazycapy.randonneur.ble.HrProvider
 import com.crazycapy.randonneur.ble.StubHrProvider
@@ -59,6 +60,7 @@ import com.crazycapy.randonneur.nav.NavEngine
 import com.crazycapy.randonneur.nav.NavEvent
 import com.crazycapy.randonneur.nav.PoiTracker
 import com.crazycapy.randonneur.nav.maneuverFor
+import com.crazycapy.randonneur.sim.RadarSimulator
 import com.crazycapy.randonneur.sim.RouteSimulator
 import com.crazycapy.randonneur.state.RideMode
 import com.crazycapy.randonneur.state.RideStore
@@ -103,6 +105,7 @@ class NavigationService : Service() {
     private var startRealtimeMs = 0L
     private var ticker: Runnable? = null
     private var sim: RouteSimulator? = null
+    private var radarSim: RadarSimulator? = null
     private var tickCounter = 0
 
     // Turn beeps (left/right cue that shortens as the turn nears).
@@ -210,6 +213,8 @@ class NavigationService : Service() {
         RideStore.nextTurnIndex = null
         RideStore.upcomingRoute = emptyList()
         RideStore.nextTurnPopupVisible = false
+        RideStore.radarTargets = emptyList()
+        radarSim = null
 
         startForeground(NOTIF_ID, buildNotification("Preparing ${track.name}…"))
 
@@ -397,6 +402,21 @@ class NavigationService : Service() {
         }
         updateAvgSpeed()
         updatePoi()
+        updateRadarSim(lat, lon, moved)
+    }
+
+    /** Advance the ghost-ride rear-radar traffic sim; clears it for GPS rides. */
+    private fun updateRadarSim(lat: Double, lon: Double, movedM: Double) {
+        if (RideStore.mode != RideMode.GHOST || !RideStore.radarSimEnabled) {
+            if (RideStore.radarTargets.isNotEmpty()) RideStore.radarTargets = emptyList()
+            return
+        }
+        val course = RideStore.bearing ?: return
+        val speed = RideStore.ghostSpeedKmh
+        if (speed <= 0.0) return
+        val dtSec = movedM / (speed / KMH_TO_MS)
+        val sim = radarSim ?: RadarSimulator().also { radarSim = it }
+        RideStore.radarTargets = sim.tick(lat, lon, course, speed, dtSec)
     }
 
     private fun updateAvgSpeed() {
@@ -771,6 +791,8 @@ class NavigationService : Service() {
         RideStore.nextTurnIndex = null
         RideStore.upcomingRoute = emptyList()
         RideStore.nextTurnPopupVisible = false
+        RideStore.radarTargets = emptyList()
+        radarSim = null
         lastNotificationText = null
         updateNotification(message)
         // Guard the late foreground-stop so a ride restarted within this window

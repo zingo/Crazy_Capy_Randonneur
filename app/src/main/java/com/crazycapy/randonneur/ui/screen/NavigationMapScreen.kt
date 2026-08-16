@@ -84,6 +84,7 @@ import com.crazycapy.randonneur.ui.helpers.nearestWaypoint
 import com.crazycapy.randonneur.ui.helpers.refreshRoute
 import com.crazycapy.randonneur.ui.helpers.tapToleranceMeters
 import com.crazycapy.randonneur.ui.helpers.updateIdleDot
+import com.crazycapy.randonneur.ui.helpers.updateRadarTargets
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -276,6 +277,14 @@ internal fun NavigationMapScreen(
         if (RideStore.active || !RideStore.mapVisible) { updateIdleDot(m, null, null, show = false); return@LaunchedEffect }
         if (idleLat == null || idleLon == null) return@LaunchedEffect
         updateIdleDot(m, idleLat, idleLon, show = true)
+    }
+
+    // Draw simulated rear-radar traffic behind the rider during ghost rides.
+    LaunchedEffect(map, RideStore.radarTargets, RideStore.active, RideStore.mode, RideStore.radarSimEnabled, RideStore.mapVisible) {
+        val m = map ?: return@LaunchedEffect
+        if (!RideStore.mapVisible) return@LaunchedEffect
+        val show = RideStore.active && RideStore.mode == RideMode.GHOST && RideStore.radarSimEnabled
+        updateRadarTargets(m, RideStore.radarTargets, show)
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->

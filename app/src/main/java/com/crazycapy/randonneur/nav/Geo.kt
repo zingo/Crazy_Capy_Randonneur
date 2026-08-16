@@ -14,6 +14,7 @@
 package com.crazycapy.randonneur.nav
 
 import kotlin.math.atan2
+import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -50,6 +51,20 @@ object Geo {
     fun turnDegrees(bearingIn: Double, bearingOut: Double): Double {
         val d = bearingOut - bearingIn
         return (d + 540.0) % 360.0 - 180.0
+    }
+
+    /** The point `distM` meters from (lat, lon) along `bearingDeg` (initial bearing). */
+    fun destinationMeters(lat: Double, lon: Double, bearingDeg: Double, distM: Double): Pair<Double, Double> {
+        val angular = distM / EARTH_RADIUS_M
+        val brng = Math.toRadians(bearingDeg)
+        val lat1 = Math.toRadians(lat)
+        val lon1 = Math.toRadians(lon)
+        val lat2 = asin(sin(lat1) * cos(angular) + cos(lat1) * sin(angular) * cos(brng))
+        val lon2 = lon1 + atan2(
+            sin(brng) * sin(angular) * cos(lat1),
+            cos(angular) - sin(lat1) * sin(lat2),
+        )
+        return Math.toDegrees(lat2) to ((Math.toDegrees(lon2) + 540.0) % 360.0 - 180.0)
     }
 
     /** Distance in meters from point p to the line segment a->b (equirectangular approx). */

@@ -59,6 +59,11 @@ your ears do the navigating — no accounts, no cloud, no ads.
 ### Testing
 - **Ghost ride simulator** – try any route without leaving home: follow a
   simulated rider on the map, hear the full guidance, and control the pace.
+- **Simulated rear-radar traffic** – on a ghost ride, cars, trucks and bikes
+  overtake from behind (coloured dots on the map, disappearing once they pass,
+  since a rear radar only looks back). Toggle it in the ghost-ride start
+  dialog. This is the visual preview of an optional future live-radar
+  integration.
 
 ---
 
@@ -78,8 +83,6 @@ and dark map styles are both shown.
 | Saved routes library (cache status) | Checkpoint info popup (phone) | Route loaded with checkpoint markers (phone) |
 | --- | --- | --- |
 | ![Saved routes](docs/screenshots/2026-08-12-17-saved-routes-cache.png) | ![Checkpoint info popup](docs/screenshots/2026-08-14-02-cp-popup.png) | ![Route loaded with checkpoint markers](docs/screenshots/2026-08-14-01-route-with-cps-phone.png) |
-
-Screenshot files are dated `YYYY-MM-DD-…` so stale captures are easy to spot.
 
 ---
 
@@ -111,6 +114,23 @@ Install on a connected device/emulator:
 ```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
+
+#### Flash to your phone
+
+Copy-paste build + install to the phone over USB (`adb -d` targets the single
+USB-connected device; see `adb devices` — a phone may show as `unauthorized`
+until you accept the debug prompt on it):
+
+```bash
+export JAVA_HOME=$HOME/.local/opt/jdk-21.0.12+8
+export PATH=$PATH:$HOME/Android/Sdk/platform-tools
+
+./gradlew :app:assembleDebug
+adb -d install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Never skip the `assembleDebug` — the APK under
+`app/build/outputs/apk/debug/` can be stale from an earlier build.
 
 ### Run
 
