@@ -21,8 +21,8 @@ import com.crazycapy.randonneur.roadBrightenOverrides
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.gpx.Waypoint
 import com.crazycapy.randonneur.nav.Geo
-import com.crazycapy.randonneur.sim.RadarTarget
-import com.crazycapy.randonneur.sim.RadarTargetType
+import com.crazycapy.randonneur.radar.RadarVehicle
+import com.crazycapy.randonneur.radar.RadarVehicleSize
 import com.crazycapy.randonneur.state.RideStore
 import com.google.gson.JsonObject
 import org.maplibre.android.camera.CameraPosition
@@ -370,12 +370,12 @@ internal fun updateIdleDot(map: MapLibreMap, lat: Double?, lon: Double?, show: B
  * │  Simulated rear-radar traffic layer                                     │
  * │                                                                         │
  * │  updateRadarTargets redraws the colour-coded dots behind the rider      │
- * │  during a ghost ride.  Fed by the same RadarTarget shape a live         │
- * │  rear-radar stream will use later, so this layer is ready for it.       │
+ * │  during a ghost ride or a live rear-radar stream.  Both feed the same   │
+ * │  [RadarVehicle] model.                                                  │
  * └─────────────────────────────────────────────────────────────────────────┘
  */
 
-internal fun updateRadarTargets(map: MapLibreMap, targets: List<RadarTarget>, show: Boolean) {
+internal fun updateRadarTargets(map: MapLibreMap, targets: List<RadarVehicle>, show: Boolean) {
     runCatching {
         val style = map.getStyle() ?: return
         if (!show || targets.isEmpty()) {
@@ -384,10 +384,10 @@ internal fun updateRadarTargets(map: MapLibreMap, targets: List<RadarTarget>, sh
             return
         }
         val features = targets.map { t ->
-            val color = when (t.type) {
-                RadarTargetType.CAR -> "#E53935"
-                RadarTargetType.TRUCK -> "#FF9800"
-                RadarTargetType.BIKE -> "#42A5F5"
+            val color = when (t.size) {
+                RadarVehicleSize.CAR   -> "#FF9800"
+                RadarVehicleSize.TRUCK -> "#E53935"
+                RadarVehicleSize.BIKE  -> "#42A5F5"
             }
             val props = JsonObject().apply { addProperty("color", color) }
             Feature.fromGeometry(Point.fromLngLat(t.lon, t.lat), props)

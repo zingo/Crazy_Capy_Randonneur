@@ -157,6 +157,7 @@ object RouteStore {
         map["ghostTimeScale"]?.toDoubleOrNull()?.let { RideStore.ghostTimeScale = it }
         map["ghostSpeedKmh"]?.toDoubleOrNull()?.let { RideStore.ghostSpeedKmh = it }
         map["radarSim"]?.toBooleanStrictOrNull()?.let { RideStore.radarSimEnabled = it }
+        map["radarIntegration"]?.toBooleanStrictOrNull()?.let { RideStore.radarIntegrationEnabled = it }
     }
 
     fun saveSettings(context: Context) {
@@ -171,6 +172,7 @@ object RouteStore {
             "ghostTimeScale=${RideStore.ghostTimeScale}",
             "ghostSpeedKmh=${RideStore.ghostSpeedKmh}",
             "radarSim=${RideStore.radarSimEnabled}",
+            "radarIntegration=${RideStore.radarIntegrationEnabled}",
         )
         runCatching { settingsFile(context).writeText(lines.joinToString("\n")) }
     }

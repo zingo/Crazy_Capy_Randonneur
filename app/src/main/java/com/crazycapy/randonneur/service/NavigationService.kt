@@ -60,6 +60,7 @@ import com.crazycapy.randonneur.nav.NavEngine
 import com.crazycapy.randonneur.nav.NavEvent
 import com.crazycapy.randonneur.nav.PoiTracker
 import com.crazycapy.randonneur.nav.maneuverFor
+import com.crazycapy.randonneur.radar.RadarClient
 import com.crazycapy.randonneur.sim.RadarSimulator
 import com.crazycapy.randonneur.sim.RouteSimulator
 import com.crazycapy.randonneur.state.RideMode
@@ -234,7 +235,10 @@ class NavigationService : Service() {
         startTicker()
 
         when (mode) {
-            RideMode.GPS -> startGps(track, nav)
+            RideMode.GPS -> {
+                startGps(track, nav)
+                RadarClient.start(this)
+            }
             RideMode.GHOST -> startGhost(track, nav, reverse, resume)
             RideMode.IDLE -> Unit
         }
@@ -405,9 +409,13 @@ class NavigationService : Service() {
         updateRadarSim(lat, lon, moved)
     }
 
-    /** Advance the ghost-ride rear-radar traffic sim; clears it for GPS rides. */
+    /**
+     * Advance the ghost-ride rear-radar traffic sim. In GPS rides the live
+     * [RadarClient] owns radarTargets instead, so nothing is cleared here.
+     */
     private fun updateRadarSim(lat: Double, lon: Double, movedM: Double) {
-        if (RideStore.mode != RideMode.GHOST || !RideStore.radarSimEnabled) {
+        if (RideStore.mode != RideMode.GHOST) return
+        if (!RideStore.radarSimEnabled) {
             if (RideStore.radarTargets.isNotEmpty()) RideStore.radarTargets = emptyList()
             return
         }
@@ -769,6 +777,7 @@ class NavigationService : Service() {
         driverThread = null
         sim = null
         releaseWakeLock()
+        // TODO clearing RideStore should probably be refactored to it's own function to make this more readable. 
         RideStore.status = message
         RideStore.active = false
         RideStore.mode = RideMode.IDLE
@@ -791,8 +800,9 @@ class NavigationService : Service() {
         RideStore.nextTurnIndex = null
         RideStore.upcomingRoute = emptyList()
         RideStore.nextTurnPopupVisible = false
-        RideStore.radarTargets = emptyList()
+        RideStore.radarTargets = emptyList() //TODO radar data/showing is not part or a ride and should probably not be cleared on stopRide
         radarSim = null
+        RadarClient.stop(this)
         lastNotificationText = null
         updateNotification(message)
         // Guard the late foreground-stop so a ride restarted within this window

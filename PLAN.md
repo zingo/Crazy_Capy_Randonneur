@@ -80,7 +80,7 @@ CrazyCapyRouting/
 
 ## Status
 
-- **M1–M4 done & verified**, M5 polish largely shipped. 77 unit tests +
+- **M1–M4 done & verified**, M5 polish largely shipped. 89 unit tests +
   instrumented ghost-ride tests pass on Capy17 (Android 17 AVD) via
   `./gradlew :app:connectedDebugAndroidTest`.
 - Shipped: TrainingHud → compact 3×2 top-left HUD (speed | covered | elapsed /
@@ -94,6 +94,12 @@ CrazyCapyRouting/
   toward the next checkpoint and the ETA cycle gains an ETA-CP mode); dark/light
   map toggle (dark default for OLED); StubHrProvider hooked into the service
   loop.
+- **Rear radar**: **live-radar** integration with android-bike-radar-overlay —
+  clean-room AIDL contract, `RadarClient` consuming the stream onto the same map
+  layer, and a HUD `RadarStatusBar` (battery %, connected state, tail-light
+  toggle). ghost-ride `RadarSimulator` (fake cars/trucks/bikes overtaking
+  from 175 m behind, drawn as coloured dots behind the rider, toggle persisted)
+  plus an optional. See `Integration_android-bike-radar-overlay.plan`.
 - **RWGPS import**: `RwGpsImport` fetches a route from its public JSON
   (`routes/<id>.json`) and `RwGpsParser` rebuilds it as a `Track`, lifting the
   route's POIs (incl. brevet `control` POIs) into waypoints — so checkpoints

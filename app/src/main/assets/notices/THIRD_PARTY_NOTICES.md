@@ -26,6 +26,30 @@ OpenFreeMap's attribution control to the map automatically, which satisfies
 this requirement (`OpenFreeMap © OpenMapTiles, Data from OpenStreetMap`).
 You must keep the MapLibre attribution control enabled.
 
+## Cross-app radar contract (dual-licensed)
+
+The rear-radar integration defines a small AIDL interface in
+`app/src/main/aidl/.../radar/` — the wire contract shared with the optional
+[android-bike-radar-overlay](https://github.com/partymola/android-bike-radar-overlay)
+app. These interface files are deliberately dual-licensed **`Apache-2.0 OR
+0BSD`** so they are easy to use and share across projects:
+
+- Crazy Capy Randonneur uses them under its own **Apache License 2.0**.
+- A GPL-licensed project can take the **0BSD** option, which imposes no
+  obligations.
+
+Only the factual wire-format contract (interface and parcelable layout) is
+shared; no GPL code is imported into this app.
+
+## Optional overlay app (android-bike-radar-overlay)
+
+When installed, the separate
+[android-bike-radar-overlay](https://github.com/partymola/android-bike-radar-overlay)
+app (package `es.jjrh.bikeradar`, **GPL-3.0-or-later**) can provide a live
+rear-radar stream. The two apps are separate APKs that communicate over the
+Android binder with no shared code; this app does not bundle or copy any of the
+overlay app's code.
+
 ## Runtime libraries (direct dependencies)
 
 | Library | Version | License | Copyright |
@@ -147,6 +171,26 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 The **Public Domain** applies to the `XmlPull` API (all classes directly in
 the `org.xmlpull.v1` package), as published on the kXML project (public
 domain declaration at <https://creativecommons.org/licenses/publicdomain>).
+
+## 0BSD (Zero-Clause BSD)
+
+Applies to: the cross-app AIDL contract files (offered alongside Apache-2.0;
+either license may be chosen).
+
+```
+Copyright (C) 2026 Crazy Capy Randonneur contributors
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
+OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+```
 
 ## MIT License
 

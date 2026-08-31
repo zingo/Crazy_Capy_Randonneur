@@ -7,9 +7,9 @@
  *
  *   NavigationService writes  ->  RideStore (mutableStateOf)  ->  UI reads
  *        |                           |                              |
- *   GPS fixes / events      lat/lon/speed/dist           recomposition
- *   turn events             beep/nav volume               turn cards
- *   HR data                 HR bpm                        HUD fields
+ *   GPS fixes / events      lat/lon/speed/dist                 recomposition
+ *   turn events             beep/nav volume                     turn cards
+ *   HR data                 HR bpm radar                        HUD fields
  *
  * Single-writer (the Service thread), multiple readers (Compose UI, TTS).
  * Persistence handled by RouteStore.
@@ -20,7 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.gpx.Track
-import com.crazycapy.randonneur.sim.RadarTarget
+import com.crazycapy.randonneur.radar.RadarVehicle
 
 /**
  * App-level state shared between the Activity (share target), the foreground
@@ -43,12 +43,6 @@ object RideStore {
     /** Riding the route from its end back to its start. */
     var reverse: Boolean by mutableStateOf(false)
 
-    /** Ghost-ride speed-up factor (1x = real time). */
-    var ghostTimeScale: Double by mutableStateOf(90.0)
-
-    /** Ghost-ride cruise speed in km/h. */
-    var ghostSpeedKmh: Double by mutableStateOf(28.0)
-
     /** Where the last ride stopped along the route (resume point), or null. */
     var resumeAlongM: Double? by mutableStateOf(null)
 
@@ -57,9 +51,6 @@ object RideStore {
 
     /** Reverse flag of the last ride, for the resume prompt. */
     var resumeReversed: Boolean by mutableStateOf(false)
-
-    /** Mode (GPS or ghost) of the last ride, so resume starts the same way. */
-    var resumeMode: RideMode by mutableStateOf(RideMode.GPS)
 
     /** Name of the route the last ride used. */
     var resumeRouteName: String? by mutableStateOf(null)
@@ -154,13 +145,44 @@ object RideStore {
     /** Preferred map style: dark by default (OLED screens drain less). */
     var darkMap: Boolean by mutableStateOf(true)
 
-    // ---- Rear-radar (simulated in ghost rides, real stream later) ----
+    /** Master switch for the live rear-radar integration (overlay app): when
+     *  false nothing is bound or streamed, to save battery. */
+    var radarIntegrationEnabled: Boolean by mutableStateOf(true)
+
+    /** Whether the overlay app's on-screen radar overlay should be shown. */
+    var radarOverlayVisible: Boolean by mutableStateOf(true)
+
+    /** Latest rear-radar targets (empty when inactive or disabled). */
+    var radarTargets: List<RadarVehicle> by mutableStateOf(emptyList())
+
+    /** The overlay app is installed, permitted and bound (may still be idle). */
+    var radarAvailable: Boolean by mutableStateOf(false)
+
+    /** The rear radar is currently connected through the overlay app. */
+    var radarConnected: Boolean by mutableStateOf(false)
+
+    /** Rear-radar battery %, or null when unknown / not connected. */
+    var radarBatteryPercent: Int? by mutableStateOf(null)
+
+    /** True while the rear radar's tail light is forced on (solid) via the overlay app. */
+    var radarLightOn: Boolean by mutableStateOf(false)
+
+    // ---- Ghost ride stuff ----
+
+    /** Mode (GPS or ghost) of the last ride, so resume starts the same way. */
+    var resumeMode: RideMode by mutableStateOf(RideMode.GPS)
+
+    /** Ghost-ride speed-up factor (1x = real time). */
+    var ghostTimeScale: Double by mutableStateOf(90.0)
+
+    /** Ghost-ride cruise speed in km/h. */
+    var ghostSpeedKmh: Double by mutableStateOf(28.0)
+
+    // ---- Rear-radar (simulated in ghost rides, real stream from overlay app) ----
 
     /** Spawn fake overtaking traffic during ghost rides. */
     var radarSimEnabled: Boolean by mutableStateOf(true)
 
-    /** Latest rear-radar targets (empty when inactive or disabled). */
-    var radarTargets: List<RadarTarget> by mutableStateOf(emptyList())
 
     fun reset() {
         active = false

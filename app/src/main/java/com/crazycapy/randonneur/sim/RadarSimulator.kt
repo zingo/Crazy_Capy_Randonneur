@@ -9,39 +9,18 @@
  *   spawns cars/trucks/bikes faster than the rider ->
  *   they close in, pass the rider and disappear (a rear radar only looks back)
  *
- * Pure Kotlin and unit-tested. Data shapes mirror the real Varia-class radar
- * (distance behind, closing km/h, lateral offset, size) so the map layer built
- * here can be fed the live stream from android-bike-radar-overlay later.
+ * Pure Kotlin and unit-tested. Produces the same [RadarVehicle] model a live
+ * rear-radar stream is mapped onto, so the map layer built here can be fed the
+ * real stream from android-bike-radar-overlay later.
  */
 package com.crazycapy.randonneur.sim
 
 import com.crazycapy.randonneur.KMH_TO_MS
-import com.crazycapy.randonneur.nav.Geo
+import com.crazycapy.randonneur.radar.RadarProjection
+import com.crazycapy.randonneur.radar.RadarVehicle
+import com.crazycapy.randonneur.radar.RadarVehicleSize
 import kotlin.math.roundToInt
 import kotlin.random.Random
-
-/** Kind of fake traffic target, mirroring the rear radar's CAR/TRUCK split plus bikes. */
-enum class RadarTargetType { CAR, TRUCK, BIKE }
-
-/**
- * One simulated target, positioned relative to the rider's current fix.
- *
- * @param gapM distance behind the rider along the road (radar range).
- * @param lateralM signed lateral offset in metres (+ = rider's right).
- * @param lateralPos normalized -1..1, same convention as the real radar.
- * @param closingKmh positive while approaching = speed minus rider speed.
- */
-data class RadarTarget(
-    val id: Int,
-    val lat: Double,
-    val lon: Double,
-    val gapM: Double,
-    val lateralM: Double,
-    val lateralPos: Float,
-    val speedKmh: Double,
-    val type: RadarTargetType,
-    val closingKmh: Int,
-)
 
 /**
  * Spawns and advances fake overtaking traffic behind a rider.
@@ -62,7 +41,7 @@ class RadarSimulator(
         var gapM: Double,
         val lateralM: Double,
         val speedKmh: Double,
-        val type: RadarTargetType,
+        val size: RadarVehicleSize,
     )
 
     private val targets = mutableListOf<Target>()
@@ -79,7 +58,7 @@ class RadarSimulator(
         riderBearing: Double,
         riderSpeedKmh: Double,
         dtSec: Double,
-    ): List<RadarTarget> {
+    ): List<RadarVehicle> {
         if (dtSec > 0.0) {
             val iter = targets.iterator()
             while (iter.hasNext()) {
@@ -99,50 +78,50 @@ class RadarSimulator(
 
         if (targets.isEmpty()) return emptyList()
 
-        val rightOfTravel = riderBearing + 90.0
         return targets.map { t ->
-            val (behindLat, behindLon) = Geo.destinationMeters(riderLat, riderLon, riderBearing + 180.0, t.gapM)
-            val (lat, lon) = Geo.destinationMeters(behindLat, behindLon, rightOfTravel, t.lateralM)
-            RadarTarget(
-                id = t.id,
-                lat = lat,
-                lon = lon,
-                gapM = t.gapM,
-                lateralM = t.lateralM,
-                lateralPos = (t.lateralM / LATERAL_FULL_M).toFloat().coerceIn(-1f, 1f),
-                speedKmh = t.speedKmh,
-                type = t.type,
-                closingKmh = (t.speedKmh - riderSpeedKmh).roundToInt(),
+            RadarProjection.project(
+                RadarVehicle(
+                    id = t.id,
+                    distanceM = t.gapM.toInt(),
+                    closingKmh = (t.speedKmh - riderSpeedKmh).roundToInt(),
+                    size = t.size,
+                    lateralPos = (t.lateralM / LATERAL_FULL_M).toFloat().coerceIn(-1f, 1f),
+                    rangeXm = t.lateralM.toFloat(),
+                    isAhead = false,
+                ),
+                riderLat,
+                riderLon,
+                riderBearing,
             )
         }
     }
 
     private fun spawn(riderSpeedKmh: Double) {
-        val type = pickType()
-        val speed = pickSpeedKmh(type)
+        val size = pickSize()
+        val speed = pickSpeedKmh(size)
         if (speed <= riderSpeedKmh) return
-        targets.add(Target(nextId++, MAX_RANGE_M, pickLateralM(type), speed, type))
+        targets.add(Target(nextId++, MAX_RANGE_M, pickLateralM(size), speed, size))
     }
 
-    private fun pickType(): RadarTargetType {
+    private fun pickSize(): RadarVehicleSize {
         val r = random.nextDouble()
         return when {
-            r < 0.6 -> RadarTargetType.CAR
-            r < 0.75 -> RadarTargetType.TRUCK
-            else -> RadarTargetType.BIKE
+            r < 0.6 -> RadarVehicleSize.CAR
+            r < 0.75 -> RadarVehicleSize.TRUCK
+            else -> RadarVehicleSize.BIKE
         }
     }
 
-    private fun pickSpeedKmh(type: RadarTargetType): Double = when (type) {
-        RadarTargetType.CAR -> random.nextDouble() * (CAR_MAX_KMH - CAR_MIN_KMH) + CAR_MIN_KMH
-        RadarTargetType.TRUCK -> random.nextDouble() * (TRUCK_MAX_KMH - TRUCK_MIN_KMH) + TRUCK_MIN_KMH
-        RadarTargetType.BIKE -> random.nextDouble() * (BIKE_MAX_KMH - BIKE_MIN_KMH) + BIKE_MIN_KMH
+    private fun pickSpeedKmh(size: RadarVehicleSize): Double = when (size) {
+        RadarVehicleSize.CAR -> random.nextDouble() * (CAR_MAX_KMH - CAR_MIN_KMH) + CAR_MIN_KMH
+        RadarVehicleSize.TRUCK -> random.nextDouble() * (TRUCK_MAX_KMH - TRUCK_MIN_KMH) + TRUCK_MIN_KMH
+        RadarVehicleSize.BIKE -> random.nextDouble() * (BIKE_MAX_KMH - BIKE_MIN_KMH) + BIKE_MIN_KMH
     }
 
-    private fun pickLateralM(type: RadarTargetType): Double = when (type) {
-        RadarTargetType.CAR -> random.nextDouble() * (CAR_MAX_LATERAL_M - CAR_MIN_LATERAL_M) + CAR_MIN_LATERAL_M
-        RadarTargetType.TRUCK -> random.nextDouble() * (TRUCK_MAX_LATERAL_M - TRUCK_MIN_LATERAL_M) + TRUCK_MIN_LATERAL_M
-        RadarTargetType.BIKE -> random.nextDouble() * (BIKE_MAX_LATERAL_M - BIKE_MIN_LATERAL_M) + BIKE_MIN_LATERAL_M
+    private fun pickLateralM(size: RadarVehicleSize): Double = when (size) {
+        RadarVehicleSize.CAR -> random.nextDouble() * (CAR_MAX_LATERAL_M - CAR_MIN_LATERAL_M) + CAR_MIN_LATERAL_M
+        RadarVehicleSize.TRUCK -> random.nextDouble() * (TRUCK_MAX_LATERAL_M - TRUCK_MIN_LATERAL_M) + TRUCK_MIN_LATERAL_M
+        RadarVehicleSize.BIKE -> random.nextDouble() * (BIKE_MAX_LATERAL_M - BIKE_MIN_LATERAL_M) + BIKE_MIN_LATERAL_M
     }
 
     companion object {

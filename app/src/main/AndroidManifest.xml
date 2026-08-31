@@ -8,7 +8,15 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Consume rear-radar data from android-bike-radar-overlay (declared by that app). -->
+    <uses-permission android:name="es.jjrh.bikeradar.permission.RADAR" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
+    <!-- Android 11+ package visibility: needed to detect the overlay app so the
+         radar client can stay inert when it is not installed. -->
+    <queries>
+        <package android:name="es.jjrh.bikeradar" />
+    </queries>
 
     <application
         android:label="@string/app_name"

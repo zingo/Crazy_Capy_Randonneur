@@ -94,11 +94,13 @@ map-layer work is drop-in replaceable by the real stream (see Phase 1).
 - Overlay app: **GPL-3.0-or-later**. CrazyCapy: **Apache-2.0**. These are not
   link-compatible; the two APKs stay separate processes and communicate over
   binder with no shared code.
-- The AIDL contract, parcelables and any constants describing the wire format
-  (UUIDs, mode type bytes, parcel field layout) are **factual interface data**
-  and are written clean-room in CrazyCapy's repo. Do NOT copy the overlay
-  repo's `.aidl`/`.kt` files or comments; re-derive field meanings from the
-  published protocol or the values observed on the wire.
+- The `.aidl` contract files (and the wire-format field layout: UUIDs, mode
+  type bytes, parcel field order) are **factual interface data** and are
+  dual-licensed **`Apache-2.0 OR 0BSD`** — e.g.pick-either dual license, this is chosen
+  deliberately so the same interface files are easy to use and share everywhere
+  and still fit both (and other) projects.
+  Both options are GPL-2/3- and Apache-compatible.
+- The Parcelable and binder implementations remain separate per-repo app code.
 - No GPL code is imported into the CrazyCapy APK.
 
 ## Phase 0 — validate the UI with a simulator (DONE in this work)
@@ -143,5 +145,24 @@ permission-gated bound service implementing the agreed contract, plus the
 
 ## Status
 
-- Phase 0: in progress (this change set).
-- Phases 1–3: not started.
+- Phase 0: DONE. Ghost-ride radar simulator + map layer + toggle.
+- Phase 1: DONE. Clean-room AIDL contract (`app/src/main/aidl/.../radar/`),
+  shared `radar.RadarVehicle` model (sim + live stream feed the same map
+  layer), `RadarClient` binding to the overlay service and projecting the
+  stream onto the map. Inert when the overlay app is absent.
+- Phase 2: DONE. `RadarStatusBar` (HUD): battery % chip, connected state, and
+  a tail-light off/on toggle, shown only while the overlay app is present.
+  Sim remains the ghost-mode preview; live stream drives the map in GPS rides
+  when the overlay app is connected.
+- Phase 3: Prototype DONE Not submitted yet (service side, in the overlay repo). `RadarIpcService`, a
+  permission-gated (`es.jjrh.bikeradar.permission.RADAR`, protectionLevel
+  normal) exported bound service implementing the contract: streams
+  `RadarStateParcel` at the radar's cadence from `RadarStateBus`, reports
+  battery + link state via `RadarIpcBridge` (populated by `BikeRadarService`),
+  and issues tail-light mode-sets through `RadarLinkController.setTailLightMode`.
+  `setOverlayVisible` is routed but not yet wired (the overlay does not
+  currently expose a global overlay show/hide).
+
+Open items for the overlay maintainer: add `RadarIpcService` + `RadarIpcBridge`
+to the diff-coverage gate's excludes (done here) and wire `setOverlayVisible`
+if a global overlay toggle is ever added.

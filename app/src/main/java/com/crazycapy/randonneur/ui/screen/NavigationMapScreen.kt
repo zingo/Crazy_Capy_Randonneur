@@ -62,11 +62,13 @@ import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.gpx.Waypoint
 import com.crazycapy.randonneur.nav.TurnFinder
+import com.crazycapy.randonneur.radar.RadarClient
 import com.crazycapy.randonneur.service.NavigationService
 import com.crazycapy.randonneur.state.RideMode
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.ui.OffRouteAck
+import com.crazycapy.randonneur.ui.RadarStatusBar
 import com.crazycapy.randonneur.ui.TrainingHud
 import com.crazycapy.randonneur.ui.components.GhostControls
 import com.crazycapy.randonneur.ui.components.ResumeBanner
@@ -253,23 +255,38 @@ internal fun NavigationMapScreen(
             idleCenteredOnce = true
             m.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(la, lo), 15.0))
         }
+        // Seed the radar client with a rider position so live targets can be
+        // projected even when not navigating; pass the course when the fix has one.
+        fun seedRadarPosition(loc: android.location.Location) {
+            RadarClient.updateRiderPosition(loc.latitude, loc.longitude, if (loc.hasBearing()) loc.bearing.toDouble() else null)
+        }
         if (hasLoc && idleLat == null && idleLon == null) {
             val last = listOf(
                 android.location.LocationManager.GPS_PROVIDER,
                 android.location.LocationManager.NETWORK_PROVIDER,
                 android.location.LocationManager.PASSIVE_PROVIDER,
             ).mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }.maxByOrNull { it.time }
-            if (last != null) { idleLat = last.latitude; idleLon = last.longitude; centerToSelf() }
+            if (last != null) { seedRadarPosition(last); idleLat = last.latitude; idleLon = last.longitude; centerToSelf() }
             else if (RideStore.mapVisible) {
-                runCatching { lm.requestSingleUpdate(android.location.LocationManager.GPS_PROVIDER, { idleLat = it.latitude; idleLon = it.longitude; centerToSelf() }, android.os.Looper.getMainLooper()) }
+                runCatching { lm.requestSingleUpdate(android.location.LocationManager.GPS_PROVIDER, { seedRadarPosition(it); idleLat = it.latitude; idleLon = it.longitude; centerToSelf() }, android.os.Looper.getMainLooper()) }
             }
         }
         val listener = object : android.location.LocationListener {
-            override fun onLocationChanged(location: android.location.Location) { idleLat = location.latitude; idleLon = location.longitude }
+            override fun onLocationChanged(location: android.location.Location) {
+                seedRadarPosition(location)
+                idleLat = location.latitude
+                idleLon = location.longitude
+            }
         }
         if (RideStore.mapVisible) runCatching { lm.requestLocationUpdates(android.location.LocationManager.PASSIVE_PROVIDER, 5000L, 0f, listener, android.os.Looper.getMainLooper()) }
         onDispose { runCatching { lm.removeUpdates(listener) } }
     }
+
+    // Auto-detect the rear-radar overlay app once at app start. When the overlay
+    // is absent this costs nothing (no bind, no recurring check); if installed
+    // later it is picked up on the next launch. Bind, when present, keeps the
+    // radar controls available.
+    LaunchedEffect(Unit) { RadarClient.refreshAvailability(context) }
 
     // Redraw idle dot.
     LaunchedEffect(map, RideStore.active, RideStore.darkMap, idleLat, idleLon, RideStore.mapVisible) {
@@ -279,11 +296,14 @@ internal fun NavigationMapScreen(
         updateIdleDot(m, idleLat, idleLon, show = true)
     }
 
-    // Draw simulated rear-radar traffic behind the rider during ghost rides.
-    LaunchedEffect(map, RideStore.radarTargets, RideStore.active, RideStore.mode, RideStore.radarSimEnabled, RideStore.mapVisible) {
+    // Draw rear-radar traffic behind the rider: the simulator during ghost rides,
+    // the live overlay-app stream during GPS rides.
+    LaunchedEffect(map, RideStore.radarTargets, RideStore.active, RideStore.mode, RideStore.radarSimEnabled, RideStore.radarConnected, RideStore.mapVisible) {
         val m = map ?: return@LaunchedEffect
         if (!RideStore.mapVisible) return@LaunchedEffect
-        val show = RideStore.active && RideStore.mode == RideMode.GHOST && RideStore.radarSimEnabled
+        // Live radar targets show whenever a radar is connected, even when idle
+        // (not navigating); the simulator drives targets during ghost rides.
+        val show = (RideStore.mode == RideMode.GHOST && RideStore.radarSimEnabled) || RideStore.radarConnected
         updateRadarTargets(m, RideStore.radarTargets, show)
     }
 
@@ -366,7 +386,10 @@ internal fun NavigationMapScreen(
     ) { insets ->
         Box(Modifier.fillMaxSize().padding(insets)) {
             AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
-            TrainingHud(Modifier.align(Alignment.TopStart).padding(top = 8.dp, start = 8.dp))
+            Column(Modifier.align(Alignment.TopStart).padding(top = 8.dp, start = 8.dp)) {
+                TrainingHud()
+                RadarStatusBar(Modifier.padding(top = 6.dp))
+            }
             if (RideStore.active && RideStore.offRouteActive && !RideStore.offRouteAcknowledged) {
                 OffRouteAck(Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
             }

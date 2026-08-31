@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.crazycapy.randonneur.cache.RouteCache
+import com.crazycapy.randonneur.radar.RadarClient
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
 import kotlin.math.roundToInt
@@ -116,6 +117,15 @@ internal fun SettingsDialog(
                     }
                 }
                 Spacer(Modifier.height(12.dp))
+                Text("Rear radar", style = MaterialTheme.typography.titleSmall)
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                SettingSwitch(
+                    checked = RideStore.radarIntegrationEnabled,
+                    onCheckedChange = { RadarClient.setIntegrationEnabled(context, it); RouteStore.saveSettings(context) },
+                    title = "Live rear-radar",
+                    subtitle = "Read a real rear radar via the overlay app (off saves battery)",
+                )
+                Spacer(Modifier.height(12.dp))
                 Text("Demo", style = MaterialTheme.typography.titleSmall)
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -136,6 +146,10 @@ internal fun SettingsDialog(
                 AboutRow("Version", versionName)
                 AboutRow("Version code", versionCode.toString())
                 AboutRow("Build type", buildType)
+                AboutRow(
+                    "Rear radar",
+                    "Optional: android-bike-radar-overlay (GPL-3.0-or-later, separate app)",
+                )
                 Spacer(Modifier.height(16.dp))
                 Text(
                     "Map data © OpenStreetMap contributors. Tiles by OpenFreeMap.",
@@ -189,7 +203,7 @@ internal fun SettingSlider(value: Int, onValueChange: (Int) -> Unit, title: Stri
 @Composable
 internal fun AboutRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-        Text(value, style = MaterialTheme.typography.bodyMedium)
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(value, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium)
     }
 }
