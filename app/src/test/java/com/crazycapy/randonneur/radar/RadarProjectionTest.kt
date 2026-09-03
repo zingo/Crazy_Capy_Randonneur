@@ -6,6 +6,7 @@ package com.crazycapy.randonneur.radar
 
 import com.crazycapy.randonneur.nav.Geo
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -55,5 +56,18 @@ class RadarProjectionTest {
         assertEquals(behind.closingKmh, p.closingKmh)
         assertEquals(behind.size, p.size)
         assertEquals(behind.isAhead, p.isAhead)
+        assertEquals(behind.lateralPos, p.lateralPos, 0f)
+        assertEquals(behind.rangeXm, p.rangeXm, 0f)
+    }
+
+    @Test
+    fun keepsHowFarEachNumberCanBeTrusted() {
+        // The map colours on these, so losing them here turns an unmeasured
+        // target back into a confident car with the right position.
+        val unmeasured = behind.copy(closingKnown = false, lateralKnown = false, sizeKnown = false)
+        val p = RadarProjection.project(unmeasured, 50.0, 10.0, 90.0)
+        assertFalse(p.closingKnown)
+        assertFalse(p.lateralKnown)
+        assertFalse(p.sizeKnown)
     }
 }

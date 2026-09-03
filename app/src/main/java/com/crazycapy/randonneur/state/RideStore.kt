@@ -158,6 +158,13 @@ object RideStore {
     /** The overlay app is installed, permitted and bound (may still be idle). */
     var radarAvailable: Boolean by mutableStateOf(false)
 
+    /**
+     * The rider has allowed this app to read the radar; binding does not.
+     * Null until the overlay app has answered, so a granted rider is not shown
+     * the prompt for the moment a bind takes to land.
+     */
+    var radarGranted: Boolean? by mutableStateOf(null)
+
     /** The rear radar is currently connected through the overlay app. */
     var radarConnected: Boolean by mutableStateOf(false)
 

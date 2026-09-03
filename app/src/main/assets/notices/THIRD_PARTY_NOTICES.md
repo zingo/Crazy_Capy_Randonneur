@@ -26,29 +26,37 @@ OpenFreeMap's attribution control to the map automatically, which satisfies
 this requirement (`OpenFreeMap © OpenMapTiles, Data from OpenStreetMap`).
 You must keep the MapLibre attribution control enabled.
 
-## Cross-app radar contract (dual-licensed)
+## Cross-app radar contract (from android-bike-radar-overlay)
 
-The rear-radar integration defines a small AIDL interface in
-`app/src/main/aidl/.../radar/` — the wire contract shared with the optional
+The rear-radar integration is built on the contract published by the optional
 [android-bike-radar-overlay](https://github.com/partymola/android-bike-radar-overlay)
-app. These interface files are deliberately dual-licensed **`Apache-2.0 OR
-0BSD`** so they are easy to use and share across projects:
+app, which licenses these six files **Apache-2.0** so they can be copied into a
+consumer. They are copied here unmodified:
 
-- Crazy Capy Randonneur uses them under its own **Apache License 2.0**.
-- A GPL-licensed project can take the **0BSD** option, which imposes no
-  obligations.
+- `app/src/main/aidl/es/jjrh/bikeradar/ipc/IRadarService.aidl`
+- `app/src/main/aidl/es/jjrh/bikeradar/ipc/IRadarListener.aidl`
+- `app/src/main/aidl/es/jjrh/bikeradar/ipc/RadarStateParcel.aidl`
+- `app/src/main/java/es/jjrh/bikeradar/ipc/RadarContract.kt`
+- `app/src/main/java/es/jjrh/bikeradar/ipc/RadarStateParcel.kt`
+- `app/src/main/java/es/jjrh/bikeradar/ipc/RadarVehicleParcel.kt`
 
-Only the factual wire-format contract (interface and parcelable layout) is
-shared; no GPL code is imported into this app.
+Each carries `Copyright (C) 2026 JJ del Rio` and
+`SPDX-License-Identifier: Apache-2.0`. Leave those headers alone: keeping the
+copyright and licence notice is what Apache-2.0 asks of a copy, and editing one
+would make it a modified file with its own obligations. Their header lines point
+at `LICENSES/Apache-2.0.txt`, added here as a copy of [LICENSE](LICENSE) so that
+path resolves, and at `additional-permission.txt`, which is a file in that
+project's own tree.
 
 ## Optional overlay app (android-bike-radar-overlay)
 
 When installed, the separate
 [android-bike-radar-overlay](https://github.com/partymola/android-bike-radar-overlay)
 app (package `es.jjrh.bikeradar`, **GPL-3.0-or-later**) can provide a live
-rear-radar stream. The two apps are separate APKs that communicate over the
-Android binder with no shared code; this app does not bundle or copy any of the
-overlay app's code.
+rear-radar stream. No GPL-licensed code is in this app: the only files taken
+from that project are the six Apache-2.0 contract files above. That project
+also publishes an additional permission under section 7 of the GPL, covering an
+app that communicates with it solely through that interface.
 
 ## Runtime libraries (direct dependencies)
 
@@ -171,26 +179,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 The **Public Domain** applies to the `XmlPull` API (all classes directly in
 the `org.xmlpull.v1` package), as published on the kXML project (public
 domain declaration at <https://creativecommons.org/licenses/publicdomain>).
-
-## 0BSD (Zero-Clause BSD)
-
-Applies to: the cross-app AIDL contract files (offered alongside Apache-2.0;
-either license may be chosen).
-
-```
-Copyright (C) 2026 Crazy Capy Randonneur contributors
-
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
-SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
-OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
-CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-```
 
 ## MIT License
 
