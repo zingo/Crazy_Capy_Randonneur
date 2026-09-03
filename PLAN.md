@@ -94,10 +94,13 @@ CrazyCapyRouting/
   toward the next checkpoint and the ETA cycle gains an ETA-CP mode); dark/light
   map toggle (dark default for OLED); StubHrProvider hooked into the service
   loop.
-- **Rear radar**: **live-radar** integration with android-bike-radar-overlay —
-  clean-room AIDL contract, `RadarClient` consuming the stream onto the same map
-  layer, and a HUD `RadarStatusBar` (battery %, connected state, tail-light
-  toggle). ghost-ride `RadarSimulator` (fake cars/trucks/bikes overtaking
+- **Rear radar**: **live-radar** integration with android-bike-radar-overlay,
+  built on that app's published AIDL contract (six Apache-2.0 files copied in
+  verbatim), with `RadarClient` consuming the stream onto the same map layer and
+  a HUD `RadarStatusBar` (battery %, connected state, tail-light toggle). The
+  rider allows this app on the overlay app's own screen first; until then the
+  bar carries that prompt and no radar data arrives. ghost-ride `RadarSimulator`
+  (fake cars/trucks/bikes overtaking
   from 175 m behind, drawn as coloured dots behind the rider, toggle persisted)
   plus an optional. See `Integration_android-bike-radar-overlay.plan`.
 - **RWGPS import**: `RwGpsImport` fetches a route from its public JSON

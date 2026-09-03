@@ -9,8 +9,8 @@ shown and controlled from inside CrazyCapy.
 The integration is two-sided: a small IPC surface added to the overlay app,
 and a consumer + UI in CrazyCapy. This plan scopes the CrazyCapy side and
 defines the wire contract. The two apps are developed separately and signed
-differently, so the interface must be agreed as a *contract*, never copied
-code (see licensing below).
+differently, so the interface has to be agreed as a *contract*. The overlay app
+now publishes one and licenses it for copying; see licensing below.
 
 android-bike-radar-overlay overlay is good and can be used but it would be
 nice to be able to turn it on/off it might also be nice to be able to controll
@@ -46,7 +46,11 @@ Rejected alternatives: localhost HTTP/WebSocket server in the overlay app
 server bound to `127.0.0.1`); a ContentProvider (fine for battery snapshots,
 no streaming).
 
-### Contract sketch (CrazyCapy side — written clean-room)
+### Contract sketch (superseded, kept for context)
+
+The overlay app now publishes the contract, and the shape below is not what it
+carries. See its `RadarContract.kt` and the copies under
+`app/src/main/java/es/jjrh/bikeradar/ipc/`.
 
 A question is if the interface should support multiple connected radars? 
 e.g. should a "radar-id" be part of all calls in the API? (and a query/list also added).
@@ -87,20 +91,24 @@ map-layer work is drop-in replaceable by the real stream (see Phase 1).
 - The overlay app must keep the service `exported="true"` **only** with that
   permission enforced (`android:permission="..."` on the service), so a random
   installed app cannot subscribe to your rear-radar stream or flip your light.
-- Bind explicitly by component (`Intent.setComponent`), never action-based.
+- Bind by the contract's action with the package set. The overlay app's
+  service class has moved once already, and the action is the part it publishes.
+- The install-time permission only filters stray binds. The rider grants each
+  app separately on the overlay app's own consent screen, and every call that
+  returns radar data or touches the hardware is checked against that grant.
 
 ## Licensing
 
-- Overlay app: **GPL-3.0-or-later**. CrazyCapy: **Apache-2.0**. These are not
-  link-compatible; the two APKs stay separate processes and communicate over
-  binder with no shared code.
-- The `.aidl` contract files (and the wire-format field layout: UUIDs, mode
-  type bytes, parcel field order) are **factual interface data** and are
-  dual-licensed **`Apache-2.0 OR 0BSD`** — e.g.pick-either dual license, this is chosen
-  deliberately so the same interface files are easy to use and share everywhere
-  and still fit both (and other) projects.
-  Both options are GPL-2/3- and Apache-compatible.
-- The Parcelable and binder implementations remain separate per-repo app code.
+Settled differently from the sketch above, and the overlay app is what settled
+it: it publishes the contract itself.
+
+- Overlay app: **GPL-3.0-or-later**. CrazyCapy: **Apache-2.0**.
+- Six contract files are licensed **Apache-2.0** by the overlay app so a
+  consumer can copy them, and CrazyCapy copies them unmodified, keeping their
+  headers and copyright line. They are listed in THIRD_PARTY_NOTICES.md.
+- The overlay app also publishes an additional permission under section 7 of
+  the GPL, covering an app that communicates with it solely through that
+  interface.
 - No GPL code is imported into the CrazyCapy APK.
 
 ## Phase 0 — validate the UI with a simulator (DONE in this work)
@@ -120,7 +128,7 @@ Before any IPC work, prove the idea in-app using the existing ghost ride:
 
 ## Phase 1 — consume the real stream
 
-- Write the clean-room AIDL contract into the repo (above).
+- Take the overlay app's published AIDL contract into the repo.
 - Create an optional `RadarClient` (bind, subscribe, expose a `StateFlow` of
   radar state) that is inert when the overlay app is absent.
 - Map the `RadarStateParcel` stream onto the same layer plumbing built in
@@ -146,15 +154,18 @@ permission-gated bound service implementing the agreed contract, plus the
 ## Status
 
 - Phase 0: DONE. Ghost-ride radar simulator + map layer + toggle.
-- Phase 1: DONE. Clean-room AIDL contract (`app/src/main/aidl/.../radar/`),
-  shared `radar.RadarVehicle` model (sim + live stream feed the same map
-  layer), `RadarClient` binding to the overlay service and projecting the
-  stream onto the map. Inert when the overlay app is absent.
+- Phase 1: DONE. The overlay app's published contract, copied into
+  `es/jjrh/bikeradar/ipc/`, a shared `radar.RadarVehicle` model (sim + live
+  stream feed the same map layer), and `RadarClient` binding to the overlay
+  service and projecting the stream onto the map. Inert when the overlay app is
+  absent, and silent until the rider grants access.
 - Phase 2: DONE. `RadarStatusBar` (HUD): battery % chip, connected state, and
   a tail-light off/on toggle, shown only while the overlay app is present.
   Sim remains the ghost-mode preview; live stream drives the map in GPS rides
   when the overlay app is connected.
-- Phase 3: Prototype DONE Not submitted yet (service side, in the overlay repo). `RadarIpcService`, a
+- Phase 3: the overlay app shipped its own service, contract and consent
+  screen, so the prototype below is superseded. What follows describes the
+  prototype and is kept for context. `RadarIpcService`, a
   permission-gated (`es.jjrh.bikeradar.permission.RADAR`, protectionLevel
   normal) exported bound service implementing the contract: streams
   `RadarStateParcel` at the radar's cadence from `RadarStateBus`, reports
@@ -163,6 +174,6 @@ permission-gated bound service implementing the agreed contract, plus the
   `setOverlayVisible` is routed but not yet wired (the overlay does not
   currently expose a global overlay show/hide).
 
-Open items for the overlay maintainer: add `RadarIpcService` + `RadarIpcBridge`
-to the diff-coverage gate's excludes (done here) and wire `setOverlayVisible`
-if a global overlay toggle is ever added.
+Both open items are closed on the overlay app's side. `setOverlayVisible` is
+wired, and the hold is anchored to the consumer's listener binder, so a
+consumer that crashes cannot leave the rider without their own display.

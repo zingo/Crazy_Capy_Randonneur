@@ -103,6 +103,24 @@ class RadarSimulatorTest {
     }
 
     @Test
+    fun simulatedTrafficCountsAsMeasured() {
+        // The simulator makes every value up on purpose, so its targets are
+        // complete. The map greys anything unmeasured, and these must not grey.
+        val sim = RadarSimulator(Random(23))
+        var out = emptyList<RadarVehicle>()
+        for (i in 0 until 300) {
+            out = runTicks(sim, 1, riderSpeedKmh = 14.0)
+            if (out.isNotEmpty()) break
+        }
+        assertTrue("expected a spawned target", out.isNotEmpty())
+        out.forEach { t ->
+            assertTrue("closing speed", t.closingKnown)
+            assertTrue("lateral offset", t.lateralKnown)
+            assertTrue("vehicle class", t.sizeKnown)
+        }
+    }
+
+    @Test
     fun lateralPosSaturatesAtFullScale() {
         val sim = RadarSimulator(Random(3))
         var out = emptyList<RadarVehicle>()
