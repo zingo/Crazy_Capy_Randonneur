@@ -171,11 +171,18 @@ object RideStore {
     /** The rear radar is currently connected through the overlay app. */
     var radarConnected: Boolean by mutableStateOf(false)
 
+    /** Timestamp when radar connection was lost; drives the cone fade-out.
+     *  Null when connected or when the fade-out has finished. */
+    var radarLostAtMs: Long? by mutableStateOf(null)
+
     /** Rear-radar battery %, or null when unknown / not connected. */
     var radarBatteryPercent: Int? by mutableStateOf(null)
 
     /** True while the rear radar's tail light is forced on (solid) via the overlay app. */
     var radarLightOn: Boolean by mutableStateOf(false)
+
+    /** True while the ghost sim is feeding targets; false when user toggles it off mid-ride. */
+    var radarSimConnected: Boolean by mutableStateOf(false)
 
     // ---- Ghost ride stuff ----
 
@@ -221,5 +228,7 @@ object RideStore {
         upcomingRoute = emptyList()
         nextTurnPopupVisible = false
         radarTargets = emptyList()
+        radarLostAtMs = null
+        radarSimConnected = false
     }
 }

@@ -163,31 +163,40 @@ permission-gated bound service implementing the agreed contract, plus the
   a tail-light off/on toggle, shown only while the overlay app is present.
   Sim remains the ghost-mode preview; live stream drives the map in GPS rides
   when the overlay app is connected.
-- Phase 3: the overlay app shipped its own service, contract and consent
-  screen, so the prototype below is superseded. What follows describes the
-  prototype and is kept for context. `RadarIpcService`, a
-  permission-gated (`es.jjrh.bikeradar.permission.RADAR`, protectionLevel
-  normal) exported bound service implementing the contract: streams
-  `RadarStateParcel` at the radar's cadence from `RadarStateBus`, reports
-  battery + link state via `RadarIpcBridge` (populated by `BikeRadarService`),
-  and issues tail-light mode-sets through `RadarLinkController.setTailLightMode`.
-  `setOverlayVisible` is routed but not yet wired (the overlay does not
-  currently expose a global overlay show/hide).
-
-Both open items are closed on the overlay app's side. `setOverlayVisible` is
-wired, and the hold is anchored to the consumer's listener binder, so a
-consumer that crashes cannot leave the rider without their own display.
+- Phase 3: DONE. The overlay app shipped its own service, contract and consent
+  screen. `setOverlayVisible` is wired, and the hold is anchored to the
+  consumer's listener binder, so a consumer that crashes cannot leave the
+  rider without their own display.
+- Bug fixes: radius/opacity properties added to GeoJSON features (invisible
+  targets fix), consent launch moved from Compose to Activity
+  `startActivityForResult` (Android 15+ `callingPackage` fix), consent errors
+  shown as dialog with Retry/Cancel/Open Bike Radar buttons.
+- Build: compileSdk/minSdk/targetSdk changed from 37 to 35 (eliminates D8
+  warnings, lowest SDK supported by Compose BOM 2025.06.01).
+- CI: GitHub Actions workflows added (unit tests, lint, Gradle wrapper
+  validation, CodeQL, dependency review, dependency submission).
+- Radar-lost handling: when the live stream (or ghost sim) drops, targets fade
+  and shrink with a red blinking ring, a red blinking triangle appears at the
+  rider pointing back, and TTS announces "Radar lost" three times (5 s apart);
+  on reconnect "Radar back" is said once and pending repeats are cancelled.
+  Ghost sim now feeds through `RadarClient.feedGhostTargets` so it exercises
+  the same watchdog/expiry/cone path as the overlay app, with a radar on/off
+  button in the ghost-ride controls to trigger the dropout.
 
 ## Remaining work
 
-- [ ] Fix missing radius/opacity properties in `updateRadarTargets` — done, awaiting commit
-- [ ] Test consent flow on device: "Allow radar access" → overlay consent screen → grant → targets appear
-- [ ] Test permission install order: install CCR before overlay, verify behavior
-- [ ] Test overlay handoff: background CCR → overlay reappears, foreground → hides
-- [ ] Test watchdog: kill overlay mid-ride, verify targets expire
-- [ ] Test tail-light toggle: verify latches only after radar confirms
-- [ ] Test ghost ride: verify simulator still works, targets colored normally
-- [ ] Investigate compileSdk 37 issue (D8 warnings: "API level 37 not supported")
-- [ ] Investigate post-watchdog target visualization: fading, growing, trajectory continuation, or combination — safe way to show "danger is unknown" after 5s dropout
+- [x] Fix missing radius/opacity properties in `updateRadarTargets`
+- [x] Fix consent launch on Android 15+ (move from Compose to Activity)
+- [x] Show consent errors as dialog with Retry/Cancel/Open Bike Radar
+- [x] Test consent flow on device
+- [x] Test overlay handoff: background CCR → overlay reappears, foreground → hides
+- [x] Test watchdog: kill overlay mid-ride, verify targets expire
+- [x] Test tail-light toggle: verify latches only after radar confirms
+- [x] Test ghost ride: verify simulator still works, targets colored normally
+- [x] compileSdk/minSdk/targetSdk → 35
+- [x] Add CI workflows (tests, lint, CodeQL, dependency review)
+- [x] Investigate post-watchdog target visualization: fading + red blinking ring, red blinking triangle behind rider
+- [x] Radar-lost TTS: "Radar lost" x3 (5 s apart), "Radar back" once on reconnect
+- [x] Ghost sim feeds through the live radar path (`feedGhostTargets`) + radar on/off in ghost controls
 - [ ] Investigate HAS_LATERAL=false visualization: bigger dots, different color, or other cue to show "we don't know if this passes you or is right behind you"
 - [ ] Close/reset overlay PR #36 (or replace with README credit commit)

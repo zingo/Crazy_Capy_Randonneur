@@ -40,6 +40,9 @@ private const val FRAME_STALE_MS = 10_000L
 
 private const val WATCHDOG_MS = 5_000L
 
+/** How long the radar-lost cone and fading targets remain visible after dropout. */
+private const val CONE_DURATION_MS = 20_000L
+
 private const val BATTERY_INTERVAL_MS = 10_000L
 
 /**
@@ -108,6 +111,12 @@ object RadarClient {
             expireStaleStream()
             if (bound) watchdogHandler.postDelayed(this, WATCHDOG_MS)
         }
+    }
+
+    /** After [CONE_DURATION_MS] the cone and fading targets are fully removed. */
+    private val coneCleanup = Runnable {
+        RideStore.radarTargets = emptyList()
+        RideStore.radarLostAtMs = null
     }
 
     private val connection = object : ServiceConnection {
@@ -363,6 +372,8 @@ object RadarClient {
         RideStore.radarConnected = false
         RideStore.radarBatteryPercent = null
         RideStore.radarTargets = emptyList()
+        RideStore.radarLostAtMs = null
+        watchdogHandler.removeCallbacks(coneCleanup)
     }
 
     /**
@@ -375,12 +386,14 @@ object RadarClient {
     private fun expireStaleStream() {
         val last = lastFrameAtMs
         if (last == 0L || System.currentTimeMillis() - last < FRAME_STALE_MS) return
-        // Re-stamp rather than clear, so the next quiet spell is caught too.
         lastFrameAtMs = System.currentTimeMillis()
         RideStore.radarConnected = false
-        RideStore.radarTargets = emptyList()
-        // Do not take the connected state from a poll of the very stream this
-        // has just judged unreliable; only a frame may set it.
+        // Keep targets on map for the cone fade-out; they will be cleared
+        // by coneCleanup after CONE_DURATION_MS.
+        if (RideStore.radarLostAtMs == null) {
+            RideStore.radarLostAtMs = System.currentTimeMillis()
+            watchdogHandler.postDelayed(coneCleanup, CONE_DURATION_MS)
+        }
         registerListener(pollStatus = false)
     }
 
@@ -408,6 +421,28 @@ object RadarClient {
         if (bearing != null) lastBearing = bearing
     }
 
+    /** Ghost simulator pushes already-projected targets through the same
+     *  watchdog/expiry/cone path as the live overlay stream. */
+    fun feedGhostTargets(targets: List<RadarVehicle>) {
+        lastFrameAtMs = System.currentTimeMillis()
+        RideStore.radarConnected = true
+        if (RideStore.radarLostAtMs != null && RideStore.radarSimEnabled) {
+            RideStore.radarLostAtMs = null
+            watchdogHandler.removeCallbacks(coneCleanup)
+        }
+        RideStore.radarTargets = targets
+    }
+
+    /** Ghost simulator disconnect — triggers the same cone/expiry as a real
+     *  overlay-app dropout so the rider sees the fade-out + cone. */
+    fun simDisconnect() {
+        if (RideStore.radarLostAtMs != null) return
+        lastFrameAtMs = 0L
+        RideStore.radarConnected = false
+        RideStore.radarLostAtMs = System.currentTimeMillis()
+        watchdogHandler.postDelayed(coneCleanup, CONE_DURATION_MS)
+    }
+
     private fun onSnapshot(state: RadarStateParcel) {
         // Stamped before the ghost-ride exit: the stream is alive either way,
         // and the watchdog must not read a ghost ride as a dead one.
@@ -422,6 +457,11 @@ object RadarClient {
         if (!state.streamLive) {
             RideStore.radarTargets = emptyList()
             return
+        }
+        // Stream restored — cancel the cone fade-out.
+        if (RideStore.radarLostAtMs != null) {
+            RideStore.radarLostAtMs = null
+            watchdogHandler.removeCallbacks(coneCleanup)
         }
         // Project against the current ride fix, or the last known one, so live
         // targets keep showing on the map even when not navigating. With no fix

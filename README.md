@@ -62,7 +62,11 @@ your ears do the navigating — no accounts, no cloud, no ads.
   map, alongside a radar battery chip, a tail-light toggle and a toggle that
   hides the overlay app's own on-screen radar while you are watching the map.
   Nothing is used when the overlay app is absent, nothing is read until you
-  allow it, and the whole feature has an off switch in Settings.
+  allow it, and the whole feature has an off switch in Settings. If the radar
+  stream drops out mid-ride, the last targets fade out with a red blinking ring
+  (they can no longer be trusted), a red blinking triangle appears at the rider
+  pointing back, and the voice says "Radar lost" three times; when the stream
+  returns it says "Radar back" once.
 
 ### Testing
 - **Ghost ride simulator** – try any route without leaving home: follow a
@@ -70,7 +74,9 @@ your ears do the navigating — no accounts, no cloud, no ads.
 - **Simulated rear-radar traffic** – on a ghost ride, cars, trucks and bikes
   overtake from behind (coloured dots on the map, disappearing once they pass,
   since a rear radar only looks back). Toggle it in the ghost-ride start
-  dialog.
+  dialog, or mid-ride with the radar button in the ghost controls — turning it
+  off triggers the same "radar lost" fading targets, triangle and voice alerts
+  as a real dropout.
 
 ---
 
@@ -152,10 +158,10 @@ Never skip the `assembleDebug` — the APK under
    without moving. In the start dialog you can flip **Reverse direction** to
    ride it backwards.
 
-While ghosting, use **Slower/Faster** and the **Slow/28 km/h/Fast** speed
-buttons to tune the pace, hit **Reverse dir** to turn around mid-ride, and
-**Stop** to finish. Stop anywhere and a banner offers to **Resume** the ride
-from where you stopped.
+While ghosting, use the **+/−** buttons to tune the pace (time scale and
+cruise speed) and the **radar** button to turn the simulated rear-radar on/off
+mid-ride; hit **Reverse dir** to turn around, and **Stop** to finish. Stop
+anywhere and a banner offers to **Resume** the ride from where you stopped.
 
 Voice guidance needs the device TTS engine (usually installed by default).
 
