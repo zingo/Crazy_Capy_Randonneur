@@ -295,6 +295,12 @@ OpenFreeMap / OSM terms; do not hide it in modified builds.
 
 ---
 
+## Contributors
+
+- **Zingo Andersen** ([@zingo](https://github.com/zingo)) — project maintainer
+- **JJ del Rio** ([@partymola](https://github.com/partymola)) — rear-radar
+  contract and IPC integration
+
 ## Status
 
 See [PLAN.md](PLAN.md) for the live milestone list and “next move” notes.
