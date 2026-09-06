@@ -99,6 +99,12 @@ class NavigationService : Service() {
     private val running = AtomicBoolean(false)
     private val arrived = AtomicBoolean(false)
 
+    /** Set once per radar-lost episode so "Radar lost" is announced only once. */
+    private var radarLostAnnounced = false
+
+    /** Pending "Radar lost" repeats, cancelled if the radar comes back. */
+    private val radarLostAnnounceRunnables = mutableListOf<Runnable>()
+
     /** Bumped every time a ghost-sim thread is (re)started; guards the stop-post
      *  of a superseded thread from killing a freshly restarted one. */
     private val ghostGeneration = AtomicInteger(0)
@@ -410,21 +416,29 @@ class NavigationService : Service() {
     }
 
     /**
-     * Advance the ghost-ride rear-radar traffic sim. In GPS rides the live
-     * [RadarClient] owns radarTargets instead, so nothing is cleared here.
+     * Advance the ghost-ride rear-radar traffic sim. Pushes targets through
+     * [RadarClient.feedGhostTargets] so the watchdog/expiry/cone path is
+     * identical to the live overlay stream.
      */
     private fun updateRadarSim(lat: Double, lon: Double, movedM: Double) {
         if (RideStore.mode != RideMode.GHOST) return
         if (!RideStore.radarSimEnabled) {
-            if (RideStore.radarTargets.isNotEmpty()) RideStore.radarTargets = emptyList()
+            if (RideStore.radarSimConnected) {
+                RideStore.radarSimConnected = false
+                RadarClient.simDisconnect()
+            }
             return
         }
+        if (!RideStore.radarSimConnected) RideStore.radarSimConnected = true
         val course = RideStore.bearing ?: return
         val speed = RideStore.ghostSpeedKmh
         if (speed <= 0.0) return
         val dtSec = movedM / (speed / KMH_TO_MS)
         val sim = radarSim ?: RadarSimulator().also { radarSim = it }
-        RideStore.radarTargets = sim.tick(lat, lon, course, speed, dtSec)
+        val targets = sim.tick(lat, lon, course, speed, dtSec)
+        if (RideStore.radarSimEnabled) {
+            RadarClient.feedGhostTargets(targets)
+        }
     }
 
     private fun updateAvgSpeed() {
@@ -457,6 +471,14 @@ class NavigationService : Service() {
                 RideStore.elapsedSec = (SystemClock.elapsedRealtime() - startRealtimeMs) / 1000
                 RideStore.hr = hrProvider.currentHr()
                 updateAvgSpeed()
+                if (RideStore.radarLostAtMs != null && !radarLostAnnounced) {
+                    radarLostAnnounced = true
+                    announceRadarLost()
+                } else if (RideStore.radarLostAtMs == null && radarLostAnnounced) {
+                    radarLostAnnounced = false
+                    cancelRadarLostAnnounce()
+                    if (RideStore.radarConnected) speak("Radar back")
+                }
                 // Live ghost controls: pick up speed/scale changes from the UI.
                 sim?.timeScale = RideStore.ghostTimeScale
                 sim?.speedKmh = RideStore.ghostSpeedKmh
@@ -743,6 +765,22 @@ class NavigationService : Service() {
         }
     }
 
+    /** Say "Radar lost" three times with a 5 s pause between each. */
+    private fun announceRadarLost() {
+        radarLostAnnounceRunnables.clear()
+        for (i in 0..2) {
+            val r = Runnable { speak("Radar lost") }
+            radarLostAnnounceRunnables.add(r)
+            mainHandler.postDelayed(r, i * 5_000L)
+        }
+    }
+
+    /** Drop any still-pending "Radar lost" repeats (radar came back). */
+    private fun cancelRadarLostAnnounce() {
+        for (r in radarLostAnnounceRunnables) mainHandler.removeCallbacks(r)
+        radarLostAnnounceRunnables.clear()
+    }
+
     private fun saveLastRideState() {
         val nav = engine ?: return
         val t = RideStore.track ?: return
@@ -801,6 +839,8 @@ class NavigationService : Service() {
         RideStore.upcomingRoute = emptyList()
         RideStore.nextTurnPopupVisible = false
         RideStore.radarTargets = emptyList() //TODO radar data/showing is not part or a ride and should probably not be cleared on stopRide
+        cancelRadarLostAnnounce()
+        radarLostAnnounced = false
         radarSim = null
         RadarClient.stop(this)
         lastNotificationText = null

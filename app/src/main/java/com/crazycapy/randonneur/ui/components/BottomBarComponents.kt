@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.crazycapy.randonneur.gpx.Track
+import com.crazycapy.randonneur.radar.RadarClient
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.voice.Phrases
@@ -87,33 +88,41 @@ internal fun GhostControls() {
     val context = LocalContext.current
     val scale = RideStore.ghostTimeScale
     val speed = RideStore.ghostSpeedKmh
+    val radarOn = RideStore.radarSimEnabled
     Row(
         Modifier.fillMaxWidth().padding(top = 4.dp),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         OutlinedButton(
             onClick = { RideStore.ghostTimeScale = (scale / 1.5).coerceIn(1.0, 600.0); RouteStore.saveSettings(context) },
-            modifier = Modifier.weight(1f),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
-        ) { Text("Slower") }
+        ) { Text("\u2212") }
         Text("x${scale.toInt()}", style = MaterialTheme.typography.titleSmall)
         OutlinedButton(
             onClick = { RideStore.ghostTimeScale = (scale * 1.5).coerceIn(1.0, 600.0); RouteStore.saveSettings(context) },
-            modifier = Modifier.weight(1f),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
-        ) { Text("Faster") }
-        Text("|", style = MaterialTheme.typography.titleSmall)
+        ) { Text("+") }
         OutlinedButton(
             onClick = { RideStore.ghostSpeedKmh = (speed - 2.0).coerceIn(2.0, 60.0); RouteStore.saveSettings(context) },
-            modifier = Modifier.weight(1f),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
-        ) { Text("Slow") }
-        Text("${speed.toInt()} km/h", style = MaterialTheme.typography.titleSmall)
+        ) { Text("\u2212") }
+        Text("${speed.toInt()}", style = MaterialTheme.typography.titleSmall)
         OutlinedButton(
             onClick = { RideStore.ghostSpeedKmh = (speed + 2.0).coerceIn(2.0, 60.0); RouteStore.saveSettings(context) },
-            modifier = Modifier.weight(1f),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
-        ) { Text("Fast") }
+        ) { Text("+") }
+        OutlinedButton(
+            onClick = {
+                if (radarOn) {
+                    RideStore.radarSimEnabled = false
+                    RadarClient.simDisconnect()
+                } else {
+                    RideStore.radarSimEnabled = true
+                }
+                RouteStore.saveSettings(context)
+            },
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+        ) { Text(if (radarOn) "\u25C9" else "\u25CB") }
     }
 }

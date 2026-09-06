@@ -102,7 +102,13 @@ CrazyCapyRouting/
   bar carries that prompt and no radar data arrives. ghost-ride `RadarSimulator`
   (fake cars/trucks/bikes overtaking
   from 175 m behind, drawn as coloured dots behind the rider, toggle persisted)
-  plus an optional. See `Integration_android-bike-radar-overlay.plan`.
+  plus an optional. **Radar-lost handling**: a dropped stream fades the last
+  targets out over 20 s with a red blinking ring and shows a red blinking
+  triangle at the rider pointing back, while the voice says "Radar lost" three
+  times (5 s apart) and "Radar back" once on reconnect. The ghost sim feeds
+  through the same `RadarClient` path so the dropout is testable without a real
+  radar (radar on/off button in the ghost controls). See
+  `Integration_android-bike-radar-overlay.plan`.
 - **RWGPS import**: `RwGpsImport` fetches a route from its public JSON
   (`routes/<id>.json`) and `RwGpsParser` rebuilds it as a `Track`, lifting the
   route's POIs (incl. brevet `control` POIs) into waypoints — so checkpoints

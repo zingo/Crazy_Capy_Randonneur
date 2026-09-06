@@ -86,6 +86,8 @@ import com.crazycapy.randonneur.ui.helpers.nearestWaypoint
 import com.crazycapy.randonneur.ui.helpers.refreshRoute
 import com.crazycapy.randonneur.ui.helpers.tapToleranceMeters
 import com.crazycapy.randonneur.ui.helpers.updateIdleDot
+import com.crazycapy.randonneur.ui.helpers.removeRadarCone
+import com.crazycapy.randonneur.ui.helpers.updateRadarCone
 import com.crazycapy.randonneur.ui.helpers.updateRadarTargets
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -298,13 +300,40 @@ internal fun NavigationMapScreen(
 
     // Draw rear-radar traffic behind the rider: the simulator during ghost rides,
     // the live overlay-app stream during GPS rides.
-    LaunchedEffect(map, RideStore.radarTargets, RideStore.active, RideStore.mode, RideStore.radarSimEnabled, RideStore.radarConnected, RideStore.mapVisible) {
+    LaunchedEffect(map, RideStore.radarTargets, RideStore.active, RideStore.mode, RideStore.radarSimEnabled, RideStore.radarConnected, RideStore.mapVisible, RideStore.radarLostAtMs) {
         val m = map ?: return@LaunchedEffect
         if (!RideStore.mapVisible) return@LaunchedEffect
-        // Live radar targets show whenever a radar is connected, even when idle
-        // (not navigating); the simulator drives targets during ghost rides.
-        val show = (RideStore.mode == RideMode.GHOST && RideStore.radarSimEnabled) || RideStore.radarConnected
-        updateRadarTargets(m, RideStore.radarTargets, show)
+        val show = (RideStore.mode == RideMode.GHOST && RideStore.radarSimEnabled) || RideStore.radarConnected || RideStore.radarLostAtMs != null
+        if (RideStore.radarLostAtMs != null && RideStore.radarTargets.isNotEmpty()) {
+            // Re-render fading targets every 100 ms while the cone is alive.
+            while (RideStore.radarLostAtMs != null) {
+                updateRadarTargets(m, RideStore.radarTargets, true, RideStore.radarLostAtMs)
+                kotlinx.coroutines.delay(100L)
+            }
+            updateRadarTargets(m, RideStore.radarTargets, show, null)
+        } else {
+            updateRadarTargets(m, RideStore.radarTargets, show, RideStore.radarLostAtMs)
+        }
+    }
+
+    // Radar-lost triangle behind the rider when the overlay drops out.
+    LaunchedEffect(map, RideStore.radarLostAtMs, RideStore.mapVisible) {
+        val m = map ?: return@LaunchedEffect
+        if (!RideStore.mapVisible) return@LaunchedEffect
+        if (RideStore.radarLostAtMs == null) {
+            removeRadarCone(m)
+            return@LaunchedEffect
+        }
+        while (RideStore.radarLostAtMs != null) {
+            val lat = RideStore.lat
+            val lon = RideStore.lon
+            val bearing = RideStore.bearing
+            if (lat != null && lon != null && bearing != null) {
+                updateRadarCone(m, lat, lon, bearing, RideStore.radarLostAtMs!!)
+            }
+            kotlinx.coroutines.delay(100L)
+        }
+        removeRadarCone(m)
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->

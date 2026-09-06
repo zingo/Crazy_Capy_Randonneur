@@ -393,7 +393,12 @@ internal fun updateIdleDot(map: MapLibreMap, lat: Double?, lon: Double?, show: B
  * └─────────────────────────────────────────────────────────────────────────┘
  */
 
-internal fun updateRadarTargets(map: MapLibreMap, targets: List<RadarVehicle>, show: Boolean) {
+internal fun updateRadarTargets(
+    map: MapLibreMap,
+    targets: List<RadarVehicle>,
+    show: Boolean,
+    lostAtMs: Long? = null,
+) {
     runCatching {
         val style = map.getStyle() ?: return
         if (!show || targets.isEmpty()) {
@@ -401,11 +406,30 @@ internal fun updateRadarTargets(map: MapLibreMap, targets: List<RadarVehicle>, s
             style.removeSource("radar-source")
             return
         }
+        val now = System.currentTimeMillis()
+        val stale = lostAtMs != null
         val features = targets.map { t ->
             val props = JsonObject().apply {
                 addProperty("color", targetColor(t))
-                addProperty("radius", 5f)
-                addProperty("opacity", 0.95f)
+                if (stale) {
+                    val age = (now - lostAtMs!!).coerceAtMost(CONE_DURATION_MS)
+                    val fraction = age.toDouble() / CONE_DURATION_MS
+                    // Shrink from 5 → 1 as the dot fades.
+                    addProperty("radius", (5.0 * (1.0 - 0.8 * fraction)).coerceAtLeast(1.0))
+                    // Blink the fill between 0.3 and 0.8 while overall fading.
+                    val blinkCycle = ((age % 600L) / 600.0)
+                    val blink = (0.3 + 0.5 * kotlin.math.abs(kotlin.math.sin(blinkCycle * Math.PI)))
+                    val fade = (1.0 - fraction)
+                    addProperty("opacity", (blink * fade).coerceIn(0.05, 0.8))
+                    // Red stroke to flag "do not trust".
+                    addProperty("strokeColor", "#E53935")
+                    addProperty("strokeWidth", 2.5f)
+                } else {
+                    addProperty("radius", 5f)
+                    addProperty("opacity", 0.95f)
+                    addProperty("strokeColor", "#FFFFFF")
+                    addProperty("strokeWidth", 1.5f)
+                }
             }
             Feature.fromGeometry(Point.fromLngLat(t.lon, t.lat), props)
         }
@@ -417,13 +441,101 @@ internal fun updateRadarTargets(map: MapLibreMap, targets: List<RadarVehicle>, s
                     PropertyFactory.circleColor(Expression.get("color")),
                     PropertyFactory.circleRadius(Expression.toNumber(Expression.get("radius"))),
                     PropertyFactory.circleOpacity(Expression.toNumber(Expression.get("opacity"))),
-                    PropertyFactory.circleStrokeColor(0xFFFFFFFF.toInt()),
-                    PropertyFactory.circleStrokeWidth(1.5f),
+                    PropertyFactory.circleStrokeColor(Expression.get("strokeColor")),
+                    PropertyFactory.circleStrokeWidth(Expression.toNumber(Expression.get("strokeWidth"))),
                 )
             )
         } else {
             existing.setGeoJson(FeatureCollection.fromFeatures(features))
         }
+    }
+}
+
+/** How long the cone and fading targets remain visible after dropout. */
+private const val CONE_DURATION_MS = 20_000L
+
+/**
+ * Draw the red blinking radar-lost triangle behind the rider.
+ *
+ * A triangle [SymbolLayer] bitmap, sized ~5x the rider arrow: the apex sits
+ * on the rider, the open (base) end points back. [lostAtMs] drives a red
+ * blink that fades out over 20 s.
+ */
+internal fun updateRadarCone(
+    map: MapLibreMap,
+    lat: Double,
+    lon: Double,
+    bearingDeg: Double,
+    lostAtMs: Long,
+) {
+    try {
+        val style = map.getStyle() ?: return
+        val age = System.currentTimeMillis() - lostAtMs
+        if (age > CONE_DURATION_MS) {
+            removeRadarCone(map)
+            return
+        }
+        val blink = 0.4 + 0.4 * kotlin.math.abs(kotlin.math.sin((age % 600L) / 600.0 * Math.PI))
+        val opacity = (blink * (1.0 - age.toDouble() / CONE_DURATION_MS)).coerceIn(0.0, 0.9)
+        val props = JsonObject().apply {
+            addProperty("bearing", bearingDeg)
+            addProperty("opacity", opacity.toFloat())
+        }
+        val feature = Feature.fromGeometry(Point.fromLngLat(lon, lat), props)
+        val existing = style.getSource("radar-cone-source") as? GeoJsonSource
+        if (existing == null) {
+            style.addImage("radar-cone-image", coneTriangleBitmap())
+            style.addSource(GeoJsonSource("radar-cone-source", feature))
+            style.addLayer(
+                SymbolLayer("radar-cone-layer", "radar-cone-source").withProperties(
+                    PropertyFactory.iconImage("radar-cone-image"),
+                    PropertyFactory.iconSize(4.5f),
+                    PropertyFactory.iconRotate(Expression.get("bearing")),
+                    PropertyFactory.iconOpacity(Expression.toNumber(Expression.get("opacity"))),
+                    PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
+                    PropertyFactory.iconIgnorePlacement(true),
+                    PropertyFactory.iconAllowOverlap(true),
+                )
+            )
+        } else {
+            existing.setGeoJson(feature)
+        }
+    } catch (e: Exception) {
+        android.util.Log.e("RadarCone", "updateRadarCone failed", e)
+    }
+}
+
+/** Triangle with the apex at the centre and the base at the bottom, sized
+ *  about like 4 radar dots in a 2x2 square (~20 px wide x ~40 px tall), so
+ *  when anchored at the rider and rotated by heading the point sits on the
+ *  bike and the open end trails behind. */
+private fun coneTriangleBitmap(): Bitmap {
+    val size = 64
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bmp)
+    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(0xE5, 0x39, 0x35) }
+    val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.STROKE
+        strokeWidth = 3f
+    }
+    val cx = size / 2f
+    val triangle = Path().apply {
+        moveTo(cx, 32f)          // apex at centre (the rider)
+        lineTo(cx - 11f, 72f)    // base-left
+        lineTo(cx + 11f, 72f)    // base-right
+        close()
+    }
+    canvas.drawPath(triangle, outline)
+    canvas.drawPath(triangle, fill)
+    return bmp
+}
+
+internal fun removeRadarCone(map: MapLibreMap) {
+    runCatching {
+        val style = map.getStyle() ?: return
+        style.removeLayer("radar-cone-layer")
+        style.removeSource("radar-cone-source")
     }
 }
 
