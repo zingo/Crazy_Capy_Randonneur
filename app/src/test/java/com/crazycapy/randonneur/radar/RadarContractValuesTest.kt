@@ -69,7 +69,7 @@ class RadarContractValuesTest {
         // The codes are literals for the same reason as everything else here:
         // reading them from the contract would let a re-copy that swapped two
         // of them explain the wrong refusal, with this test still green.
-        assertEquals("Bike Radar is mid-ride: ask again once it ends", consentStatus(1))
+        assertEquals("Bike Radar is mid-ride — turn off the radar, and retry.", consentStatus(1))
         assertEquals("Bike Radar could not save that answer", consentStatus(3))
         assertEquals("Bike Radar could not identify this app", consentStatus(2))
     }
