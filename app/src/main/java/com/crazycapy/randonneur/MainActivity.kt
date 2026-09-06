@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
         RouteStore.loadSettings(appContext)
         loadResumeState(appContext)
         handleShareIntent(intent)
+        RadarClient.launchConsent = { consentLauncher.launch(RadarClient.requestAccessIntent()) }
 
         setContent {
             MaterialTheme {
@@ -61,6 +62,10 @@ class MainActivity : ComponentActivity() {
 
     private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) loadRoute(uri)
+    }
+
+    private val consentLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        RadarClient.onConsentResult(this, result.resultCode, result.data)
     }
 
     private fun handleShareIntent(intent: Intent?) {

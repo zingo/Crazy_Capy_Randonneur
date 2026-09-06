@@ -17,8 +17,6 @@
  */
 package com.crazycapy.randonneur.ui
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -53,9 +51,6 @@ fun RadarStatusBar(modifier: Modifier = Modifier) {
     val fg = if (RideStore.darkMap) Color.White else Color(0xFF1A1A1A)
     val sub = if (RideStore.darkMap) Color(0xFFBABABA) else Color(0xFF666666)
     val bg = if (RideStore.darkMap) Color(0xCC121212) else Color(0xE8FFFFFF)
-    val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        RadarClient.onConsentResult(context, result.resultCode, result.data)
-    }
 
     Row(
         modifier
@@ -71,7 +66,7 @@ fun RadarStatusBar(modifier: Modifier = Modifier) {
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clickable {
-                    runCatching { consent.launch(RadarClient.requestAccessIntent()) }
+                    runCatching { RadarClient.launchConsent?.invoke() }
                 },
             )
             return@Row

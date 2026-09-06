@@ -50,7 +50,7 @@ private const val BATTERY_INTERVAL_MS = 10_000L
  * binder stub, which a JVM unit test cannot do.
  */
 internal fun consentStatus(resultCode: Int): String? = when (resultCode) {
-    RadarContract.Consent.RESULT_RIDE_IN_PROGRESS -> "Bike Radar is mid-ride: ask again once it ends"
+    RadarContract.Consent.RESULT_RIDE_IN_PROGRESS -> "Bike Radar is mid-ride — turn off the radar, and retry."
     RadarContract.Consent.RESULT_NOT_STORED -> "Bike Radar could not save that answer"
     RadarContract.Consent.RESULT_CALLER_UNKNOWN -> "Bike Radar could not identify this app"
     else -> null
@@ -207,6 +207,15 @@ object RadarClient {
     fun requestAccessIntent(): Intent =
         Intent(RadarContract.Consent.ACTION).setPackage(RadarContract.PACKAGE)
 
+    /**
+     * Set by [MainActivity] so that [RadarStatusBar] can launch the consent
+     * screen through the Activity's `startActivityForResult`, which is the
+     * only way the Bike Radar overlay app's `RadarConsentActivity` receives a non-null
+     * `callingPackage`.  Compose's `rememberLauncherForActivityResult` does
+     * not set it on Android 15+.
+     */
+    var launchConsent: (() -> Unit)? = null
+
     /** The answer from [requestAccessIntent]. */
     fun onConsentResult(context: Context, resultCode: Int, data: Intent?) {
         val ok = resultCode == Activity.RESULT_OK
@@ -218,7 +227,7 @@ object RadarClient {
             return
         }
         RideStore.radarGranted = false
-        consentStatus(resultCode)?.let { RideStore.status = it }
+        consentStatus(resultCode)?.let { RideStore.consentError = it }
     }
 
     /** Ensure the overlay service is bound (the stream is registered on

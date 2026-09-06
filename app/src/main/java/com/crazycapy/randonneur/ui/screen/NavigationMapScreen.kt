@@ -410,6 +410,25 @@ internal fun NavigationMapScreen(
             confirmButton = { TextButton(onClick = { cpPopup = null }) { Text("OK") } },
         )
     }
+    RideStore.consentError?.let { error ->
+        AlertDialog(
+            onDismissRequest = { RideStore.consentError = null },
+            title = { Text("Radar access") },
+            text = { Text(error, style = MaterialTheme.typography.bodyMedium) },
+            confirmButton = {
+                TextButton(onClick = { RideStore.consentError = null; RadarClient.launchConsent?.invoke() }) { Text("Retry") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { RideStore.consentError = null }) { Text("Cancel") }
+                    TextButton(onClick = {
+                        RideStore.consentError = null
+                        RadarClient.launchOverlayApp(context)
+                    }) { Text("Open Bike Radar") }
+                }
+            },
+        )
+    }
     if (showRoutes) RoutesDialog(context = context, onDismiss = { showRoutes = false }, onLoad = onLoadSavedRoute, onDelete = { RouteStore.deleteRoute(context, it) }, onImport = onImportRequest)
     pendingStart?.let { mode ->
         StartRideDialog(mode = mode, onDismiss = { pendingStart = null }, onStart = { reverseOn ->

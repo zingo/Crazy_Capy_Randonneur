@@ -165,6 +165,9 @@ object RideStore {
      */
     var radarGranted: Boolean? by mutableStateOf(null)
 
+    /** Non-null when the consent screen returned an error the rider should see. */
+    var consentError: String? by mutableStateOf(null)
+
     /** The rear radar is currently connected through the overlay app. */
     var radarConnected: Boolean by mutableStateOf(false)
 
