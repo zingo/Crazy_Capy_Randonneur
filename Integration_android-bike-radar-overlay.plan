@@ -177,3 +177,17 @@ permission-gated bound service implementing the agreed contract, plus the
 Both open items are closed on the overlay app's side. `setOverlayVisible` is
 wired, and the hold is anchored to the consumer's listener binder, so a
 consumer that crashes cannot leave the rider without their own display.
+
+## Remaining work
+
+- [ ] Fix missing radius/opacity properties in `updateRadarTargets` — done, awaiting commit
+- [ ] Test consent flow on device: "Allow radar access" → overlay consent screen → grant → targets appear
+- [ ] Test permission install order: install CCR before overlay, verify behavior
+- [ ] Test overlay handoff: background CCR → overlay reappears, foreground → hides
+- [ ] Test watchdog: kill overlay mid-ride, verify targets expire
+- [ ] Test tail-light toggle: verify latches only after radar confirms
+- [ ] Test ghost ride: verify simulator still works, targets colored normally
+- [ ] Investigate compileSdk 37 issue (D8 warnings: "API level 37 not supported")
+- [ ] Investigate post-watchdog target visualization: fading, growing, trajectory continuation, or combination — safe way to show "danger is unknown" after 5s dropout
+- [ ] Investigate HAS_LATERAL=false visualization: bigger dots, different color, or other cue to show "we don't know if this passes you or is right behind you"
+- [ ] Close/reset overlay PR #36 (or replace with README credit commit)

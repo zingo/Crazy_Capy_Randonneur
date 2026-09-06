@@ -8,12 +8,12 @@ plugins {
 
 android {
     namespace = "com.crazycapy.randonneur"
-    compileSdk = 37
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.crazycapy.randonneur"
-        minSdk = 37
-        targetSdk = 37
+        minSdk = 35
+        targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
 
