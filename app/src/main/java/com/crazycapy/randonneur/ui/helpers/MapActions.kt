@@ -402,7 +402,11 @@ internal fun updateRadarTargets(map: MapLibreMap, targets: List<RadarVehicle>, s
             return
         }
         val features = targets.map { t ->
-            val props = JsonObject().apply { addProperty("color", targetColor(t)) }
+            val props = JsonObject().apply {
+                addProperty("color", targetColor(t))
+                addProperty("radius", 5f)
+                addProperty("opacity", 0.95f)
+            }
             Feature.fromGeometry(Point.fromLngLat(t.lon, t.lat), props)
         }
         val existing = style.getSource("radar-source") as? GeoJsonSource
