@@ -5,35 +5,58 @@
 /*
  * RadarClient — consumer of the android-bike-radar-overlay bound service.
  *
- * Binds to the overlay app's exported, permission-gated AIDL service, subscribes
- * to ~5 Hz radar snapshots, projects them onto the rider's position and feeds
- * RideStore.radarTargets (the same layer the ghost-ride simulator uses).
+ * Binds to the overlay app's exported service, subscribes to ~5 Hz radar
+ * snapshots once the rider has granted access, projects them onto the rider's
+ * position and feeds RideStore.radarTargets (the same layer the ghost-ride
+ * simulator uses).
  *
- * Auto-detects the overlay app and degrades gracefully when it is absent, an
- * older version without the IPC service, or the IPC permission is not granted:
- * RideStore.radarAvailable stays false, no status bar is drawn, no targets are
- * rendered, and nothing is bound. The pure ghost-ride simulator is unaffected.
+ * Degrades at each step: the overlay app absent, too new for the contract this
+ * build speaks, bound with no grant, or registered and then gone quiet.
+ * RideStore.radarAvailable and RideStore.radarGranted carry which, nothing is
+ * rendered without a grant, and the ghost-ride simulator is unaffected
+ * throughout.
  */
 package com.crazycapy.randonneur.radar
 
+import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
 import com.crazycapy.randonneur.state.RideMode
 import com.crazycapy.randonneur.state.RideStore
+import es.jjrh.bikeradar.ipc.IRadarListener
 import es.jjrh.bikeradar.ipc.IRadarService
-import es.jjrh.bikeradar.ipc.IRadarTargetListener
+import es.jjrh.bikeradar.ipc.RadarContract
 import es.jjrh.bikeradar.ipc.RadarStateParcel
-import es.jjrh.bikeradar.ipc.RadarVehicleParcel
+import java.util.concurrent.Executors
+
+/** How long a stream may go quiet before its targets stop being drawn. */
+private const val FRAME_STALE_MS = 10_000L
+
+private const val WATCHDOG_MS = 5_000L
+
+private const val BATTERY_INTERVAL_MS = 10_000L
+
+/**
+ * What to tell the rider when the overlay app declines to record a grant, or
+ * null when the answer needs no explanation.
+ *
+ * Separate from [RadarClient] so it can be tested: touching that object loads a
+ * binder stub, which a JVM unit test cannot do.
+ */
+internal fun consentStatus(resultCode: Int): String? = when (resultCode) {
+    RadarContract.Consent.RESULT_RIDE_IN_PROGRESS -> "Bike Radar is mid-ride: ask again once it ends"
+    RadarContract.Consent.RESULT_NOT_STORED -> "Bike Radar could not save that answer"
+    RadarContract.Consent.RESULT_CALLER_UNKNOWN -> "Bike Radar could not identify this app"
+    else -> null
+}
 
 object RadarClient {
-
-    const val OVERLAY_PACKAGE = "es.jjrh.bikeradar"
-    const val OVERLAY_SERVICE = "es.jjrh.bikeradar.RadarIpcService"
-    const val OVERLAY_PERMISSION = "es.jjrh.bikeradar.permission.RADAR"
 
     @Volatile
     private var service: IRadarService? = null
@@ -41,7 +64,33 @@ object RadarClient {
     @Volatile
     private var bound = false
 
+    /** The overlay app speaks a contract version this build cannot read. */
+    @Volatile
+    private var contractRefused = false
+
+    @Volatile
+    private var appContext: Context? = null
+
+    @Volatile
     private var lastBatteryAtMs = 0L
+
+    @Volatile
+    private var lastFrameAtMs = 0L
+
+    /** The rider asked us to hide the overlay, as opposed to it being hidden now. */
+    @Volatile
+    private var overlayHiddenByRider = false
+
+    // setRadarLightMode waits for the radar to answer over the air, which is
+    // longer than the input-dispatch window allows. One thread also keeps two
+    // quick taps from racing at the radio.
+    private val lightWrites = Executors.newSingleThreadExecutor()
+
+    // Off the main thread: the watchdog re-registers, and that call reaches the
+    // other app's package manager and grant store.
+    private val watchdogHandler = Handler(
+        HandlerThread("radar-watchdog").apply { start() }.looper,
+    )
 
     // Last rider fix the targets were projected against; survives a ride stop so
     // live targets can keep showing on the map while idle.
@@ -54,34 +103,58 @@ object RadarClient {
     @Volatile
     private var lastBearing: Double? = null
 
+    private val watchdog = object : Runnable {
+        override fun run() {
+            expireStaleStream()
+            if (bound) watchdogHandler.postDelayed(this, WATCHDOG_MS)
+        }
+    }
+
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            service = IRadarService.Stub.asInterface(binder)
+            val svc = IRadarService.Stub.asInterface(binder)
+            service = svc
+            val version = runCatching { svc.getContractVersion() }.getOrDefault(0)
+            if (version !in 1..RadarContract.VERSION) {
+                refuseContract()
+                return
+            }
+            contractRefused = false
             // Always subscribe to the stream so targets flow even when idle; the
             // snapshot handler skips ghost rides (the simulator drives those).
-            runCatching { service?.registerTargetListener(listener) }
-            refreshStatus()
+            registerListener()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             service = null
-            RideStore.radarConnected = false
-            RideStore.radarTargets = emptyList()
+            clearLiveState()
+        }
+
+        override fun onBindingDied(name: ComponentName?) {
+            // Fires instead of onServiceDisconnected when the overlay app is
+            // updated, and nothing rebinds on its own.
+            val context = appContext
+            unbind()
+            if (context != null) refreshAvailability(context)
+        }
+
+        override fun onNullBinding(name: ComponentName?) {
+            unbind()
         }
     }
 
-    private val listener = object : IRadarTargetListener.Stub() {
+    private val listener = object : IRadarListener.Stub() {
         override fun onRadarState(state: RadarStateParcel) {
             onSnapshot(state)
         }
     }
 
     /**
-     * Re-check whether the overlay feature is available (package present and its
-     * IPC service resolvable), update [RideStore.radarAvailable], and bind the
-     * service so the always-visible controls work even outside a ride. Call on
-     * app start and whenever availability may have changed (install/uninstall/
-     * update); the snapshot stream is only registered during GPS rides.
+     * Re-check whether the overlay feature is available (package present, its
+     * permission held, its service resolvable), update
+     * [RideStore.radarAvailable], and bind so the always-visible controls work
+     * even outside a ride. Binding grants nothing on its own;
+     * [requestAccessIntent] is what asks the rider.
      */
     fun refreshAvailability(context: Context) {
         if (!RideStore.radarIntegrationEnabled) {
@@ -94,6 +167,9 @@ object RadarClient {
         }
         RideStore.radarAvailable = true
         ensureBound(context)
+        // The rider may have granted us in the overlay app's own settings
+        // rather than through our prompt, and nothing tells us when they do.
+        if (bound && RideStore.radarGranted != true) registerListener()
     }
 
     /**
@@ -106,7 +182,7 @@ object RadarClient {
         if (enabled) {
             refreshAvailability(context)
         } else {
-            unbind(context)
+            unbind()
             markUnavailable()
         }
     }
@@ -114,25 +190,41 @@ object RadarClient {
     /** Open the overlay app (launcher activity), if it is installed. */
     fun launchOverlayApp(context: Context) {
         val intent = runCatching {
-            context.packageManager.getLaunchIntentForPackage(OVERLAY_PACKAGE)
+            context.packageManager.getLaunchIntentForPackage(RadarContract.PACKAGE)
         }.getOrNull() ?: return
-        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { context.startActivity(intent) }
+    }
+
+    /**
+     * The rider's access screen in the overlay app. Launch it for a result and
+     * feed the answer back through [onConsentResult].
+     *
+     * The result is what tells the overlay app which app is asking, so nothing
+     * is granted without one. Opening it again when a grant already exists
+     * shows its current state, so the same screen covers changing their mind.
+     */
+    fun requestAccessIntent(): Intent =
+        Intent(RadarContract.Consent.ACTION).setPackage(RadarContract.PACKAGE)
+
+    /** The answer from [requestAccessIntent]. */
+    fun onConsentResult(context: Context, resultCode: Int, data: Intent?) {
+        val ok = resultCode == Activity.RESULT_OK
+        if (ok && data?.getBooleanExtra(RadarContract.Consent.EXTRA_READ, false) == true) {
+            // The bind may not have landed, or may have died while the rider was
+            // on the other app's screen; registering into nothing answers
+            // nothing. refreshAvailability registers once it is bound.
+            refreshAvailability(context)
+            return
+        }
+        RideStore.radarGranted = false
+        consentStatus(resultCode)?.let { RideStore.status = it }
     }
 
     /** Ensure the overlay service is bound (the stream is registered on
      *  connect so live targets flow even when idle). */
     fun start(context: Context) {
-        if (!RideStore.radarIntegrationEnabled) {
-            markUnavailable()
-            return
-        }
-        if (!isOverlayServiceAvailable(context)) {
-            markUnavailable()
-            return
-        }
-        RideStore.radarAvailable = true
-        ensureBound(context)
+        refreshAvailability(context)
     }
 
     /** Ride stop: keep the service bound (so the always-visible controls and
@@ -141,62 +233,158 @@ object RadarClient {
         refreshStatus()
     }
 
+    /**
+     * Hand the overlay back while this app is not drawing its own map, without
+     * forgetting that the rider asked for it hidden.
+     *
+     * Nothing on the overlay app's side lifts a hold for an app that is merely
+     * backgrounded, so without this a rider whose screen blanks is left with no
+     * collision display at all.
+     */
+    fun releaseOverlay() {
+        if (RideStore.radarOverlayVisible) return
+        overlayHiddenByRider = true
+        setOverlayVisible(true)
+    }
+
+    /** Re-hide the overlay if that is what the rider had asked for. */
+    fun restoreOverlay() {
+        if (!overlayHiddenByRider) return
+        // Keep the wish until it has actually been carried out: coming back to
+        // a bind that died in the meantime must not quietly forget it.
+        if (setOverlayVisible(false)) overlayHiddenByRider = false
+    }
+
     private fun ensureBound(context: Context) {
         if (bound) return
-        val intent = Intent().setComponent(ComponentName(OVERLAY_PACKAGE, OVERLAY_SERVICE))
+        val application = context.applicationContext
+        appContext = application
         val ok = runCatching {
-            context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+            application.bindService(serviceIntent(), connection, Context.BIND_AUTO_CREATE)
         }.getOrDefault(false)
         if (!ok) {
             // Bind rejected (e.g. IPC permission not granted): treat as unavailable.
+            runCatching { application.unbindService(connection) }
             markUnavailable()
             return
         }
         bound = true
+        watchdogHandler.removeCallbacks(watchdog)
+        watchdogHandler.postDelayed(watchdog, WATCHDOG_MS)
     }
 
-    private fun unbind(context: Context) {
+    private fun unbind() {
         runCatching { service?.unregisterTargetListener(listener) }
         service = null
+        contractRefused = false
         if (bound) {
             bound = false
-            runCatching { context.unbindService(connection) }
+            runCatching { appContext?.unbindService(connection) }
         }
-        RideStore.radarConnected = false
-        RideStore.radarBatteryPercent = null
-        RideStore.radarTargets = emptyList()
+        watchdogHandler.removeCallbacks(watchdog)
+        // The overlay app lifts every hold once its last consumer unbinds, so
+        // there is nothing left for the rider's wish to apply to.
+        overlayHiddenByRider = false
+        RideStore.radarGranted = null
+        clearLiveState()
         lastLat = null
         lastLon = null
         lastBearing = null
     }
 
-    fun setRadarLightMode(mode: Int) {
-        runCatching { service?.setRadarLightMode(mode) }
+    private fun refuseContract() {
+        service = null
+        if (bound) {
+            bound = false
+            runCatching { appContext?.unbindService(connection) }
+        }
+        watchdogHandler.removeCallbacks(watchdog)
+        contractRefused = true
+        markUnavailable()
     }
 
-    fun setOverlayVisible(visible: Boolean) {
-        RideStore.radarOverlayVisible = visible
-        runCatching { service?.setOverlayVisible(visible) }
+    /**
+     * Turn the radar's tail light on (solid) or off.
+     *
+     * Off the caller's thread, and the toggle latches only once the radar has
+     * taken the mode: a refusal is a rider who granted reading but not control,
+     * or a radar that is not linked. The state here is what this app last set,
+     * not a reading, and the overlay app sets its own modes too.
+     */
+    fun setTailLight(on: Boolean) {
+        val svc = service ?: return
+        val mode = if (on) RadarContract.LIGHT_MODE_SOLID else RadarContract.LIGHT_MODE_OFF
+        lightWrites.execute {
+            val ok = runCatching { svc.setRadarLightMode(mode) }.getOrDefault(false)
+            if (ok) RideStore.radarLightOn = on
+        }
+    }
+
+    /**
+     * Hiding needs the rider's control grant; showing is always allowed.
+     * Returns whether the overlay app took it.
+     */
+    fun setOverlayVisible(visible: Boolean): Boolean {
+        val svc = service ?: return false
+        val ok = runCatching { svc.setOverlayVisible(visible) }.getOrDefault(false)
+        if (ok) RideStore.radarOverlayVisible = visible
+        return ok
+    }
+
+    private fun registerListener(pollStatus: Boolean = true) {
+        val svc = service ?: return
+        val granted = runCatching { svc.registerTargetListener(listener) }.getOrDefault(false)
+        RideStore.radarGranted = granted
+        if (granted) {
+            if (pollStatus) refreshStatus()
+            return
+        }
+        clearLiveState()
     }
 
     private fun markUnavailable() {
         RideStore.radarAvailable = false
+        RideStore.radarGranted = null
+        overlayHiddenByRider = false
+        clearLiveState()
+    }
+
+    private fun clearLiveState() {
+        lastFrameAtMs = 0L
         RideStore.radarConnected = false
         RideStore.radarBatteryPercent = null
         RideStore.radarTargets = emptyList()
     }
 
+    /**
+     * A registration can stop delivering with the binder still up, because the
+     * rider revoked us or the radar link stalled. Neither is reported, so a
+     * quiet stream must not leave its last targets drawn as though they were
+     * current. Re-registering is idempotent and its return value is the only
+     * way to ask whether the grant is still there.
+     */
+    private fun expireStaleStream() {
+        val last = lastFrameAtMs
+        if (last == 0L || System.currentTimeMillis() - last < FRAME_STALE_MS) return
+        // Re-stamp rather than clear, so the next quiet spell is caught too.
+        lastFrameAtMs = System.currentTimeMillis()
+        RideStore.radarConnected = false
+        RideStore.radarTargets = emptyList()
+        // Do not take the connected state from a poll of the very stream this
+        // has just judged unreliable; only a frame may set it.
+        registerListener(pollStatus = false)
+    }
+
     private fun refreshStatus() {
         val svc = service ?: return
-        val connected = runCatching { svc.isConnected() }.getOrDefault(false)
-        RideStore.radarConnected = connected
+        RideStore.radarConnected = runCatching { svc.isConnected() }.getOrDefault(false)
         refreshBattery()
     }
 
     private fun refreshBattery() {
         val svc = service ?: return
         val now = System.currentTimeMillis()
-        if (now - lastBatteryAtMs < 10_000L) return
+        if (now - lastBatteryAtMs < BATTERY_INTERVAL_MS) return
         lastBatteryAtMs = now
         val percent = runCatching { svc.getBatteryPercent() }.getOrDefault(-1)
         RideStore.radarBatteryPercent = if (percent >= 0) percent else null
@@ -212,34 +400,58 @@ object RadarClient {
     }
 
     private fun onSnapshot(state: RadarStateParcel) {
+        // Stamped before the ghost-ride exit: the stream is alive either way,
+        // and the watchdog must not read a ghost ride as a dead one.
+        lastFrameAtMs = System.currentTimeMillis()
         if (RideStore.mode == RideMode.GHOST) return
+        // An app with no radar attached reports no targets, which is the same
+        // shape as a radar reporting an empty road. streamLive tells those
+        // apart, and reading the second as the first is the worst thing this
+        // could get wrong.
+        RideStore.radarConnected = state.streamLive
+        refreshBattery()
+        if (!state.streamLive) {
+            RideStore.radarTargets = emptyList()
+            return
+        }
         // Project against the current ride fix, or the last known one, so live
-        // targets keep showing on the map even when not navigating.
+        // targets keep showing on the map even when not navigating. With no fix
+        // at all there is nowhere to draw them.
         val lat = RideStore.lat ?: lastLat
         val lon = RideStore.lon ?: lastLon
         val bearing = RideStore.bearing ?: lastBearing
-        if (lat == null || lon == null || bearing == null) return
+        if (lat == null || lon == null || bearing == null) {
+            RideStore.radarTargets = emptyList()
+            return
+        }
         lastLat = lat
         lastLon = lon
         lastBearing = bearing
         RideStore.radarTargets = state.toDomain().map { RadarProjection.project(it, lat, lon, bearing) }
-        refreshStatus()
     }
 
     /** True only when the package is installed, grants the IPC permission, and
-     *  exposes the IPC service (so an older overlay version without the service
-     *  or a revoked permission both count as unavailable). */
+     *  answers the contract's service action (so an older overlay version
+     *  without the service, a revoked permission, and a version this build
+     *  cannot read all count as unavailable). */
     private fun isOverlayServiceAvailable(context: Context): Boolean {
+        if (contractRefused) return false
         if (!isOverlayInstalled(context)) return false
-        val granted = context.checkSelfPermission(OVERLAY_PERMISSION) == PackageManager.PERMISSION_GRANTED
+        val granted = context.checkSelfPermission(RadarContract.PERMISSION) == PackageManager.PERMISSION_GRANTED
         if (!granted) return false
         return runCatching {
-            context.packageManager.getServiceInfo(ComponentName(OVERLAY_PACKAGE, OVERLAY_SERVICE), 0) != null
+            context.packageManager.resolveService(
+                serviceIntent(),
+                PackageManager.ResolveInfoFlags.of(0L),
+            ) != null
         }.getOrDefault(false)
     }
 
+    private fun serviceIntent(): Intent =
+        Intent(RadarContract.ACTION).setPackage(RadarContract.PACKAGE)
+
     private fun isOverlayInstalled(context: Context): Boolean =
         runCatching {
-            context.packageManager.getPackageInfo(OVERLAY_PACKAGE, 0)
+            context.packageManager.getPackageInfo(RadarContract.PACKAGE, 0)
         }.isSuccess
 }

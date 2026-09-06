@@ -89,6 +89,13 @@ Device test notes:
    */
   ```
 
+  The six files under `es/jjrh/bikeradar/ipc/` (in both `aidl/` and `java/`)
+  are the exception. They are unmodified copies from android-bike-radar-overlay
+  and keep their own Apache-2.0 header and copyright line. Do not edit them and
+  do not normalise their headers: keeping that notice is what the licence asks
+  of a copy, and changing one line makes it a modified file with obligations of
+  its own. See THIRD_PARTY_NOTICES.md.
+
 - Do NOT add code comments unless asked; keep code self-explanatory.
 - Pure logic goes in `nav`/`voice`/`gpx` (unit-testable, no Android imports).
   Keep `NavigationService` for Android-touching glue only.

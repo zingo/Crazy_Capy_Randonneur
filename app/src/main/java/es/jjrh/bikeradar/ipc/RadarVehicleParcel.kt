@@ -1,31 +1,33 @@
-/*
- * Copyright (c) 2026 Crazy Capy Randonneur contributors
- * SPDX-License-Identifier: Apache-2.0
- */
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (C) 2026 JJ del Rio
+// Permissive so another app can copy this contract into its own build.
+// Licence text: LICENSES/Apache-2.0.txt. Consumers: additional-permission.txt
 package es.jjrh.bikeradar.ipc
 
-import android.os.Parcel
-import android.os.Parcelable
-import com.crazycapy.randonneur.radar.RadarVehicle
-import com.crazycapy.randonneur.radar.RadarVehicleSize
-
-/** Wire size codes shared with the contract (0=car, 1=truck, 2=bike). */
-const val RADAR_SIZE_CAR = 0
-const val RADAR_SIZE_TRUCK = 1
-const val RADAR_SIZE_BIKE = 2
-
 /**
- * Parcelable mirror of one rear-radar target. Field order and types define the
- * IPC wire layout (the cross-app contract); the consumer app ships its own
- * implementation of the same layout.
+ * One rear-radar target as carried over the cross-app contract.
  *
- * Note on [distanceM]: by default it is the distance BEHIND the rider. When
- * [isAhead] is true the target has passed the rider and [distanceM] instead
- * means the distance AHEAD. An ahead reading is inherently less reliable — the
- * rear radar is mostly "looking back" — so consumers should present it with
- * care.
+ * Not itself [android.os.Parcelable]: [RadarStateParcel] marshals these inline,
+ * so one version number governs the whole layout. A nested parcelable would
+ * need its own version, because its CREATOR cannot see the enclosing state's.
+ *
+ * [distanceM] is the distance BEHIND the rider unless [isAhead], in which case
+ * it is the distance ahead. A rear radar mostly looks back, so an ahead reading
+ * is the less reliable one.
+ *
+ * [lateralPos], [rangeXm], [closingKmh] and [size] are only measurements when
+ * the enclosing state's capability bits say so. Otherwise they are defaults,
+ * and a zero lateral offset means "not measured" rather than "dead centre".
+ * [lateralKnown] already folds in the stream's lateral capability, so read it
+ * alone: every flag on this wire is trustworthy on its own.
+ *
+ * [isAhead] has no capability bit because its default is the safe reading. A
+ * range-only stream does not report the sign of the range, so every target
+ * arrives as behind the rider, which is where a rear radar's targets nearly
+ * always are. A consumer using it to exclude unreliable in-front tracks
+ * excludes nothing there rather than excluding the wrong thing.
  */
-class RadarVehicleParcel(
+data class RadarVehicleParcel(
     val id: Int,
     val distanceM: Int,
     val closingKmh: Int,
@@ -33,48 +35,6 @@ class RadarVehicleParcel(
     val lateralPos: Float,
     val rangeXm: Float,
     val isAhead: Boolean,
-) : Parcelable {
-
-    fun toDomain(): RadarVehicle = RadarVehicle(
-        id = id,
-        distanceM = distanceM,
-        closingKmh = closingKmh,
-        size = when (size) {
-            RADAR_SIZE_TRUCK -> RadarVehicleSize.TRUCK
-            RADAR_SIZE_BIKE -> RadarVehicleSize.BIKE
-            else -> RadarVehicleSize.CAR
-        },
-        lateralPos = lateralPos,
-        rangeXm = rangeXm,
-        isAhead = isAhead,
-    )
-
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
-        parcel.writeInt(id)
-        parcel.writeInt(distanceM)
-        parcel.writeInt(closingKmh)
-        parcel.writeInt(size)
-        parcel.writeFloat(lateralPos)
-        parcel.writeFloat(rangeXm)
-        parcel.writeByte(if (isAhead) 1 else 0)
-    }
-
-    override fun describeContents(): Int = 0
-
-    companion object {
-        @JvmField
-        val CREATOR = object : Parcelable.Creator<RadarVehicleParcel> {
-            override fun createFromParcel(parcel: Parcel): RadarVehicleParcel = RadarVehicleParcel(
-                id = parcel.readInt(),
-                distanceM = parcel.readInt(),
-                closingKmh = parcel.readInt(),
-                size = parcel.readInt(),
-                lateralPos = parcel.readFloat(),
-                rangeXm = parcel.readFloat(),
-                isAhead = parcel.readByte() != 0.toByte(),
-            )
-
-            override fun newArray(size: Int): Array<RadarVehicleParcel?> = arrayOfNulls(size)
-        }
-    }
-}
+    /** False when this frame's lateral read was not usable, whatever the source can do. */
+    val lateralKnown: Boolean,
+)

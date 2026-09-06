@@ -8,12 +8,17 @@
  * Rendered under the TrainingHud and always available whenever the overlay app
  * is installed and permitted (not only during navigation): a battery chip plus
  * an overlay show/hide toggle and a tail-light off/on toggle. The status text
- * is tappable to jump to the overlay app. The tail-light toggle is greyed until
- * a radar is connected. Nothing is drawn when the overlay app is absent or the
- * integration is disabled.
+ * is tappable to jump to the overlay app, which is also where a rider changes
+ * what this app is allowed. Until they have allowed it at all, the bar carries
+ * that prompt instead of the chip and toggles. A toggle the rider was not
+ * granted control for simply does not latch, because the overlay app answers
+ * the call with a refusal. Nothing is drawn when the overlay app is absent or
+ * the integration is disabled.
  */
 package com.crazycapy.randonneur.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -37,7 +42,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import es.jjrh.bikeradar.ipc.IRadarService
 import com.crazycapy.randonneur.radar.RadarClient
 import com.crazycapy.randonneur.state.RideStore
 
@@ -49,6 +53,9 @@ fun RadarStatusBar(modifier: Modifier = Modifier) {
     val fg = if (RideStore.darkMap) Color.White else Color(0xFF1A1A1A)
     val sub = if (RideStore.darkMap) Color(0xFFBABABA) else Color(0xFF666666)
     val bg = if (RideStore.darkMap) Color(0xCC121212) else Color(0xE8FFFFFF)
+    val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        RadarClient.onConsentResult(context, result.resultCode, result.data)
+    }
 
     Row(
         modifier
@@ -57,6 +64,18 @@ fun RadarStatusBar(modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (RideStore.radarGranted == false) {
+            Text(
+                text = "Allow radar access",
+                color = fg,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable {
+                    runCatching { consent.launch(RadarClient.requestAccessIntent()) }
+                },
+            )
+            return@Row
+        }
         val connected = RideStore.radarConnected
         val battery = RideStore.radarBatteryPercent
         val label = when {
@@ -83,10 +102,7 @@ fun RadarStatusBar(modifier: Modifier = Modifier) {
         ToggleButton(
             active = lightOn,
             enabled = connected,
-            onToggle = {
-                RideStore.radarLightOn = !lightOn
-                RadarClient.setRadarLightMode(if (lightOn) IRadarService.LIGHT_OFF else IRadarService.LIGHT_SOLID)
-            },
+            onToggle = { RadarClient.setTailLight(!lightOn) },
             icon = Icons.Filled.Lightbulb,
             contentDescription = "Tail light",
         )

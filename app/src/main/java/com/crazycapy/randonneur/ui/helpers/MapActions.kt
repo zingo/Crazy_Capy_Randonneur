@@ -51,6 +51,24 @@ private const val RECENTER_THRESHOLD = 0.30
 private const val ROUTE_FIT_PADDING = 80
 private const val MAX_POI_CHIPS = 256
 
+private const val UNMEASURED_TARGET_COLOR = "#9E9E9E"
+
+/**
+ * Grey when the target's class or lane position is a default rather than a
+ * reading, so it does not read as a car measured into the rider's lane. A
+ * range-only radar sends its lateral offset as zero, and zero is exactly the
+ * middle of the lane, so the dot's position is a claim this app cannot make.
+ * Colour only says so; it does not fix it.
+ */
+internal fun targetColor(target: RadarVehicle): String =
+    if (!target.sizeKnown || !target.lateralKnown) {
+        UNMEASURED_TARGET_COLOR
+    } else when (target.size) {
+        RadarVehicleSize.CAR -> "#FF9800"
+        RadarVehicleSize.TRUCK -> "#E53935"
+        RadarVehicleSize.BIKE -> "#42A5F5"
+    }
+
 /*
  * ┌─────────────────────────────────────────────────────────────────────────┐
  * │  MapActions — stateless helper functions operating on a MapLibreMap.    │
@@ -384,12 +402,7 @@ internal fun updateRadarTargets(map: MapLibreMap, targets: List<RadarVehicle>, s
             return
         }
         val features = targets.map { t ->
-            val color = when (t.size) {
-                RadarVehicleSize.CAR   -> "#FF9800"
-                RadarVehicleSize.TRUCK -> "#E53935"
-                RadarVehicleSize.BIKE  -> "#42A5F5"
-            }
-            val props = JsonObject().apply { addProperty("color", color) }
+            val props = JsonObject().apply { addProperty("color", targetColor(t)) }
             Feature.fromGeometry(Point.fromLngLat(t.lon, t.lat), props)
         }
         val existing = style.getSource("radar-source") as? GeoJsonSource
@@ -398,8 +411,8 @@ internal fun updateRadarTargets(map: MapLibreMap, targets: List<RadarVehicle>, s
             style.addLayer(
                 CircleLayer("radar-layer", "radar-source").withProperties(
                     PropertyFactory.circleColor(Expression.get("color")),
-                    PropertyFactory.circleRadius(5f),
-                    PropertyFactory.circleOpacity(0.95f),
+                    PropertyFactory.circleRadius(Expression.toNumber(Expression.get("radius"))),
+                    PropertyFactory.circleOpacity(Expression.toNumber(Expression.get("opacity"))),
                     PropertyFactory.circleStrokeColor(0xFFFFFFFF.toInt()),
                     PropertyFactory.circleStrokeWidth(1.5f),
                 )

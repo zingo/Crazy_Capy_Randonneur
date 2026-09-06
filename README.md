@@ -57,10 +57,12 @@ your ears do the navigating — no accounts, no cloud, no ads.
   guidance while your screen is off.
 - **Live rear-radar (optional)** – when the separate
   [android-bike-radar-overlay](https://github.com/partymola/android-bike-radar-overlay)
-  app is installed and permitted, Crazy Capy consumes its rear-radar stream
-  and draws real overtaking traffic on the map during GPS rides, plus a radar
-  battery chip and a tail-light toggle. Nothing is used when the overlay app
-  is absent.
+  app is installed and you have allowed Crazy Capy on its access screen, Crazy
+  Capy consumes its rear-radar stream and draws real overtaking traffic on the
+  map, alongside a radar battery chip, a tail-light toggle and a toggle that
+  hides the overlay app's own on-screen radar while you are watching the map.
+  Nothing is used when the overlay app is absent, nothing is read until you
+  allow it, and the whole feature has an off switch in Settings.
 
 ### Testing
 - **Ghost ride simulator** – try any route without leaving home: follow a
@@ -228,6 +230,8 @@ rendering via `adb exec-out screencap` and pixel analysis (see
 | `app/src/main/java/.../cache` | Pre-cache: turn-image generation, storage, corridor tile warm, anchor projection |
 | `app/src/main/java/.../sim` | Ghost ride simulator |
 | `app/src/main/java/.../ui` | Compose overlays: HUD + next-turn preview, off-route ack, dialogs |
+| `app/src/main/java/.../radar` | Rear-radar client: binding, the rider's grant, the shared target model and its projection |
+| `app/src/main/{aidl,java}/es/jjrh/bikeradar/ipc` | The overlay app's contract, copied unmodified under its Apache-2.0 licence |
 | `app/src/androidTest` | Instrumented ghost-ride test + assets |
 | `PLAN.md` | Live development plan / status |
 
@@ -247,11 +251,16 @@ rendering via `adb exec-out screencap` and pixel analysis (see
 
 ## Codebase
 
-- **Cross-app interface files** (`app/src/main/aidl/.../radar/`): the AIDL
-  contract shared with the optional
+- **Cross-app interface files** (`app/src/main/aidl/es/jjrh/bikeradar/ipc/` and
+  `app/src/main/java/es/jjrh/bikeradar/ipc/`): the contract shared with the
+  optional
   [android-bike-radar-overlay](https://github.com/partymola/android-bike-radar-overlay)
-  app is dual-licensed **`Apache-2.0 OR 0BSD`** (`SPDX-License-Identifier:
-  Apache-2.0 OR 0BSD`).
+  app. That project licenses these six files **`Apache-2.0`** so a consumer can
+  copy them, and they are copied here unmodified, keeping their own header and
+  copyright line. They are the only source files under
+  `com/crazycapy/` and `es/jjrh/` that this project did not write; see
+  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for everything else the app
+  ships.
 
 ---
 
@@ -260,23 +269,25 @@ rendering via `adb exec-out screencap` and pixel analysis (see
 - **This project** is licensed under the **Apache License 2.0** – see
   [LICENSE](LICENSE). Every source file carries an SPDX header
   (`SPDX-License-Identifier: Apache-2.0`).
-- **Cross-app radar contract** (`app/src/main/aidl/.../radar/`): the AIDL
-  interface shared with the optional overlay app is **dual-licensed**
-  `Apache-2.0 OR 0BSD`. The wire-format field layout (UUIDs, mode type bytes,
-  parcel field order) is factual interface data; this pick-either dual license
-  is a deliberate choice so the same interface is easy to use and share across
-  projects — CrazyCapy uses the Apache-2.0 option, while a GPL-2/3 project can
-  take the 0BSD option. Both options are Apache- and GPL-2/3-compatible. The
-  Parcelable and binder implementations remain separate per-repo app code.
+- **Cross-app radar contract** (`app/src/main/aidl/es/jjrh/bikeradar/ipc/` and
+  `app/src/main/java/es/jjrh/bikeradar/ipc/`): six files copied from the overlay
+  app, which licenses them `Apache-2.0` for exactly that purpose. They keep
+  their own header and copyright line, as Apache-2.0 asks. They also have to
+  stay in the `es.jjrh.bikeradar.ipc` package: AIDL checks the interface name
+  on every call, and on the listener a mismatch throws inside this process
+  rather than the other one, so the stream would simply never arrive.
 - **Third-party components** (MapLibre, OpenFreeMap/OSM, AndroidX, Compose,
   Kotlin, kXML, Gradle, AGP, JUnit, …) and their licenses are listed in
   [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The same file is bundled
   into the app (`assets/notices/`) and readable at
   **Settings → Open-source licenses** at any time.
 - **Optional overlay app** ([android-bike-radar-overlay](https://github.com/partymola/android-bike-radar-overlay))
-  is **GPL-3.0-or-later**, whereas Crazy Capy is **Apache-2.0**; these are not
-  link-compatible. The two apps stay separate APKs and communicate over the
-  Android binder with no shared code, and no GPL code is imported into this APK.
+  is **GPL-3.0-or-later**, whereas Crazy Capy is **Apache-2.0**. No
+  GPL-licensed code is in this APK: the only files taken from that project are
+  the six Apache-2.0 contract files above. That project also publishes an
+  additional permission under section 7 of the GPL
+  ([`additional-permission.txt`](https://github.com/partymola/android-bike-radar-overlay/blob/main/additional-permission.txt))
+  covering an app that communicates with it solely through that interface.
 
 Attribution requirement: the app keeps MapLibre’s attribution control visible
 (“OpenFreeMap © OpenMapTiles, Data from OpenStreetMap”), as required by the

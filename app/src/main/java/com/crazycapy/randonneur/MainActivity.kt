@@ -15,6 +15,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import com.crazycapy.randonneur.gpx.TrackLoader
+import com.crazycapy.randonneur.radar.RadarClient
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.ui.screen.NavigationMapScreen
@@ -43,6 +44,19 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleShareIntent(intent)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        RadarClient.refreshAvailability(this)
+        RadarClient.restoreOverlay()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // We are no longer drawing the map, and nothing on the overlay app's
+        // side hands the rider their own radar display back on its own.
+        RadarClient.releaseOverlay()
     }
 
     private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
