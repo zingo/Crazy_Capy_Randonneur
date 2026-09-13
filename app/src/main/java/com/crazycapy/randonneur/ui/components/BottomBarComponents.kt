@@ -23,6 +23,7 @@ import com.crazycapy.randonneur.radar.RadarClient
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.voice.Phrases
+import com.crazycapy.randonneur.voice.SpeechMarkerGenerator
 
 /*
  * ┌─────────────────────────────────────────────────────────────────────────┐
@@ -124,5 +125,26 @@ internal fun GhostControls() {
             },
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
         ) { Text(if (radarOn) "\u25C9" else "\u25CB") }
+        OutlinedButton(
+            onClick = {
+                if (RideStore.speechMarkersVisible) {
+                    RideStore.speechMarkersVisible = false
+                } else {
+                    val track = RideStore.track
+                    if (track != null) {
+                        if (RideStore.speechMarkers.isEmpty()) {
+                            Thread {
+                                val markers = SpeechMarkerGenerator().generate(track, RideStore.ghostSpeedKmh)
+                                RideStore.speechMarkers = markers
+                                RideStore.speechMarkersVisible = true
+                            }.start()
+                        } else {
+                            RideStore.speechMarkersVisible = true
+                        }
+                    }
+                }
+            },
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+        ) { Text(if (RideStore.speechMarkersVisible) "\u2691" else "\u2690") }
     }
 }

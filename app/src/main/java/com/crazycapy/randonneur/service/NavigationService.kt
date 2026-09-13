@@ -72,6 +72,7 @@ import com.crazycapy.randonneur.voice.BeepSignal
 import com.crazycapy.randonneur.voice.BeepTone
 import com.crazycapy.randonneur.voice.Phrases
 import com.crazycapy.randonneur.voice.TurnSummary
+import com.crazycapy.randonneur.voice.spokenText
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -545,25 +546,19 @@ class NavigationService : Service() {
                 RideStore.nextTurnM = event.distanceM
                 RideStore.nextTurnPopupVisible = true
                 RideStore.nextTurnIndex = event.turn.position
-                speak(Phrases.turnApproachAt(maneuverFor(event.turn.degrees), event.distanceM))
+                spokenText(event)?.let { speak(it) }
                 turnActive = true
                 startBeeps()
                 updateNotification(notifSummary())
             }
             is NavEvent.TurnNear -> {
-                val next = event.nextTurnAfter?.let { maneuverFor(it.degrees) }
                 RideStore.nextTurnDegrees = event.turn.degrees
                 RideStore.nextTurnM = event.distanceM
                 RideStore.nextTurnAfterDegrees = event.nextTurnAfter?.degrees
                 RideStore.nextTurnAfterM = event.metersToNextAfter
                 RideStore.nextTurnPopupVisible = true
                 RideStore.nextTurnIndex = event.turn.position
-                speak(Phrases.turnNear(
-                    maneuverFor(event.turn.degrees),
-                    event.distanceM,
-                    next,
-                    event.metersToNextAfter,
-                ))
+                spokenText(event)?.let { speak(it) }
                 turnActive = true
                 startBeeps()
                 updateNotification(notifSummary())
@@ -573,7 +568,7 @@ class NavigationService : Service() {
                 RideStore.nextTurnM = 0.0
                 RideStore.nextTurnPopupVisible = true
                 RideStore.nextTurnIndex = event.turn.position
-                speak(Phrases.turnNow(maneuverFor(event.turn.degrees)))
+                spokenText(event)?.let { speak(it) }
                 turnActive = true
                 startBeeps()
                 updateNotification(notifSummary())
@@ -589,31 +584,31 @@ class NavigationService : Service() {
                 stopBeeps()
                 updateNotification(notifSummary())
             }
-            is NavEvent.GoStraight -> speak(Phrases.goOn(event.distanceToTurnM))
+            is NavEvent.GoStraight -> spokenText(event)?.let { speak(it) }
             is NavEvent.OffRoute -> {
                 RideStore.offRouteActive = true
                 RideStore.offRouteM = event.distanceM
                 RideStore.offRouteAcknowledged = false
-                speak(Phrases.offRoute(event.distanceM))
+                spokenText(event)?.let { speak(it) }
                 updateNotification(notifSummary())
             }
             is NavEvent.OffRouteStill -> {
                 if (RideStore.offRouteAcknowledged) return
                 RideStore.offRouteM = event.distanceM
-                speak(Phrases.offRouteStill())
+                spokenText(event)?.let { speak(it) }
             }
             is NavEvent.BackOnRoute -> {
                 RideStore.offRouteActive = false
                 RideStore.offRouteM = 0.0
                 RideStore.offRouteAcknowledged = false
-                speak(Phrases.backOnRoute())
+                spokenText(event)?.let { speak(it) }
                 updateNotification(notifSummary())
             }
             is NavEvent.Arrived -> {
                 arrived.set(true)
                 turnActive = false
                 stopBeeps()
-                speak(Phrases.arrived())
+                spokenText(event)?.let { speak(it) }
                 updateNotification(notifSummary())
                 mainHandler.postDelayed({
                     if (running.get()) stopRide("Route finished. Nice ride!")

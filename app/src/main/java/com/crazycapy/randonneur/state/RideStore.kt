@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.radar.RadarVehicle
+import com.crazycapy.randonneur.voice.SpeechMarker
 
 /**
  * App-level state shared between the Activity (share target), the foreground
@@ -145,6 +146,9 @@ object RideStore {
     /** Preferred map style: dark by default (OLED screens drain less). */
     var darkMap: Boolean by mutableStateOf(true)
 
+    /** Current map zoom level (updated by camera listener, for HUD debug). */
+    var mapZoomLevel: Double by mutableStateOf(0.0)
+
     /** Master switch for the live rear-radar integration (overlay app): when
      *  false nothing is bound or streamed, to save battery. */
     var radarIntegrationEnabled: Boolean by mutableStateOf(true)
@@ -198,6 +202,12 @@ object RideStore {
     /** Show the in-ride speed/× scaling controls during a ghost ride (hide for clean screenshots). */
     var showGhostControls: Boolean by mutableStateOf(true)
 
+    /** Recorded spoken clips with their trigger location (populated by the headless generator). */
+    var speechMarkers: List<SpeechMarker> by mutableStateOf(emptyList())
+
+    /** Show the speech-marker overlay on the map (transient debug toggle). */
+    var speechMarkersVisible: Boolean by mutableStateOf(false)
+
     // ---- Rear-radar (simulated in ghost rides, real stream from overlay app) ----
 
     /** Spawn fake overtaking traffic during ghost rides. */
@@ -233,5 +243,6 @@ object RideStore {
         radarTargets = emptyList()
         radarLostAtMs = null
         radarSimConnected = false
+        speechMarkers = emptyList()
     }
 }

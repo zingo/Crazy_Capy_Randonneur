@@ -90,7 +90,7 @@ CrazyCapyRouting/
 
 ## Status
 
-- **M1–M4 done & verified**, M5 polish largely shipped. 116 unit tests +
+- **M1–M4 done & verified**, M5 polish largely shipped. 119 unit tests +
   instrumented ghost-ride tests pass on Capy15 (Android 15 AVD) via
   `./gradlew :app:connectedDebugAndroidTest`.
 - Shipped: TrainingHud → compact 3×2 top-left HUD (speed | covered | elapsed /

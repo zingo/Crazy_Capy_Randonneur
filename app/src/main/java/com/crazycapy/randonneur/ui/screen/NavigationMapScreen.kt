@@ -89,6 +89,7 @@ import com.crazycapy.randonneur.ui.helpers.updateIdleDot
 import com.crazycapy.randonneur.ui.helpers.removeRadarCone
 import com.crazycapy.randonneur.ui.helpers.updateRadarCone
 import com.crazycapy.randonneur.ui.helpers.updateRadarTargets
+import com.crazycapy.randonneur.ui.helpers.updateSpeechMarkers
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -247,6 +248,16 @@ internal fun NavigationMapScreen(
         onDispose { m.removeOnCameraMoveStartedListener(listener) }
     }
 
+    // Expose zoom level for HUD debug.
+    DisposableEffect(map) {
+        val m = map ?: return@DisposableEffect onDispose { }
+        val listener = object : MapLibreMap.OnCameraIdleListener {
+            override fun onCameraIdle() { RideStore.mapZoomLevel = m.cameraPosition.zoom }
+        }
+        m.addOnCameraIdleListener(listener)
+        onDispose { m.removeOnCameraIdleListener(listener) }
+    }
+
     // Idle-position dot: passive location listener.
     DisposableEffect(context, RideStore.mapVisible) {
         val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
@@ -314,6 +325,13 @@ internal fun NavigationMapScreen(
         } else {
             updateRadarTargets(m, RideStore.radarTargets, show, RideStore.radarLostAtMs)
         }
+    }
+
+    // Debug speech markers: draw recorded spoken clips at their trigger point.
+    LaunchedEffect(map, RideStore.speechMarkers, RideStore.speechMarkersVisible, RideStore.mapVisible) {
+        val m = map ?: return@LaunchedEffect
+        if (!RideStore.mapVisible) return@LaunchedEffect
+        updateSpeechMarkers(m, RideStore.speechMarkers, RideStore.speechMarkersVisible)
     }
 
     // Radar-lost triangle behind the rider when the overlay drops out.
