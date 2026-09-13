@@ -24,6 +24,7 @@ import com.crazycapy.randonneur.nav.Geo
 import com.crazycapy.randonneur.radar.RadarVehicle
 import com.crazycapy.randonneur.radar.RadarVehicleSize
 import com.crazycapy.randonneur.state.RideStore
+import com.crazycapy.randonneur.voice.SpeechMarker
 import com.google.gson.JsonObject
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -537,6 +538,153 @@ internal fun removeRadarCone(map: MapLibreMap) {
         style.removeLayer("radar-cone-layer")
         style.removeSource("radar-cone-source")
     }
+}
+
+/**
+ * Draw recorded speech-debug markers with zoom-dependent rendering:
+ *  - z ≥ 14: full blue flag with text
+ *  - 11 ≤ z < 14: small truncated flag
+ *  - z < 11: tiny dot only
+ *
+ * Cleared when [show] is false or [markers] is empty.
+ */
+internal fun updateSpeechMarkers(map: MapLibreMap, markers: List<SpeechMarker>, show: Boolean) {
+    runCatching {
+        val style = map.getStyle() ?: return
+        listOf("speech-layer-full", "speech-layer-mini", "speech-layer-dot").forEach { style.removeLayer(it) }
+        style.removeSource("speech-source")
+        var i = 0
+        while (i < SPEECH_FLAG_MAX) {
+            val prefix = "speech-flag-$i"
+            if (style.getImage("$prefix-full") != null) {
+                style.removeImage("$prefix-full")
+                style.removeImage("$prefix-mini")
+                style.removeImage("$prefix-dot")
+                i++
+            } else break
+        }
+        if (!show || markers.isEmpty()) return
+
+        markers.forEach { m ->
+            style.addImage("speech-flag-${m.seq}-full", drawFullFlag(m.text))
+            style.addImage("speech-flag-${m.seq}-mini", drawMiniFlag(m.text))
+            style.addImage("speech-flag-${m.seq}-dot", drawDotFlag())
+        }
+        val features = markers.map { m ->
+            Feature.fromGeometry(
+                Point.fromLngLat(m.lon, m.lat),
+                JsonObject().apply {
+                    addProperty("full", "speech-flag-${m.seq}-full")
+                    addProperty("mini", "speech-flag-${m.seq}-mini")
+                    addProperty("dot", "speech-flag-${m.seq}-dot")
+                },
+            )
+        }
+        style.addSource(GeoJsonSource("speech-source", FeatureCollection.fromFeatures(features)))
+        val anchor = PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM_LEFT)
+        val overlap = PropertyFactory.iconAllowOverlap(true)
+        val ignore = PropertyFactory.iconIgnorePlacement(true)
+        style.addLayer(
+            SymbolLayer("speech-layer-full", "speech-source").withProperties(
+                PropertyFactory.iconImage(Expression.get("full")),
+                PropertyFactory.iconSize(Expression.step(Expression.zoom(), 0.0,
+                    Expression.literal(14.0), Expression.literal(1.0))),
+                anchor, overlap, ignore,
+            )
+        )
+        style.addLayer(
+            SymbolLayer("speech-layer-mini", "speech-source").withProperties(
+                PropertyFactory.iconImage(Expression.get("mini")),
+                PropertyFactory.iconSize(Expression.step(Expression.zoom(), 0.0,
+                    Expression.literal(11.0), Expression.literal(1.0),
+                    Expression.literal(14.0), Expression.literal(0.0))),
+                anchor, overlap, ignore,
+            )
+        )
+        style.addLayer(
+            SymbolLayer("speech-layer-dot", "speech-source").withProperties(
+                PropertyFactory.iconImage(Expression.get("dot")),
+                PropertyFactory.iconSize(Expression.step(Expression.zoom(), 1.0,
+                    Expression.literal(11.0), Expression.literal(0.0))),
+                anchor, overlap, ignore,
+            )
+        )
+    }
+}
+
+private const val SPEECH_FLAG_MAX = 4096
+
+/** Full flag: normal-weight text on a blue pennant with pole. */
+private fun drawFullFlag(text: String): Bitmap {
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = 26f
+        typeface = Typeface.DEFAULT
+    }
+    val padX = 10f
+    val flagH = 40f
+    val notch = 14f
+    val flagW = textPaint.measureText(text) + padX * 2 + notch
+    val poleH = 22f
+    val width = (flagW + 2f).toInt()
+    val height = (flagH + poleH).toInt()
+    val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bmp)
+    val polePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE; strokeWidth = 3f; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
+    }
+    canvas.drawLine(2f, flagH, 2f, height.toFloat(), polePaint)
+    val flagBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF0288D1.toInt() }
+    canvas.drawPath(Path().apply {
+        moveTo(0f, 0f); lineTo(flagW - notch, 0f); lineTo(flagW, flagH / 2f)
+        lineTo(flagW - notch, flagH); lineTo(0f, flagH); close()
+    }, flagBg)
+    val baseline = flagH / 2f - (textPaint.descent() + textPaint.ascent()) / 2f
+    canvas.drawText(text, padX, baseline, textPaint)
+    return bmp
+}
+
+/** Mini flag: truncated text, smaller flag. */
+private fun drawMiniFlag(text: String): Bitmap {
+    val display = if (text.length > 8) text.take(7) + "\u2026" else text
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = 22f
+        typeface = Typeface.DEFAULT
+    }
+    val padX = 8f
+    val flagH = 32f
+    val notch = 10f
+    val flagW = textPaint.measureText(display) + padX * 2 + notch
+    val poleH = 16f
+    val width = (flagW + 2f).toInt()
+    val height = (flagH + poleH).toInt()
+    val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bmp)
+    val polePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE; strokeWidth = 2.5f; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
+    }
+    canvas.drawLine(1.5f, flagH, 1.5f, height.toFloat(), polePaint)
+    val flagBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF0288D1.toInt() }
+    canvas.drawPath(Path().apply {
+        moveTo(0f, 0f); lineTo(flagW - notch, 0f); lineTo(flagW, flagH / 2f)
+        lineTo(flagW - notch, flagH); lineTo(0f, flagH); close()
+    }, flagBg)
+    val baseline = flagH / 2f - (textPaint.descent() + textPaint.ascent()) / 2f
+    canvas.drawText(display, padX, baseline, textPaint)
+    return bmp
+}
+
+/** Tiny dot: shown at low zoom where flags would clutter. */
+private fun drawDotFlag(): Bitmap {
+    val size = 16
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bmp)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF0288D1.toInt() }
+    canvas.drawCircle(size / 2f, size / 2f, size / 2f - 1f, paint)
+    val border = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 1.5f }
+    canvas.drawCircle(size / 2f, size / 2f, size / 2f - 1f, border)
+    return bmp
 }
 
 /*

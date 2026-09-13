@@ -62,7 +62,7 @@ adb -s <device-serial> install -r app/build/outputs/apk/debug/app-debug.apk
 
 After changing code, run `./gradlew :app:assembleDebug :app:lintDebug` and the
 unit tests; run the instrumented suite when behavior touching the service or
-notification changed. Currently 116 unit tests + 4 instrumented ghost-ride tests.
+notification changed. Currently 119 unit tests + 4 instrumented ghost-ride tests.
 
 Device test notes:
 - The phone's notification is blocked at OS level (`dumpsys notification` shows
@@ -112,7 +112,7 @@ Device test notes:
   `navVolume` (0 = off), persisted by `RouteStore`.
 - Settings UI lives in `MainActivity.kt` (dialogs); new settings need a
   `RideStore` field + a `RouteStore` save/load key.
-- Tests: JUnit for JVM unit tests (currently 116), instrumented ghost-ride tests in
+- Tests: JUnit for JVM unit tests (currently 119), instrumented ghost-ride tests in
   `app/src/androidTest`.
 
 ## User shorthand

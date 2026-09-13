@@ -36,6 +36,7 @@ import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.radar.RadarClient
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
+import com.crazycapy.randonneur.voice.SpeechMarkerGenerator
 import kotlin.math.roundToInt
 
 /*
@@ -144,6 +145,31 @@ internal fun SettingsDialog(
                     onCheckedChange = { RideStore.showGhostControls = it; RouteStore.saveSettings(context) },
                     title = "Show ghost controls",
                     subtitle = "Speed/scale/radar buttons during a ghost ride",
+                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Speech markers", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Mark every spoken clip on the map at its trigger point",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    TextButton(onClick = {
+                        val track = RideStore.track
+                        if (track != null) {
+                            Thread {
+                                val markers = SpeechMarkerGenerator().generate(track, RideStore.ghostSpeedKmh)
+                                RideStore.speechMarkers = markers
+                                RideStore.speechMarkersVisible = true
+                            }.start()
+                        }
+                    }, enabled = ghostAvailable) { Text("Generate") }
+                }
+                SettingSwitch(
+                    checked = RideStore.speechMarkersVisible,
+                    onCheckedChange = { RideStore.speechMarkersVisible = it },
+                    title = "Show speech markers",
+                    subtitle = "Toggle the marker overlay on the map",
                 )
                 Spacer(Modifier.height(12.dp))
                 Text("About", style = MaterialTheme.typography.titleSmall)

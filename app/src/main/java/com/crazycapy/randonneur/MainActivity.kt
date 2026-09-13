@@ -80,6 +80,7 @@ class MainActivity : ComponentActivity() {
             val track = TrackLoader.loadUri(this, uri)
             RideStore.track = track
             RideStore.status = "Route loaded: ${track.name}"
+            clearSpeechMarkers()
             RouteStore.saveTrack(this, track)
         } catch (e: Exception) {
             RideStore.track = null
@@ -92,6 +93,12 @@ class MainActivity : ComponentActivity() {
         val track = RouteStore.loadTrack(this, savedRouteId) ?: return
         RideStore.track = track
         RideStore.status = "Route loaded: ${track.name}"
+        clearSpeechMarkers()
+    }
+
+    private fun clearSpeechMarkers() {
+        RideStore.speechMarkers = emptyList()
+        RideStore.speechMarkersVisible = false
     }
 
     private fun loadResumeState(context: Context) {

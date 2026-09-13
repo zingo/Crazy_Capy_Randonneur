@@ -141,8 +141,8 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                     modifier = Modifier.weight(1f),
                 )
                 Metric(
-                    value = timeFmt,
-                    unit = currentTime,
+                    value = "%.1f".format(RideStore.mapZoomLevel),
+                    unit = "zoom",
                     modifier = Modifier.weight(1f),
                 )
             }
