@@ -387,7 +387,7 @@ internal fun NavigationMapScreen(
                     )
                     val cacheStatus = RouteCache.status
                     if (cacheStatus != null) Text(cacheStatus, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                    if (RideStore.active && RideStore.mode == RideMode.GHOST) GhostControls()
+                    if (RideStore.active && RideStore.mode == RideMode.GHOST && RideStore.showGhostControls) GhostControls()
                     if (!RideStore.active && showResumeOffer(track)) {
                         ResumeBanner(
                             onResume = {

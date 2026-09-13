@@ -1,6 +1,6 @@
 # Crazy Capy Randonneur — Plan
 
-Open-source, voice-first, battery-extreme bike navigator for Android 17+.
+Open-source, voice-first, battery-extreme bike navigator for Android 14+.
 Import a GPX/TCX route from popular cycling sites, start navigating, keep
 the phone in the pocket with the screen off, and ride to spoken guidance.
 
@@ -13,8 +13,7 @@ the phone in the pocket with the screen off, and ride to spoken guidance.
 
 ## Decisions
 
-- Target: Android 17 only — `minSdk = targetSdk = compileSdk = 37`
-  (fallback 36 if SDK 37 download isn't available).
+- Target: Android 14+ — `minSdk = 34`, `targetSdk = compileSdk = 35`.
 - Language/UI: Kotlin 2.x + Jetpack Compose (Material 3, dynamic color, edge-to-edge).
 - Maps: **MapLibre Native (org.maplibre.gl:android-sdk:12.x)** — offline-capable vector maps
   (region download, MBTiles/PMTiles), the engine GraphHopper's navigation SDK builds on.
@@ -56,7 +55,7 @@ CrazyCapyRouting/
 
 ## Milestones
 
-- M1 — scaffold & toolchain: JDK 21 / AGP 8.x / platform 37; project boots;
+- M1 — scaffold & toolchain: JDK 21 / AGP 8.x / platform 35; project boots;
   map screen shows a Mapsforge region; GPS center/follow; launcher icon from logo.
 - M2 — import & overlay: pick GPX via SAF, parse, draw polyline.
 - M3 — nav core: NavEngine (snap, "Turn left in 200 metres", distance/ETA), TTS.
@@ -78,10 +77,21 @@ CrazyCapyRouting/
   two to take effect). Unit-test the pure decision function; real tuning on
   the physical phone with `dumpsys battery` before/after.
 
+- **Radar target world-motion (maybe not needed).** Today live radar targets
+  are projected to absolute lat/lon once per ~5 Hz snapshot and frozen between
+  samples, so they don't rotate with the bike. We don't yet derive each
+  target's own world direction/speed from consecutive positions (no heading
+  arrow, no extrapolation). Low value if the radar is fast enough already —
+  and any per-frame dead-reckoning costs battery, so guard it behind the same
+  "freeze-then-snap" approach rather than a continuous projection loop. A
+  cheaper fallback worth considering first: keep the last snapshot's data and
+  only use it to prolong/dead-reckon the fading targets when the stream
+  vanishes, instead of computing motion for every frame.
+
 ## Status
 
-- **M1–M4 done & verified**, M5 polish largely shipped. 89 unit tests +
-  instrumented ghost-ride tests pass on Capy17 (Android 17 AVD) via
+- **M1–M4 done & verified**, M5 polish largely shipped. 116 unit tests +
+  instrumented ghost-ride tests pass on Capy15 (Android 15 AVD) via
   `./gradlew :app:connectedDebugAndroidTest`.
 - Shipped: TrainingHud → compact 3×2 top-left HUD (speed | covered | elapsed /
   avg | left | tap-to-cycle ETA/left/total) with a north-up next-turn junction preview
@@ -109,6 +119,11 @@ CrazyCapyRouting/
   through the same `RadarClient` path so the dropout is testable without a real
   radar (radar on/off button in the ghost controls). See
   `Integration_android-bike-radar-overlay.plan`.
+- **Ghost-radar path-following**: the ghost-ride `RadarSimulator` now rides the
+  route's actual geometry (via `Track.pointAtDistance`) with a ±10 m lateral
+  offset, so simulated traffic hugs the road through corners instead of
+  projecting straight back along a bearing. A "Show ghost controls" setting
+  hides the in-ride speed/scale/radar buttons for clean captures.
 - **RWGPS import**: `RwGpsImport` fetches a route from its public JSON
   (`routes/<id>.json`) and `RwGpsParser` rebuilds it as a `Track`, lifting the
   route's POIs (incl. brevet `control` POIs) into waypoints — so checkpoints

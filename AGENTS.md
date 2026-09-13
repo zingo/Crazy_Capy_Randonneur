@@ -5,10 +5,10 @@ Guidance for AI coding agents working in this repository.
 ## Project
 
 Crazy Capy Randonneur — open-source, voice-first, battery-extreme GPS bike
-navigator for Android 17+ (API 37). No Play Services, no accounts, no cloud.
+navigator for Android 14+ (API 34). No Play Services, no accounts, no cloud.
 
 - App package / namespace: `com.crazycapy.randonneur`
-- `minSdk = targetSdk = compileSdk = 37`
+- `minSdk = 34`, `targetSdk = compileSdk = 35`
 - Stack: Kotlin 2.1.21, Jetpack Compose (Material 3), MapLibre + OpenFreeMap,
   Gradle 8.13 / AGP 8.13. No Play Services.
 - Package layout under `app/src/main/java/com/crazycapy/randonneur/`:
@@ -34,7 +34,11 @@ export PATH=$JAVA_HOME/bin:$PATH
 ```
 
 adb lives at `/home/zingo/Android/Sdk/platform-tools/adb`. Known devices:
-- Phone (Pixel 7 Pro): serial `35181FDH3000QT`
+- Tablet (Wacom DTHA116, Android 14 / API 34) — preferred dev device. Needs a
+  udev rule for Wacom (vendor `056a`) or it shows "no permissions":
+  `SUBSYSTEM=="usb", ATTR{idVendor}=="056a", MODE="0666", GROUP="plugdev"` in
+  `/etc/udev/rules.d/51-android.rules`.
+- Phone (Pixel 7 Pro)
 - Emulator: `emulator-5554`
 
 ## Commands
@@ -53,13 +57,12 @@ adb lives at `/home/zingo/Android/Sdk/platform-tools/adb`. Known devices:
 ./gradlew :app:connectedDebugAndroidTest
 
 # Install to phone / emulator
-adb -s 35181FDH3000QT install -r app/build/outputs/apk/debug/app-debug.apk
-adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s <device-serial> install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 After changing code, run `./gradlew :app:assembleDebug :app:lintDebug` and the
 unit tests; run the instrumented suite when behavior touching the service or
-notification changed. Currently 77 unit tests + 4 instrumented ghost-ride tests.
+notification changed. Currently 116 unit tests + 4 instrumented ghost-ride tests.
 
 Device test notes:
 - The phone's notification is blocked at OS level (`dumpsys notification` shows
@@ -109,7 +112,7 @@ Device test notes:
   `navVolume` (0 = off), persisted by `RouteStore`.
 - Settings UI lives in `MainActivity.kt` (dialogs); new settings need a
   `RideStore` field + a `RouteStore` save/load key.
-- Tests: JUnit for JVM unit tests (currently 72), instrumented ghost-ride tests in
+- Tests: JUnit for JVM unit tests (currently 116), instrumented ghost-ride tests in
   `app/src/androidTest`.
 
 ## User shorthand

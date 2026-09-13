@@ -412,7 +412,7 @@ class NavigationService : Service() {
         }
         updateAvgSpeed()
         updatePoi()
-        updateRadarSim(lat, lon, moved)
+        updateRadarSim(moved)
     }
 
     /**
@@ -420,7 +420,7 @@ class NavigationService : Service() {
      * [RadarClient.feedGhostTargets] so the watchdog/expiry/cone path is
      * identical to the live overlay stream.
      */
-    private fun updateRadarSim(lat: Double, lon: Double, movedM: Double) {
+    private fun updateRadarSim(movedM: Double) {
         if (RideStore.mode != RideMode.GHOST) return
         if (!RideStore.radarSimEnabled) {
             if (RideStore.radarSimConnected) {
@@ -430,12 +430,12 @@ class NavigationService : Service() {
             return
         }
         if (!RideStore.radarSimConnected) RideStore.radarSimConnected = true
-        val course = RideStore.bearing ?: return
         val speed = RideStore.ghostSpeedKmh
         if (speed <= 0.0) return
+        val track = RideStore.track ?: return
         val dtSec = movedM / (speed / KMH_TO_MS)
         val sim = radarSim ?: RadarSimulator().also { radarSim = it }
-        val targets = sim.tick(lat, lon, course, speed, dtSec)
+        val targets = sim.tick(track, RideStore.coveredM, speed, dtSec)
         if (RideStore.radarSimEnabled) {
             RadarClient.feedGhostTargets(targets)
         }

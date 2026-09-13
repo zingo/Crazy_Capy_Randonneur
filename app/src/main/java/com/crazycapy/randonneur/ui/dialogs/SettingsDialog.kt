@@ -139,6 +139,12 @@ internal fun SettingsDialog(
                     }
                     TextButton(enabled = ghostAvailable, onClick = { onStartGhost(); onDismiss() }) { Text("Start") }
                 }
+                SettingSwitch(
+                    checked = RideStore.showGhostControls,
+                    onCheckedChange = { RideStore.showGhostControls = it; RouteStore.saveSettings(context) },
+                    title = "Show ghost controls",
+                    subtitle = "Speed/scale/radar buttons during a ghost ride",
+                )
                 Spacer(Modifier.height(12.dp))
                 Text("About", style = MaterialTheme.typography.titleSmall)
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
