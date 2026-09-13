@@ -5,8 +5,7 @@ voice-first bike GPS for Android that treats battery life as a first-class
 feature. You load your own GPX route, slip the phone in your pocket, and let
 your ears do the navigating — no accounts, no cloud, no ads.
 
-> Required: Android **17 (API 37)** — the project deliberately targets the
-> newest platform only.
+> Required: Android **14 (API 34)** — minSdk 34, targetSdk/compileSdk 35.
 
 ## Why it preserve battery
 
@@ -72,30 +71,32 @@ your ears do the navigating — no accounts, no cloud, no ads.
 - **Ghost ride simulator** – try any route without leaving home: follow a
   simulated rider on the map, hear the full guidance, and control the pace.
 - **Simulated rear-radar traffic** – on a ghost ride, cars, trucks and bikes
-  overtake from behind (coloured dots on the map, disappearing once they pass,
-  since a rear radar only looks back). Toggle it in the ghost-ride start
-  dialog, or mid-ride with the radar button in the ghost controls — turning it
-  off triggers the same "radar lost" fading targets, triangle and voice alerts
-  as a real dropout.
+  overtake from behind (coloured dots on the map, following the road's curves at
+  a slight lane offset and disappearing once they pass, since a rear radar only
+  looks back). Toggle it in the ghost-ride start dialog, or mid-ride with the
+  radar button in the ghost controls — turning it off triggers the same "radar
+  lost" fading targets, triangle and voice alerts as a real dropout. A "Show
+  ghost controls" setting hides those in-ride buttons for a clean map view.
 
 ---
 
 ## Screenshots
 
 Captured with the on-device ghost-ride simulator – no real riding needed. Light
-and dark map styles are both shown.
+and dark map styles are both shown; the rear-radar shots show simulated traffic
+following the road behind the rider.
 
-| Ghost ride with HUD (light map, 3×2 grid) | Turn preview up close (light map) | Lock-screen notification |
+| Ghost ride with HUD (light map) | Ghost ride with HUD (dark map) | Turn preview (light map) |
 | --- | --- | --- |
-| ![Ghost ride with HUD, light map](docs/screenshots/2026-08-13-02-hud-light.png) | ![Turn preview, light map](docs/screenshots/2026-08-12-11-ghost-ride-turn-preview-light.png) | ![Lock-screen notification](docs/screenshots/2026-08-12-06-notification.png) |
+| ![Ghost ride with HUD, light map](docs/screenshots/2026-09-13-06-hud-light.png) | ![Ghost ride with HUD, dark map](docs/screenshots/2026-09-13-07-hud-dark.png) | ![Turn preview, light map](docs/screenshots/2026-09-13-08-turn-preview-light.png) |
 
-| Ghost ride with HUD (dark map, 3×2 grid) | Turn preview up close (dark map) | Settings (pre-cache toggle) |
+| Turn preview (dark map) | Route loaded with checkpoint markers | Saved routes library (cache status) |
 | --- | --- | --- |
-| ![Ghost ride with HUD, dark map](docs/screenshots/2026-08-13-01-hud-dark.png) | ![Turn preview, dark map](docs/screenshots/2026-08-12-13-ghost-ride-turn-preview-dark.png) | ![Settings](docs/screenshots/2026-08-12-18-settings-cache.png) |
+| ![Turn preview, dark map](docs/screenshots/2026-09-13-09-turn-preview-dark.png) | ![Route loaded with checkpoint markers](docs/screenshots/2026-09-13-03-route-checkpoints.png) | ![Saved routes](docs/screenshots/2026-09-13-04-saved-routes.png) |
 
-| Saved routes library (cache status) | Checkpoint info popup (phone) | Route loaded with checkpoint markers (phone) |
+| Settings | Rear-radar traffic (light map) | Rear-radar traffic (dark map) |
 | --- | --- | --- |
-| ![Saved routes](docs/screenshots/2026-08-12-17-saved-routes-cache.png) | ![Checkpoint info popup](docs/screenshots/2026-08-14-02-cp-popup.png) | ![Route loaded with checkpoint markers](docs/screenshots/2026-08-14-01-route-with-cps-phone.png) |
+| ![Settings](docs/screenshots/2026-09-13-05-settings.png) | ![Rear-radar traffic, light map](docs/screenshots/2026-09-13-01-ghost-ride-radar-light.png) | ![Rear-radar traffic, dark map](docs/screenshots/2026-09-13-02-ghost-ride-radar-dark.png) |
 
 ---
 
@@ -104,9 +105,9 @@ and dark map styles are both shown.
 ### Prerequisites
 
 - JDK 21 (the build sets `JAVA_HOME` below, or use any JDK 21+).
-- Android SDK with platform **API 37** installed.
+- Android SDK with platform **API 35** installed.
 - (Optional) a physical Pixel/other phone for on-device testing; tests also run
-  on the API 37 emulator image.
+  on the API 35 emulator image.
 
 ### Build
 

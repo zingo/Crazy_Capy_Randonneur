@@ -195,6 +195,9 @@ object RideStore {
     /** Ghost-ride cruise speed in km/h. */
     var ghostSpeedKmh: Double by mutableStateOf(28.0)
 
+    /** Show the in-ride speed/× scaling controls during a ghost ride (hide for clean screenshots). */
+    var showGhostControls: Boolean by mutableStateOf(true)
+
     // ---- Rear-radar (simulated in ghost rides, real stream from overlay app) ----
 
     /** Spawn fake overtaking traffic during ghost rides. */
