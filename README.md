@@ -22,6 +22,9 @@ your ears do the navigating — no accounts, no cloud, no ads.
   · rest on next load") and resumes on the next load, skipping what's done.
 - **Dark OLED map by default** – the dark tile style is the default; light is
   one tap away.
+- **Map scale bar & compass** – a distance scale sits bottom-centre and tracks
+  your zoom level; a compass appears top-right whenever the map is rotated and
+  snaps back to north-up when tapped. Zoom with pinch — no on-screen buttons.
 - **Toggleable extras** – the per-second live notification and the corner popup
   can each be switched off in Settings when you don't need them.
 
@@ -209,7 +212,7 @@ fix pipeline and asserts arrival with turn announcements.
   simulated rider so you can watch the heading arrow move, and the camera only
   recentres when you drift ~30% from the screen centre. Speed it up/down, flip
   direction, or resume a stopped ride from the banner.
-- **Settings**: the gear icon (top-right) opens ride options: toggle the
+- **Settings**: the gear icon (bottom-right) opens ride options: toggle the
   next-turn popup, the per-second notification (battery savers) and audio
   ducking; set the **turn-beep** and **navigation-voice** volumes (0 = off);
   toggle the **pre-cache** prompt; clear all route caches; manage your saved
