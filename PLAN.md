@@ -142,7 +142,10 @@ CrazyCapyRouting/
   ("500 m left · 32.0 km/h", includes the following turn when near).
 - Distances phrased as `m`/`km` (e.g. `400 m`, `2.6 km`) everywhere, including
   the HUD and notification.
-- Camera controls: zoom +/− FABs; route auto-fits to bounds on load (and on style
+- Camera controls: pinch to zoom (no on-screen zoom buttons); a bottom-centre
+  scale bar sized from MapLibre's `Projection.getMetersPerPixelAtLatitude`, and
+  a top-right compass that appears only when rotated and snaps back to north-up
+  when tapped. Route auto-fits to bounds on load (and on style
   reload); riding keeps follow-zoom. `reset()` on RideStore; `mapVisible` drives
   UI redraws (headless = zero map work).
 - **QA**: fixed missing `getMapAsync { map = it }` — without it MapLibre never

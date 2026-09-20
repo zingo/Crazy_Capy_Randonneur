@@ -104,9 +104,14 @@ Device test notes:
   Keep `NavigationService` for Android-touching glue only.
 - Distance phrasing: use `Phrases.formatDistance`/`formatShort` (units `m`/`km`,
   `0` → `"0 m"`). Speed shown as e.g. `32.0 km/h` via `formatKmh`.
-- HUD is a 3×2 grid (Speed | distance covered | elapsed / Average | distance
+- HUD is a 3×2 grid (Speed | distance covered | map zoom / Average | distance
   remaining | tap-to-cycle ETA mode) with a north-up `TurnPreview` beside it. The
   main map is always north-up.
+- On-map controls: pinch to zoom (no zoom buttons); a bottom-centre `MapScaleBar`
+  sized from MapLibre's `Projection.getMetersPerPixelAtLatitude`, and a
+  top-right `MapCompass` shown only when the map is rotated (tap = snap north).
+  The bottom-right button stack is centre-on-me (when following is released),
+  dark/light toggle, then the settings gear at the very bottom.
 - Beeps are decoupled from the turn popup via a `turnActive` flag in
   `NavigationService`; volume comes from `RideStore.beepVolume` /
   `navVolume` (0 = off), persisted by `RouteStore`.

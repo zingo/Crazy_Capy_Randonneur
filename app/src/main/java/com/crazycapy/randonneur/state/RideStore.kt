@@ -149,6 +149,9 @@ object RideStore {
     /** Current map zoom level (updated by camera listener, for HUD debug). */
     var mapZoomLevel: Double by mutableStateOf(0.0)
 
+    /** Current map bearing in degrees (0 = north up). */
+    var mapBearing: Double by mutableStateOf(0.0)
+
     /** Master switch for the live rear-radar integration (overlay app): when
      *  false nothing is bound or streamed, to save battery. */
     var radarIntegrationEnabled: Boolean by mutableStateOf(true)

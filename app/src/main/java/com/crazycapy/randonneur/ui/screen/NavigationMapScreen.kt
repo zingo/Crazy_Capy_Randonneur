@@ -19,13 +19,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -47,10 +47,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.roundToInt
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -136,7 +148,12 @@ internal fun NavigationMapScreen(
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     val mapView = remember(context) {
         MapLibre.getInstance(context.applicationContext)
-        MapView(context).apply { getMapAsync { map = it } }
+        MapView(context).apply {
+            getMapAsync {
+                it.uiSettings.isCompassEnabled = false
+                map = it
+            }
+        }
     }
     var track by remember { mutableStateOf(RideStore.track) }
     var status by remember { mutableStateOf(RideStore.status) }
@@ -252,7 +269,10 @@ internal fun NavigationMapScreen(
     DisposableEffect(map) {
         val m = map ?: return@DisposableEffect onDispose { }
         val listener = object : MapLibreMap.OnCameraIdleListener {
-            override fun onCameraIdle() { RideStore.mapZoomLevel = m.cameraPosition.zoom }
+            override fun onCameraIdle() {
+                RideStore.mapZoomLevel = m.cameraPosition.zoom
+                RideStore.mapBearing = m.cameraPosition.bearing
+            }
         }
         m.addOnCameraIdleListener(listener)
         onDispose { m.removeOnCameraIdleListener(listener) }
@@ -385,14 +405,11 @@ internal fun NavigationMapScreen(
                         Icon(Icons.Filled.MyLocation, contentDescription = "Center on me")
                     }
                 }
-                FloatingActionButton(onClick = { map?.animateCamera(CameraUpdateFactory.zoomIn()) }, modifier = Modifier.size(44.dp), containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) {
-                    Icon(Icons.Filled.Add, contentDescription = "Zoom in")
-                }
-                FloatingActionButton(onClick = { map?.animateCamera(CameraUpdateFactory.zoomOut()) }, modifier = Modifier.size(44.dp), containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) {
-                    Icon(Icons.Filled.Remove, contentDescription = "Zoom out")
-                }
                 FloatingActionButton(onClick = { RideStore.darkMap = !RideStore.darkMap }, containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) {
                     Icon(if (RideStore.darkMap) Icons.Filled.BrightnessLow else Icons.Filled.BrightnessHigh, contentDescription = if (RideStore.darkMap) "Switch to light map" else "Switch to dark map")
+                }
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp) {
+                    IconButton(onClick = { showSettings = true }) { Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurface) }
                 }
             }
         },
@@ -440,9 +457,11 @@ internal fun NavigationMapScreen(
             if (RideStore.active && RideStore.offRouteActive && !RideStore.offRouteAcknowledged) {
                 OffRouteAck(Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
             }
-            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) {
-                IconButton(onClick = { showSettings = true }) { Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurface) }
-            }
+            MapScaleBar(map, Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp))
+            MapCompass(
+                onClick = { map?.moveCamera(CameraUpdateFactory.bearingTo(0.0)) },
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 8.dp),
+            )
         }
     }
 
@@ -510,5 +529,71 @@ internal fun NavigationMapScreen(
             confirmButton = { TextButton(onClick = { askPrecacheFor = null; RouteCache.preCache(context, track) }) { Text("Pre-cache") } },
             dismissButton = { TextButton(onClick = { askPrecacheFor = null }) { Text("Not now") } },
         )
+    }
+}
+
+private const val EARTH_CIRCUMFERENCE_M = 40_075_016.686
+
+@Composable
+internal fun MapScaleBar(map: MapLibreMap?, modifier: Modifier = Modifier) {
+    val dark = RideStore.darkMap
+    val zoom = RideStore.mapZoomLevel
+    val lat = RideStore.lat ?: 46.5
+    val barColor = if (dark) Color.White else Color.Black
+    val textColor = if (dark) Color.White else Color.Black
+    val density = LocalDensity.current
+
+    val m = map ?: return
+    val metersPerPx = try {
+        m.projection.getMetersPerPixelAtLatitude(lat)
+    } catch (_: Exception) {
+        EARTH_CIRCUMFERENCE_M * cos(Math.toRadians(lat)) / (512.0 * 2.0.pow(zoom))
+    }
+    if (metersPerPx <= 0.0) return
+
+    val maxBarPx = with(density) { 140.dp.toPx() }
+    val maxMeters = metersPerPx * maxBarPx
+
+    val nice = listOf(1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1_000.0, 2_000.0, 5_000.0, 10_000.0, 20_000.0, 50_000.0)
+    val step = nice.lastOrNull { it <= maxMeters } ?: nice.first()
+    val barPx = step / metersPerPx
+
+    val label = if (step >= 1_000.0) "${(step / 1_000.0).roundToInt()} km" else "${step.roundToInt()} m"
+    val widthDp = with(density) { barPx.toFloat().toDp() }
+
+    Row(modifier, verticalAlignment = Alignment.Bottom) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(label, color = textColor, fontSize = 10.sp)
+            Spacer(Modifier.height(1.dp))
+            androidx.compose.foundation.Canvas(Modifier.width(widthDp).height(6.dp)) {
+                val y = size.height / 2
+                drawLine(barColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 2.5f)
+                drawLine(barColor, Offset(0f, 0f), Offset(0f, size.height), strokeWidth = 2f)
+                drawLine(barColor, Offset(size.width, 0f), Offset(size.width, size.height), strokeWidth = 2f)
+            }
+        }
+    }
+}
+
+@Composable
+internal fun MapCompass(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val bearing = RideStore.mapBearing
+    val dark = RideStore.darkMap
+    val isNorth = bearing % 360.0 == 0.0 || kotlin.math.abs(bearing % 360.0) < 0.5 || kotlin.math.abs(bearing % 360.0 - 360.0) < 0.5
+    if (isNorth) return
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+        shadowElevation = 2.dp,
+        modifier = modifier,
+    ) {
+        IconButton(onClick = onClick) {
+            Icon(
+                Icons.Filled.Navigation,
+                contentDescription = "North up",
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(22.dp).rotate(bearing.toFloat()),
+            )
+        }
     }
 }
