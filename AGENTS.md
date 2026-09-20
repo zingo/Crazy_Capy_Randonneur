@@ -124,6 +124,8 @@ Device test notes:
 
 - "flash" or "/flash" = build the debug APK and install it on the phone
   (see `.agents/commands/flash.md` and `.agents/skills/flash/SKILL.md`).
+- "pr" or "/pr" = push the current branch and open a GitHub PR against `main`
+  (see `.agents/commands/pr.md` and `.agents/skills/pr/SKILL.md`).
 
 ## Docs
 
