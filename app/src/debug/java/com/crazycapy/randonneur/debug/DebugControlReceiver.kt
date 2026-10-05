@@ -55,7 +55,20 @@ class DebugControlReceiver : BroadcastReceiver() {
             Log.e(TAG, "START_GHOST without a route path")
             return
         }
-        val file = File(path)
+        // Only read routes from the adb staging directory (the script pushes
+        // there); refuse anything else so an exported broadcast can't be used
+        // to read arbitrary files.
+        val file = try {
+            File(path).canonicalFile
+        } catch (e: Exception) {
+            Log.e(TAG, "Bad route path: $path", e)
+            return
+        }
+        val allowed = File("/data/local/tmp").canonicalPath + File.separator
+        if (!file.path.startsWith(allowed)) {
+            Log.e(TAG, "Refusing route outside $allowed: ${file.path}")
+            return
+        }
         if (!file.exists()) {
             Log.e(TAG, "Route file not found: $path")
             return
