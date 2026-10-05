@@ -80,6 +80,20 @@ Device test notes:
 - Pre-cache is honest about partial runs: the dialog reports e.g. "Pre-cached
   34/347 · rest on next load" when some turns were missed, and later loads resume
   where they left off (skips existing files, retries the rest).
+- Power measurement: an AVHzY/YK-Lab "Shizuku" USB power meter (Korona YK003C,
+  `/dev/ttyACM0`) can log ~1 kHz V/A/W for comparing builds/settings/other apps;
+  use `tools/avhzy-monitor.py` (`record` / `compare` / `windows` / `report` /
+  `diff` / `promote` / `condense`, see `tools/README.md`). Runs are chunk-
+  condensed by default (`--chunk 300`) and live in the git-ignored
+  `power-runs/condensed/`. For repeatable ghost-ride runs use
+  `tools/ghost-power-run.sh` (drives the ride over adb, starts at the same route
+  point, cycles the screen to a target on-%, waits out charging, and has
+  `fast`/`nano`/`small`/`medium`/`long`/`ultra` presets; default route
+  `tools/routes/ystad-onnekoppinge-harlosa.gpx`). It relies on the debug-only
+  `DebugControlReceiver` in `app/src/debug/`, which never ships in release.
+  `tools/power-baseline.md` is the committed reference table;
+  `tools/power-report.sh` builds a local report, diffs it against the baseline,
+  and can promote it. Light vs dark map makes no measurable power difference.
 
 ## Conventions
 
@@ -131,4 +145,6 @@ Device test notes:
 
 - `README.md` — user-facing features, build/run/test instructions, screenshots.
 - `PLAN.md` — development plan / status. Keep both in sync when features change.
+- `tools/README.md` — developer tools: the power-measurement toolkit, emulator
+  helper, and agent commands. Document new tools there.
 - Screenshot files are named `docs/screenshots/YYYY-MM-DD-NN-name.png` so stale captures are easy to spot (deleting the old file before capturing the new one).
