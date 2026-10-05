@@ -14,3 +14,9 @@ local.properties
 
 # OS
 .DS_Store
+
+# Power-monitor recordings (tools/avhzy-monitor.py)
+power-runs/
+
+# Python
+__pycache__/
