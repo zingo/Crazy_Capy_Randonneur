@@ -141,6 +141,36 @@ Notes:
 - The recording stops the moment the ride time is up, so wake/stop overhead
   doesn't dilute the measurement.
 
+### `mock-route.sh` — power-test *other* apps
+
+`ghost-power-run.sh` drives this app's own ghost engine (perfect for measuring
+this project standalone). To measure a **third-party** navigation app you need
+the whole device to move — that's `mock-route.sh`: it plays a GPX as a **mock GPS
+location** over adb (no root), so *any* app sees the device riding.
+
+```bash
+# start the other app + its navigation, then (with the meter recording):
+tools/mock-route.sh --speed 20 --hz 1        # whole default route at 1 Hz
+tools/mock-route.sh -r loop.gpx -d 600 --hz 2
+tools/mock-route.sh --dry-run                # print the plan only
+```
+
+It grants the adb shell the mock-location appop
+(`appops set --uid 2000 android:mock_location allow`), registers a `gps` test
+provider (`cmd location providers add-test-provider gps`), feeds the interpolated
+route via `set-test-provider-location` at the chosen rate, and removes the
+provider on exit (`--keep` leaves it). The mock fix propagates to the **fused**
+provider, so all apps see it (fixes carry `isMock=true`; a few apps warn on that).
+
+Rate: default **1 Hz** (the Android/fused norm — at 20 km/h ≈ 5.5 m per fix).
+Slower (0.2–0.5 Hz) is fine and lighter on the host. Keep the rate **identical**
+across the apps/runs you compare — the callback rate drives wakeups and map
+recentering, so it changes the measured power. (A mock provider delivers at the
+rate *you* push, whereas a real device delivers at the rate the *app* requested.)
+
+Note: the Wacom DTHA116 has **no GNSS** (only network/fused), so there's no real
+GNSS radio power to reproduce on it — mock is the only way to drive a route.
+
 ### `power-report.sh` and baselines
 
 `tools/power-baseline.md` (+ `.txt`) is the committed reference table.
