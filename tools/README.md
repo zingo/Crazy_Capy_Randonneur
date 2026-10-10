@@ -258,6 +258,29 @@ these constant:
 - compare runs made close together; a same-day, same-battery baseline is more
   trustworthy than one from hours earlier.
 
+### Nice to have (not done)
+
+**On-meter Lua graph.** The meter's own screen could show a rolling power graph
+(so a couple of the 60 s screen on/off cycles are visible) plus the run average
+and energy in a corner. The Shizuku platform runs Lua and exposes the screen
+(`meter.readPower/readVoltage/readCurrent`, `screen.fillRect/drawRect/showString`,
+`sys.gTick`, `delay.ms`, `color.*`, `font.*` — see the DingoCharge-Shizuku
+project for real usage). Sketch: sample `meter.readPower()` at ~2 Hz into a
+rolling buffer the width of the screen (≈2 cycles at 60 s), draw it as bars, and
+print `avg mWh/h = mean W × 1000` and `run Wh` in the header.
+
+Open questions before building it:
+- **Screen geometry** — C3/Korona is 240×135, but CT-3 is 128×160 and
+  DingoCharge's coordinates suggest 160×128 on some units; unverified for this
+  meter.
+- **`.lua` vs `.lc`** — whether the firmware runs plain `.lua` from `/lua/user/`
+  or needs the on-meter compiler.
+- **Coexistence** — whether a running Lua script blocks the serial streaming our
+  logger depends on (test needed).
+
+Install path if pursued: mount the meter as USB mass-storage, copy the script to
+`/lua/user/`, then *Left-Long → Lua Script Execute*.
+
 ### Meter protocol notes
 
 Frames are `A5 | int32-LE length | payload | XOR checksum | 5A`. A 28-byte
