@@ -292,11 +292,11 @@ Committed to the baseline as `fast (dark)` / `fast (light)` rows:
   (cv 8% vs 3%). Likely the LCD panel's/GPU's power responding to bright map
   content — worth the dark default on this tablet.
 - **Only the 5-minute `fast` scenario is reliably measurable on this tablet.**
-  Longer runs (`medium` duty-cycled 15% screen, and even 1.5 h full-screen) come
-  out with a wrong `on %` (e.g. 25–66% where 15% / ~100% is expected) and are
-  dropped by the filter — the screen sleep (`KEYCODE_SLEEP`/`svc power stayon`)
-  doesn't hold the way it does on the Wacom, and the device intermittently drops
-  off USB (the meter then reads the input dips). Treat T20 numbers as `fast`-only.
+  Every duty-cycled level comes out with a wrong `on %` — `nano` 25–40%, `small`
+  23–26%, `medium` ~25% (target 15%) — and is dropped by the filter, and even a
+  1.5 h full-screen run read ~66%. The screen sleep (`KEYCODE_SLEEP` /
+  `svc power stayon`) doesn't hold the way it does on the Wacom, and the device
+  intermittently drops off USB. Treat T20 numbers as `fast`-only.
 - **Charging contamination is hit-or-miss on this tablet** — several `fast` runs
   were dropped (on % 63–93%) because charge top-off re-activated mid-ride and the
   meter then read the capped input, not the load. Check `on %` before trusting any
