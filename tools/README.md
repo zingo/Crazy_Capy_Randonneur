@@ -8,6 +8,7 @@ reference for everything under `tools/` and the agent commands/skills under
   - [The meter](#the-meter)
   - [`avhzy-monitor.py`](#avhzy-monitorpy)
   - [`ghost-power-run.sh`](#ghost-power-runsh)
+  - [Device state — `device-state.sh`](#device-state--device-statesh)
   - [`power-report.sh` and baselines](#power-reportsh-and-baselines)
   - [Consistency and trust](#consistency-and-trust)
   - [Meter protocol notes](#meter-protocol-notes)
@@ -59,7 +60,7 @@ Subcommands: `record`, `compare`, `windows`, `report`, `diff`, `promote`,
 to stdout. `--warmup SEC` (default 1) discards the start. CSV columns:
 `timestamp_us,elapsed_ms,voltage_v,current_a,power_w`, with `#` header lines
 carrying label/note/port/start time and run metadata (preset, screen %, speed,
-start km, map mode, brightness, battery, device).
+start km, map mode, brightness, battery, device, app version).
 
 **Condensed output.** At 1 kHz a raw run is ~45 KB/s (~2.7 MB/min, ~1.4 GB for
 an 8.5 h `ultra`). Pass `--chunk SECONDS` (default **300**) to `record` and it
@@ -141,6 +142,30 @@ Notes:
 - The recording stops the moment the ride time is up, so wake/stop overhead
   doesn't dilute the measurement.
 
+### Device state — `device-state.sh`
+
+A run changes on-device settings (brightness, media volume, stay-awake,
+screen saver, wake gestures, the app's battery whitelist). `device-state.sh`
+snapshots them so the device can be put back exactly as it was:
+
+```bash
+tools/device-state.sh show                       # print the live values
+tools/device-state.sh save                        # snapshot -> power-runs/device-state-<serial>.env
+tools/device-state.sh restore                     # re-apply the snapshot
+```
+
+`ghost-power-run.sh` calls `save` before touching anything and `restore` on
+exit, so a normal run leaves no trace. **If a run is interrupted**, the
+per-device file (`power-runs/device-state-<serial>.env`, git-ignored) is left
+behind — restore later with `tools/device-state.sh restore` (the file records
+which settings and values to put back). Pass `--keep-state` to skip the
+automatic restore and leave the file in place on purpose. Captured keys:
+`screen_brightness[_mode]`, `screen_off_timeout`, `volume_music`,
+`stay_on_while_plugged_in`, `ambient_{touch,tilt}_to_wake`,
+`screensaver_enabled`, `double_tap_to_wake`, `wake_gesture_enabled`, and whether
+the app is on the deviceidle whitelist. Missing/`null` values are restored by
+deleting the key.
+
 ### `mock-route.sh` — power-test *other* apps
 
 `ghost-power-run.sh` drives this app's own ghost engine (perfect for measuring
@@ -193,8 +218,17 @@ avhzy-monitor.py promote power-runs/latest.md tools/power-baseline.md
 ```
 
 The report is written as both `power-runs/latest.md` and `power-runs/latest.txt`.
-Rows are sorted by label and carry no timestamps, so `diff` shows only real
-changes (added / removed / changed, with Δ W and Δ %). The `on %` column is the
+Each row is identified by its setting — `label` + `device` + `version` + `screen` /
+`bright` / `speed` / `start` — so `diff` shows only real changes (added / removed /
+changed, with Δ W and Δ %). Because the identity includes the device, **one
+baseline can hold several devices at once**: a T20Mini `fast (dark)` row no longer
+overwrites the Wacom one. The `version` column records the app's `versionName`
+(read from the device at run time) — **bump it for a power-affecting change**; the
+git revision is stored in the CSV header (`# app_git`) for forensics but is not
+part of the row. `date` is the most recent run's date (from the CSV's `# started`
+header, or the file's mtime if absent). **Because `version` is part of the row
+identity, numbers from before and after a version bump stay distinct rows**, so
+you can tell whether a measurement predates a change. The `on %` column is the
 fraction of the run measured above 1 W; it should track the `screen` target and
 reveals harness glitches (e.g. a screen that never slept reads ~100%). The report
 **auto-excludes any level whose `on %` is more than ~6 points off the target**, so
@@ -212,7 +246,8 @@ version) so runs from different phones/tablets stay distinguishable, and the
 **Runs accumulate by setup.** The report groups runs by their settings (device,
 mode, screen %, brightness, speed, start — volume is recorded but not part of
 the key) and emits one row per preset level (`fast`/`nano`/`small`/`medium`/
-`long`/`ultra`). Every run long enough to cover a level contributes: its first N
+`long`/`ultra`). This same setting identity is the row key for merge/`diff`, so
+mixing devices in one report is safe. Every run long enough to cover a level contributes: its first N
 seconds for a shorter level, or the whole run for the matching/longest one. So a
 batch of `small` runs plus one `ultra` gives `nano`/`small` with
 `n = small + ultra` while `medium`/`long` keep `n = medium` / `1`.
@@ -225,9 +260,10 @@ for i in $(seq 1 10); do tools/ghost-power-run.sh --label small --preset small; 
 tools/power-report.sh 'power-runs/condensed/*.csv'    # nano/small/medium/... accumulate
 ```
 
-### Findings (this device)
+### Findings (by device)
 
-From the committed baseline and interleaved tests on the Wacom DTHA116:
+**Wacom DTHA116 (Android 14)** — the baseline device. From the committed
+baseline and interleaved tests:
 
 - **Light vs dark map: no measurable difference.** An interleaved light/dark
   `nano` test gave 0.6201 vs 0.6202 W, and a matched pair of full 8.5 h `ultra`
@@ -238,6 +274,33 @@ From the committed baseline and interleaved tests on the Wacom DTHA116:
   `fast` (40 km/h): ~2.31 W. The display dominates (screen-off draw ≈ 0.1–0.3 W).
 - **Spread:** cv 0.02–0.04% (`fast`), ~0.1% (`long`/`ultra`), ~2% (duty-cycled
   short runs).
+
+**DOOGEE T20Mini (Android 13)** — second test device, the API 33 (minSdk) floor.
+Committed to the baseline as `fast (dark)` / `fast (light)` rows:
+
+| mode | avg W | n | sd W | cv % |
+|---|---|---|---|---|
+| dark | **1.5594** | 10 | 0.047 | 3.0 |
+| light | **1.7907** | 16 | 0.149 | 8.3 |
+
+- **Absolute draw is much lower than the Wacom** (~1.6–1.8 W `fast` vs 2.31 W) —
+  different panel/SoC.
+- **Light draws ~+16% more than dark** (+0.25 W at 100% screen), unlike the Wacom
+  where the map style was irrelevant. This is **confirmed**, not drift: it held in
+  a fully **interleaved** light/dark batch (light 1.767 W n=10 vs dark 1.529 W n=9,
+  **+15.6%**), and the two means are several sd apart. Light is also noisier
+  (cv 8% vs 3%). Likely the LCD panel's/GPU's power responding to bright map
+  content — worth the dark default on this tablet.
+- **Only the 5-minute `fast` scenario is reliably measurable on this tablet.**
+  Longer runs (`medium` duty-cycled 15% screen, and even 1.5 h full-screen) come
+  out with a wrong `on %` (e.g. 25–66% where 15% / ~100% is expected) and are
+  dropped by the filter — the screen sleep (`KEYCODE_SLEEP`/`svc power stayon`)
+  doesn't hold the way it does on the Wacom, and the device intermittently drops
+  off USB (the meter then reads the input dips). Treat T20 numbers as `fast`-only.
+- **Charging contamination is hit-or-miss on this tablet** — several `fast` runs
+  were dropped (on % 63–93%) because charge top-off re-activated mid-ride and the
+  meter then read the capped input, not the load. Check `on %` before trusting any
+  run; the report's auto-exclude already drops them.
 
 To compare two builds, run the same preset(s) for both and `diff` the rows; a
 difference under ~1% is noise unless it's a stable `fast`/`long` comparison.

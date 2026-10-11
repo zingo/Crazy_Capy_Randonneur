@@ -23,6 +23,12 @@
 #   medium  2 h     15% screen, 20 km/h
 #   long    4 h     15% screen, 20 km/h
 #   ultra  whole route, 15% screen, 20 km/h
+#
+# The run changes device settings (brightness, volume, stay-awake, screensaver,
+# wake gestures, battery whitelist). It snapshots them first to
+# power-runs/device-state-<serial>.env and restores them on exit. If the run is
+# interrupted, restore by hand with `tools/device-state.sh restore`; --keep-state
+# leaves the snapshot in place instead of restoring on exit.
 
 set -euo pipefail
 
@@ -71,6 +77,7 @@ DEVICE=""
 OUT="power-runs"
 DO_COMPARE=true
 DRY_RUN=false
+KEEP_STATE=false
 PIN="${SCREEN_PIN:-}"
 
 usage() {
@@ -101,6 +108,9 @@ Options:
       --pin NNNN          PIN to unlock the screen after wake (or set SCREEN_PIN)
   -o, --out DIR           output directory (default $OUT)
       --no-compare        skip the comparison table at the end
+      --keep-state        don't restore the device settings on exit; leave the
+                          saved state file so you can restore it later with
+                          tools/device-state.sh restore
       --no-inhibit        don't keep the host awake via systemd-inhibit
       --dry-run           print the plan (incl. computed ultra length) and exit
   -h, --help              show this help
@@ -134,6 +144,7 @@ while [ $# -gt 0 ]; do
         --pin) PIN="$2"; shift 2 ;;
         -o|--out) OUT="$2"; shift 2 ;;
         --no-compare) DO_COMPARE=false; shift ;;
+        --keep-state) KEEP_STATE=true; shift ;;
         --no-inhibit) shift ;;
         --dry-run) DRY_RUN=true; shift ;;
         -h|--help) usage; exit 0 ;;
@@ -219,6 +230,18 @@ fi
 # otherwise stall the whole run (and any batch driving it) indefinitely.
 adbd() { timeout 30 "$ADB" -s "$DEVICE" "$@"; }
 
+# Snapshot the device settings this run changes (brightness, volume, stay-awake,
+# screensaver, wake gestures, battery whitelist) so they can be put back. If a
+# previous run was interrupted and left a state file, keep it: it holds the
+# pristine values. Restore with `tools/device-state.sh restore -i <file>`.
+STATE_FILE="$OUT/device-state-${DEVICE}.env"
+STATE_CREATED=false
+if [ ! -f "$STATE_FILE" ]; then
+    "$SCRIPT_DIR/device-state.sh" save -s "$DEVICE" -o "$STATE_FILE" >/dev/null 2>&1 || true
+    STATE_CREATED=true
+    echo "Device state saved -> $STATE_FILE"
+fi
+
 # Best-effort: exempt the app from battery optimizations. This lets the debug
 # hook start/stop the foreground service even while the screen is locked (the
 # system logs this as code SYSTEM_ALLOW_LISTED), so long runs keep going.
@@ -248,6 +271,17 @@ DEVICE_NAME="$(adbd shell getprop ro.product.manufacturer 2>/dev/null | tr -d '\
 DEVICE_NAME="$(printf '%s' "$DEVICE_NAME" | tr -s ' ' | sed 's/^ //; s/ $//')"
 DEVICE_ANDROID="$(adbd shell getprop ro.build.version.release 2>/dev/null | tr -d '\r')"
 DEVICE_LABEL="${DEVICE_NAME:-unknown} (Android ${DEVICE_ANDROID:-?})"
+
+# App version (versionName), shown in the report table so a row can be matched to
+# the code that produced it — bump versionName for a power-affecting change. The
+# git revision is recorded in the CSV header only (not part of the row identity),
+# for forensics; a dev build here is always "dirty".
+APP_VERSION="$(adbd shell dumpsys package "$PKG" 2>/dev/null | sed -n 's/.*versionName=\([^ ]*\).*/\1/p' | head -1 | tr -d '\r')"
+APP_VERSION="${APP_VERSION:-?}"
+APP_GIT="$(git -C "$SCRIPT_DIR/.." rev-parse --short HEAD 2>/dev/null || true)"
+if [ -n "$APP_GIT" ] && [ -n "$(git -C "$SCRIPT_DIR/.." status --porcelain 2>/dev/null)" ]; then
+    APP_GIT="${APP_GIT}-dirty"
+fi
 
 # Media/speaker volume (the stream TTS and beeps use). Read it always; set it
 # with --volume PCT (0-100) or leave the device alone with 'off'.
@@ -329,6 +363,10 @@ echo "Volume:  media ${VOLUME_NOW}"
 
 if [ "$DRY_RUN" = true ]; then
     echo "(dry run — nothing executed)"
+    if [ "$STATE_CREATED" = true ]; then
+        "$SCRIPT_DIR/device-state.sh" restore -s "$DEVICE" -i "$STATE_FILE" >/dev/null 2>&1 || true
+        rm -f "$STATE_FILE"
+    fi
     exit 0
 fi
 
@@ -344,6 +382,11 @@ cleanup() {
     if [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null; then
         kill -TERM "$REC_PID" 2>/dev/null || true
         wait "$REC_PID" 2>/dev/null || true
+    fi
+    if [ "$KEEP_STATE" != true ] && [ -n "${STATE_FILE:-}" ] && [ -f "$STATE_FILE" ]; then
+        "$SCRIPT_DIR/device-state.sh" restore -s "$DEVICE" -i "$STATE_FILE" >/dev/null 2>&1 || true
+        rm -f "$STATE_FILE"
+        echo "Device state restored from $STATE_FILE"
     fi
 }
 trap cleanup EXIT
@@ -403,6 +446,8 @@ python3 "$SCRIPT_DIR/avhzy-monitor.py" record \
     --meta "battery_status=${BATTERY_STATUS:-?}" \
     --meta "volume=$VOLUME_NOW" \
     --meta "device=$DEVICE_LABEL" \
+    --meta "app_version=$APP_VERSION" \
+    --meta "app_git=${APP_GIT:-}" \
     --meta "route=$(basename "$ROUTE")" \
     --warmup 0 --chunk "$CHUNK" --out "$OUT" --quiet > "$TMP_LOG" 2>&1 &
 REC_PID=$!

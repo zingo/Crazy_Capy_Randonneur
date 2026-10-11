@@ -5,7 +5,9 @@ voice-first bike GPS for Android that treats battery life as a first-class
 feature. You load your own GPX route, slip the phone in your pocket, and let
 your ears do the navigating — no accounts, no cloud, no ads.
 
-> Required: Android **14 (API 34)** — minSdk 34, targetSdk/compileSdk 35.
+> Required: Android **13 (API 33)** — minSdk 33, targetSdk/compileSdk 35.
+>
+> **Current release: [`v0.2.0`](https://github.com/zingo/Crazy_Capy_Randonneur/releases/tag/v0.2.0)** — see [Releases](#releases).
 
 ## Why it preserve battery
 
@@ -310,6 +312,28 @@ OpenFreeMap / OSM terms; do not hide it in modified builds.
 - **Zingo Andersen** ([@zingo](https://github.com/zingo)) — project maintainer
 - **JJ del Rio** ([@partymola](https://github.com/partymola)) — rear-radar
   contract and IPC integration
+
+## Releases
+
+### v0.2.0 — 2026-10-11
+
+- **Android 13+ support** — lowered `minSdk` 34 → 33 (`targetSdk`/`compileSdk`
+  stay 35); verified on a DOOGEE T20Mini running Android 13.
+- **Reproducible power baseline** — a committed reference table now covers two
+  devices (Wacom DTHA116 / Android 14 and DOOGEE T20Mini / Android 13). Report
+  rows carry the app **version** and **date**, so a measurement can be matched to
+  the code that produced it — bump `versionName` for a power-affecting change.
+- **Power-test tooling** — `tools/ghost-power-run.sh` now snapshots and restores
+  the device settings it changes (via the new `tools/device-state.sh`), so a test
+  device is left exactly as it was, even if a run is interrupted.
+- Docs refreshed (README, PLAN, AGENTS, `tools/README.md`).
+
+### v0.1.0
+
+- First working shape: voice-first, offline GPX/TCX/KML navigation with a
+  screen-off foreground service; dark OLED map by default; pre-cached turn
+  previews; 3×2 HUD with a north-up turn preview; map scale bar & compass;
+  speech-marker debug overlay; ghost-ride simulator; rear-radar (BLE) support.
 
 ## Status
 

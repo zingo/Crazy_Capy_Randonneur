@@ -1,6 +1,6 @@
 # Crazy Capy Randonneur — Plan
 
-Open-source, voice-first, battery-extreme bike navigator for Android 14+.
+Open-source, voice-first, battery-extreme bike navigator for Android 13+.
 Import a GPX/TCX route from popular cycling sites, start navigating, keep
 the phone in the pocket with the screen off, and ride to spoken guidance.
 
@@ -13,7 +13,8 @@ the phone in the pocket with the screen off, and ride to spoken guidance.
 
 ## Decisions
 
-- Target: Android 14+ — `minSdk = 34`, `targetSdk = compileSdk = 35`.
+- Target: Android 13+ — `minSdk = 33`, `targetSdk = compileSdk = 35`.
+  (Lowered from 34 in 0.2.0; verified on a DOOGEE T20Mini, Android 13.)
 - Language/UI: Kotlin 2.x + Jetpack Compose (Material 3, dynamic color, edge-to-edge).
 - Maps: **MapLibre Native (org.maplibre.gl:android-sdk:12.x)** — offline-capable vector maps
   (region download, MBTiles/PMTiles), the engine GraphHopper's navigation SDK builds on.
@@ -90,6 +91,8 @@ CrazyCapyRouting/
 
 ## Status
 
+- **Release:** `v0.2.0` (2026-10-11) — see the README [Releases](README.md#releases)
+  section. `versionName = "0.2.0"`, `minSdk = 33` (Android 13+).
 - **M1–M4 done & verified**, M5 polish largely shipped. 119 unit tests +
   instrumented ghost-ride tests pass on Capy15 (Android 15 AVD) via
   `./gradlew :app:connectedDebugAndroidTest`.

@@ -5,10 +5,10 @@ Guidance for AI coding agents working in this repository.
 ## Project
 
 Crazy Capy Randonneur — open-source, voice-first, battery-extreme GPS bike
-navigator for Android 14+ (API 34). No Play Services, no accounts, no cloud.
+navigator for Android 13+ (API 33). No Play Services, no accounts, no cloud.
 
 - App package / namespace: `com.crazycapy.randonneur`
-- `minSdk = 34`, `targetSdk = compileSdk = 35`
+- `minSdk = 33`, `targetSdk = compileSdk = 35`
 - Stack: Kotlin 2.1.21, Jetpack Compose (Material 3), MapLibre + OpenFreeMap,
   Gradle 8.13 / AGP 8.13. No Play Services.
 - Package layout under `app/src/main/java/com/crazycapy/randonneur/`:
@@ -37,6 +37,10 @@ adb lives at `/home/zingo/Android/Sdk/platform-tools/adb`. Known devices:
 - Tablet (Wacom DTHA116, Android 14 / API 34) — preferred dev device. Needs a
   udev rule for Wacom (vendor `056a`) or it shows "no permissions":
   `SUBSYSTEM=="usb", ATTR{idVendor}=="056a", MODE="0666", GROUP="plugdev"` in
+  `/etc/udev/rules.d/51-android.rules`.
+- Tablet (DOOGEE T20Mini) — second test device, the API 33 (minSdk) floor. Also
+  needs a udev rule (it enumerates as USB vendor `18d1`):
+  `SUBSYSTEM=="usb", ATTR{idVendor}=="18d1", MODE="0666", GROUP="plugdev"` in
   `/etc/udev/rules.d/51-android.rules`.
 - Phone (Pixel 7 Pro)
 - Emulator: `emulator-5554`

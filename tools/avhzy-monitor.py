@@ -534,12 +534,25 @@ def cmd_windows(args):
 # against a committed baseline. Rows are sorted by label and carry no
 # timestamps, so comparing two reports only shows what actually changed.
 
-REPORT_HEADER = ["label", "device", "mode", "screen", "bright", "vol", "speed",
-                 "start", "n", "dur s", "avg W", "sd W", "cv %", "on %", "med W",
-                 "max W", "mWh", "mWh/h"]
+REPORT_HEADER = ["label", "device", "version", "date", "mode", "screen",
+                 "bright", "vol", "speed", "start", "n", "dur s", "avg W",
+                 "sd W", "cv %", "on %", "med W", "max W", "mWh", "mWh/h"]
 
 
 STANDARD_LEVELS = [("nano", 600), ("small", 1800), ("medium", 7200), ("long", 14400)]
+
+# Columns that identify a report row for merging/diffing. Volume is excluded (it
+# isn't part of the setup); everything else that produced the row is included, so
+# the same level measured on two devices (or at two brightnesses/speeds) stays a
+# distinct row instead of overwriting another.
+IDENTITY_COLS = ["label", "device", "version", "screen", "bright", "speed", "start"]
+
+
+def _identity_cells(header, cells):
+    """Composite row key from a report row's cells, using the header to locate
+    each identity column (missing columns fall back to '-')."""
+    idx = {h: i for i, h in enumerate(header)}
+    return tuple(cells[idx[c]] if c in idx else "-" for c in IDENTITY_COLS)
 
 
 def _setup_key(meta):
@@ -550,6 +563,7 @@ def _setup_key(meta):
     """
     return (
         meta.get("device", "-"),
+        meta.get("app_version", "-"),
         meta.get("dark_map", "-"),
         meta.get("screen_percent", "-"),
         meta.get("brightness", "-"),
@@ -590,9 +604,16 @@ def _agg(label, items):
         mode = "dark" if meta0["dark_map"].lower() == "true" else "light"
     else:
         mode = "-"
+    versions = {m.get("app_version", "-") for m, _ in items}
+    version = versions.pop() if len(versions) == 1 else "|".join(sorted(versions))
+    # A row may aggregate runs from more than one day; show the most recent date.
+    dates = sorted({m.get("started", "")[:10] for m, _ in items if m.get("started")})
+    date = dates[-1] if dates else "-"
     return {
         "label": label,
         "device": meta0.get("device", "-"),
+        "version": version,
+        "date": date,
         "mode": mode,
         "screen": meta0.get("screen_percent", "-"),
         "bright": meta0.get("brightness", "-"),
@@ -741,6 +762,13 @@ def scan_csv(path, windows=None):
                 for name, lsec in windows:
                     if rel <= lsec * 1000:
                         _upd(levels[name], v, i, w, e)
+    # Fall back to the file's mtime when a CSV predates the "# started" header.
+    if not meta.get("started"):
+        try:
+            meta["started"] = datetime.datetime.fromtimestamp(
+                os.path.getmtime(path)).isoformat(timespec="seconds")
+        except OSError:
+            pass
     return meta, _acc_stats(full), {name: _acc_stats(a) for name, a in levels.items() if a["n"] > 0}
 
 
@@ -797,7 +825,8 @@ def build_report_rows(files):
 
 
 def report_cells(r):
-    return [r["label"], r["device"], r["mode"], str(r["screen"]), str(r["bright"]),
+    return [r["label"], r["device"], r["version"], r["date"], r["mode"],
+            str(r["screen"]), str(r["bright"]),
             str(r["vol"]), str(r["speed"]), str(r["start"]), str(r["n"]),
             f"{r['dur']:.1f}", f"{r['avg']:.4f}", f"{r['sd']:.4f}", f"{r['cv']:.2f}",
             f"{r['on'] * 100:.1f}",
@@ -837,14 +866,16 @@ def cmd_report(args):
         sys.exit("No runs found.")
 
     # Start from the baseline (if given) so the local report is a full table;
-    # runs present in the CSVs replace same-label baseline rows.
+    # runs present in the CSVs replace same-identity baseline rows (label +
+    # device + version + screen/bright/speed/start), so devices/versions don't collide.
     merged = {}
     if args.merge:
         _, old = parse_report_md(args.merge)
         merged.update(old)
     for r in rows:
-        merged[r["label"]] = report_cells(r)
-    cells = [merged[label] for label in sorted(merged)]
+        cells_row = report_cells(r)
+        merged[_identity_cells(REPORT_HEADER, cells_row)] = cells_row
+    cells = [merged[key] for key in sorted(merged)]
 
     title = args.title or "run set"
     md = report_md(title, cells)
@@ -877,7 +908,7 @@ def parse_report_md(path):
                 continue
             if not cells or not cells[0]:
                 continue
-            rows[cells[0]] = cells
+            rows[_identity_cells(header, cells)] = cells
     return header, rows
 
 
@@ -889,18 +920,19 @@ def cmd_diff(args):
     oi = old_header.index("avg W")
     ni = new_header.index("avg W")
 
-    labels = sorted(set(old_rows) | set(new_rows))
-    print(f"{'label':<22} {'old avg W':>10} {'new avg W':>10} {'delta W':>9} {'delta %':>9}  status")
-    print("-" * 78)
+    keys = sorted(set(old_rows) | set(new_rows))
+    print(f"{'label':<22} {'device':<28} {'old avg W':>10} {'new avg W':>10} {'delta W':>9} {'delta %':>9}  status")
+    print("-" * 108)
     changed = 0
-    for label in labels:
-        o = old_rows.get(label)
-        n = new_rows.get(label)
+    for key in keys:
+        label, device = key[0], key[1]
+        o = old_rows.get(key)
+        n = new_rows.get(key)
         if o and not n:
-            print(f"{label[:22]:<22} {float(o[oi]):10.4f} {'-':>10} {'-':>9} {'-':>9}  removed")
+            print(f"{label[:22]:<22} {device[:28]:<28} {float(o[oi]):10.4f} {'-':>10} {'-':>9} {'-':>9}  removed")
             changed += 1
         elif n and not o:
-            print(f"{label[:22]:<22} {'-':>10} {float(n[ni]):10.4f} {'-':>9} {'-':>9}  added")
+            print(f"{label[:22]:<22} {device[:28]:<28} {'-':>10} {float(n[ni]):10.4f} {'-':>9} {'-':>9}  added")
             changed += 1
         else:
             ov, nv = float(o[oi]), float(n[ni])
@@ -909,7 +941,7 @@ def cmd_diff(args):
             status = "same" if abs(dw) < 1e-6 else "changed"
             if status == "changed":
                 changed += 1
-            print(f"{label[:22]:<22} {ov:10.4f} {nv:10.4f} {dw:+9.4f} {dp:+8.2f}%  {status}")
+            print(f"{label[:22]:<22} {device[:28]:<28} {ov:10.4f} {nv:10.4f} {dw:+9.4f} {dp:+8.2f}%  {status}")
     print(f"\n{changed} row(s) differ. old={args.old}  new={args.new}")
 
 
@@ -964,7 +996,9 @@ def main():
     rep.add_argument("--txt", default=None, help="explicit .txt output path")
     rep.add_argument("--title", default=None, help="report title")
     rep.add_argument("--merge", default=None,
-                     help="baseline .md to merge into, so the report stays a full table")
+                     help="baseline .md to merge into, so the report stays a full "
+                          "table; rows replace same-identity ones (label+device+"
+                          "version+screen/bright/speed/start), so devices don't collide")
     rep.set_defaults(func=cmd_report)
 
     dif = sub.add_parser("diff", help="compare two report .md files by label")
