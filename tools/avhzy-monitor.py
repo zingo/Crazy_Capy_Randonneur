@@ -536,7 +536,8 @@ def cmd_windows(args):
 
 REPORT_HEADER = ["label", "device", "version", "date", "mode", "screen",
                  "bright", "vol", "speed", "start", "n", "dur s", "avg W",
-                 "sd W", "cv %", "on %", "med W", "max W", "mWh", "mWh/h"]
+                 "sd W", "cv %", "on %", "min W", "med W", "max W",
+                 "peak W", "floor W", "mWh", "mWh/h", "flags"]
 
 
 STANDARD_LEVELS = [("nano", 600), ("small", 1800), ("medium", 7200), ("long", 14400)]
@@ -553,6 +554,16 @@ def _identity_cells(header, cells):
     each identity column (missing columns fall back to '-')."""
     idx = {h: i for i, h in enumerate(header)}
     return tuple(cells[idx[c]] if c in idx else "-" for c in IDENTITY_COLS)
+
+
+# Report rows are ordered by the level's intended length, not alphabetically:
+# fast, nano, small, medium, long, ultra. Any custom label sorts last.
+LEVEL_ORDER = ["fast", "nano", "small", "medium", "long", "ultra"]
+
+
+def _level_rank(label):
+    base = label.split(" (", 1)[0]
+    return LEVEL_ORDER.index(base) if base in LEVEL_ORDER else len(LEVEL_ORDER)
 
 
 def _setup_key(meta):
@@ -597,8 +608,12 @@ def _agg(label, items):
     meta0 = items[0][0]
     stats_list = [s for _, s in items]
     n = len(stats_list)
-    avg = statistics.mean(s["avg_w"] for s in stats_list)
-    sd = statistics.stdev([s["avg_w"] for s in stats_list]) if n > 1 else 0.0
+    # Series statistics are over the RUN means (one number per run), not over
+    # samples inside a run: that's what says whether a later result is a real
+    # change or just the normal run-to-run spread.
+    means = [s["avg_w"] for s in stats_list]
+    avg = statistics.mean(means)
+    sd = statistics.stdev(means) if n > 1 else 0.0
     cv = sd / avg * 100.0 if avg else 0.0
     if "dark_map" in meta0:
         mode = "dark" if meta0["dark_map"].lower() == "true" else "light"
@@ -626,10 +641,14 @@ def _agg(label, items):
         "sd": sd,
         "cv": cv,
         "on": statistics.mean(s["on_frac"] for s in stats_list),
-        "med": (statistics.mean([s["median_w"] for s in stats_list
-                                 if s["median_w"] is not None])
-                if any(s["median_w"] is not None for s in stats_list) else None),
-        "max": statistics.mean(s["max_w"] for s in stats_list),
+        "min": min(means),
+        "med": statistics.median(means),
+        "max": max(means),
+        # Within-run extremes kept as diagnostics only (worst/lowest single
+        # sample across the runs): peak flags anomalies, floor ~ device idle.
+        "peak": max(s["max_w"] for s in stats_list),
+        "floor": min(s["min_w"] for s in stats_list),
+        "gaps": sum(s["gaps"] for s in stats_list),
         "mwh": statistics.mean(s["energy_wh"] * 1000.0 for s in stats_list),
         "mwhh": avg * 1000.0,
     }
@@ -638,7 +657,7 @@ def _agg(label, items):
 def _new_acc():
     return {"n": 0, "on": 0, "sv": 0.0, "si": 0.0, "sp": 0.0, "sp2": 0.0,
             "min": None, "max": None, "energy": 0.0, "prev": None, "prev_p": 0.0,
-            "hist": {}, "first": None, "last": None}
+            "hist": {}, "first": None, "last": None, "gaps": 0}
 
 
 def _upd(a, v, i, p, e):
@@ -657,6 +676,8 @@ def _upd(a, v, i, p, e):
         dt = (e - a["prev"]) / 1000.0
         if dt > 0:
             a["energy"] += (a["prev_p"] + p) / 2.0 * dt / 3600.0
+        if e - a["prev"] > 500:  # >0.5 s with no sample: a device/USB drop-out
+            a["gaps"] += 1
     a["prev"] = e
     a["prev_p"] = p
     b = int(p / 0.01)
@@ -685,7 +706,7 @@ def _acc_stats(a):
         "duration_s": (a["last"] - a["first"]) / 1000.0 if a["first"] is not None else 0.0,
         "avg_v": a["sv"] / n, "avg_a": a["si"] / n, "avg_w": avg,
         "median_w": med, "sd_w": sd, "min_w": a["min"], "max_w": a["max"],
-        "energy_wh": a["energy"], "on_frac": a["on"] / n,
+        "energy_wh": a["energy"], "on_frac": a["on"] / n, "gaps": a["gaps"],
     }
 
 
@@ -694,6 +715,8 @@ def _upd_chunk(a, row):
     e = float(row[0]); cm = float(row[1]); n = int(row[2])
     if n <= 0:
         return
+    if cm > 450_000:  # a chunk much longer than the ~300 s nominal: a real gap
+        a["gaps"] += 1
     if a["first"] is None:
         a["first"] = e
     a["last"] = e + cm
@@ -820,7 +843,7 @@ def build_report_rows(files):
             if complete:
                 out.append(_agg(_level_label("ultra", meta0), complete))
 
-    out.sort(key=lambda r: r["label"])
+    out.sort(key=lambda r: (_level_rank(r["label"]), r["label"]))
     return out
 
 
@@ -830,8 +853,10 @@ def report_cells(r):
             str(r["vol"]), str(r["speed"]), str(r["start"]), str(r["n"]),
             f"{r['dur']:.1f}", f"{r['avg']:.4f}", f"{r['sd']:.4f}", f"{r['cv']:.2f}",
             f"{r['on'] * 100:.1f}",
-            "-" if r["med"] is None else f"{r['med']:.4f}",
-            f"{r['max']:.4f}", f"{r['mwh']:.2f}", f"{r['mwhh']:.1f}"]
+            f"{r['min']:.4f}", f"{r['med']:.4f}", f"{r['max']:.4f}",
+            f"{r['peak']:.4f}", f"{r['floor']:.4f}",
+            f"{r['mwh']:.2f}", f"{r['mwhh']:.1f}",
+            "ok" if r["gaps"] == 0 else f"{r['gaps']}gap"]
 
 
 def report_md(title, cells):
@@ -875,7 +900,7 @@ def cmd_report(args):
     for r in rows:
         cells_row = report_cells(r)
         merged[_identity_cells(REPORT_HEADER, cells_row)] = cells_row
-    cells = [merged[key] for key in sorted(merged)]
+    cells = [merged[key] for key in sorted(merged, key=lambda k: (_level_rank(k[0]), k))]
 
     title = args.title or "run set"
     md = report_md(title, cells)
@@ -920,7 +945,8 @@ def cmd_diff(args):
     oi = old_header.index("avg W")
     ni = new_header.index("avg W")
 
-    keys = sorted(set(old_rows) | set(new_rows))
+    keys = sorted(set(old_rows) | set(new_rows),
+                  key=lambda k: (_level_rank(k[0]), k))
     print(f"{'label':<22} {'device':<28} {'old avg W':>10} {'new avg W':>10} {'delta W':>9} {'delta %':>9}  status")
     print("-" * 108)
     changed = 0

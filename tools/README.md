@@ -141,6 +141,11 @@ Notes:
   is set by paced volume key events until the target index is reached.
 - The recording stops the moment the ride time is up, so wake/stop overhead
   doesn't dilute the measurement.
+- **Warm-up.** Some devices keep the display lit for a couple of minutes while the
+  app loads at startup, which inflates the `on %` of a duty-cycled run. `--warmup
+  SEC` discards the first SEC seconds (default **180** for duty-cycled runs, `0`
+  for 100%-screen) and the ride is extended by the same amount so the measured
+  window is still the full `DURATION`.
 
 ### Device state — `device-state.sh`
 
@@ -238,6 +243,22 @@ contributes to the shorter levels whose window was clean). The
 version) so runs from different phones/tablets stay distinguishable, and the
 `bright` / `vol` columns record the screen brightness and media volume used.
 
+**Reading the stats columns** (for judging a change from a re-run):
+- `avg W` is the mean of the runs and `sd W` / `cv %` their **run-to-run** spread —
+  this is the row's noise floor.
+- `min W` / `med W` / `max W` are the lowest / median / highest **run** (whole-run
+  means) — the range of the series, *not* values inside a single run. With `n=1`
+  they equal `avg W` and `sd W` is `0`.
+- `peak W` / `floor W` are the worst and lowest **instantaneous** sample across the
+  runs — **diagnostics only**: `peak` flags transient anomalies, `floor`
+  approximates the device's idle (screen-off) floor. Neither is meaningful for
+  comparing builds across devices.
+- `on %` is the mean screen-on fraction (the validity gate); `flags` is `ok`, or
+  `Ngap` when a run had time gaps (a device/USB drop-out).
+- To call a change **real**, compare `avg W` against the spread: for 1-before /
+  1-after the uncertainty is ≈ `sd W`·√2, so only differences bigger than ~2× that
+  are convincing. More repeats (n≥3) sharpen this a lot.
+
 **Repeated runs are grouped by label.** Run a scenario N times with the *same*
 `--label` and the report collapses them into one row: `n` = number of runs,
 `avg W` = mean, `sd W` / `cv %` = run-to-run spread. Use distinct labels
@@ -276,31 +297,36 @@ baseline and interleaved tests:
   short runs).
 
 **DOOGEE T20Mini (Android 13)** — second test device, the API 33 (minSdk) floor.
-Committed to the baseline as `fast (dark)` / `fast (light)` rows:
+Committed to the baseline (avg W, dark / light):
 
-| mode | avg W | n | sd W | cv % |
-|---|---|---|---|---|
-| dark | **1.5594** | 10 | 0.047 | 3.0 |
-| light | **1.7907** | 16 | 0.149 | 8.3 |
+| level | dark | light | note |
+|---|---|---|---|
+| `fast` (100% screen) | 1.5594 (n=10) | 1.7907 (n=16) | light ≈ +16% |
+| `nano` | 0.4906 (n=3) | 0.4783 (n=3) | |
+| `small` | 0.3983 (n=3) | 0.4011 (n=3) | |
+| `ultra` | 0.5361 (n=2) | 0.5434 (n=2) | light ≈ dark |
 
-- **Absolute draw is much lower than the Wacom** (~1.6–1.8 W `fast` vs 2.31 W) —
-  different panel/SoC.
-- **Light draws ~+16% more than dark** (+0.25 W at 100% screen), unlike the Wacom
-  where the map style was irrelevant. This is **confirmed**, not drift: it held in
-  a fully **interleaved** light/dark batch (light 1.767 W n=10 vs dark 1.529 W n=9,
-  **+15.6%**), and the two means are several sd apart. Light is also noisier
-  (cv 8% vs 3%). Likely the LCD panel's/GPU's power responding to bright map
-  content — worth the dark default on this tablet.
-- **Only the 5-minute `fast` scenario is reliably measurable on this tablet.**
-  Every duty-cycled level comes out with a wrong `on %` — `nano` 25–40%, `small`
-  23–26%, `medium` ~25% (target 15%) — and is dropped by the filter, and even a
-  1.5 h full-screen run read ~66%. The screen sleep (`KEYCODE_SLEEP` /
-  `svc power stayon`) doesn't hold the way it does on the Wacom, and the device
-  intermittently drops off USB. Treat T20 numbers as `fast`-only.
-- **Charging contamination is hit-or-miss on this tablet** — several `fast` runs
-  were dropped (on % 63–93%) because charge top-off re-activated mid-ride and the
-  meter then read the capped input, not the load. Check `on %` before trusting any
-  run; the report's auto-exclude already drops them.
+- **At 100% screen the T20 draws far less than the Wacom** (`fast` ~1.6–1.8 W vs
+  2.31 W) — different panel/SoC — but at 15% screen they converge (`ultra` ~0.54 W
+  on both).
+- **`fast`: light draws ~+16% more than dark** (+0.25 W) — **confirmed**, not drift
+  (interleaved light n=10 vs dark n=9, +15.6%; means several sd apart). Likely the
+  panel responding to bright map content. At 15% screen the gap nearly vanishes
+  (`ultra` dark 0.5361 vs light 0.5434, ~+1.4%). Worth the dark default here.
+- **Duty-cycled runs need `--warmup`.** The screen cycle itself works (clean 9 s on
+  / 51 s off), but the app keeps the display lit ~2–3 min while it loads at
+  startup — the first 300 s chunk reads up to ~50% `on`, which inflates the
+  whole-run `on %` and dropped earlier `nano`/`small` runs (23–40%). The harness
+  now discards the first 180 s by default for duty-cycled runs (and extends the
+  ride to match), so `nano`/`small`/`ultra` come out valid (on 12–19%). Ruled out
+  as causes: wake locks (none), the screen saver, doze, and wake gestures. Always
+  check `on %`.
+- **The T20 also intermittently drops off USB.** A mid-run replug/re-enumeration
+  corrupts the reading — a replugged 30-min run read ~60% `on` with a 6 W chunk
+  max. The `flags`/`peak` columns catch the worst of it; re-run if it falls off.
+- **Charging top-off is hit-or-miss too** — several `fast` runs were dropped
+  (on % 63–93%) because charging re-activated mid-ride; the report's auto-exclude
+  drops those runs.
 
 To compare two builds, run the same preset(s) for both and `diff` the rows; a
 difference under ~1% is noise unless it's a stable `fast`/`long` comparison.

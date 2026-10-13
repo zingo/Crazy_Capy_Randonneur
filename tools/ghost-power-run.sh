@@ -65,6 +65,7 @@ REVERSE=false
 DARK_MAP=true
 SCREEN_PERCENT=""
 SCREEN_PERIOD=60
+WARMUP=""
 SETTLE=5
 START_KM=0
 BRIGHTNESS=70
@@ -104,6 +105,8 @@ Options:
       --reverse           ride the route in reverse
       --light             light map (default: dark)
       --settle SEC        settle time after starting the ride (default $SETTLE)
+      --warmup SEC        discard the first SEC s (default 180 for duty-cycled
+                          runs, 0 for 100%) to skip the app's startup screen burst
       --device SERIAL     adb device serial (default: the only attached device)
       --pin NNNN          PIN to unlock the screen after wake (or set SCREEN_PIN)
   -o, --out DIR           output directory (default $OUT)
@@ -140,6 +143,7 @@ while [ $# -gt 0 ]; do
         --reverse) REVERSE=true; shift ;;
         --light) DARK_MAP=false; shift ;;
         --settle) SETTLE="$2"; shift 2 ;;
+        --warmup) WARMUP="$2"; shift 2 ;;
         --device) DEVICE="$2"; shift 2 ;;
         --pin) PIN="$2"; shift 2 ;;
         -o|--out) OUT="$2"; shift 2 ;;
@@ -218,6 +222,19 @@ if [ -z "$SCREEN_PERCENT" ]; then
     SCREEN_PERCENT="${PRESET_PCT:-100}"
 fi
 [ "$SCREEN_PERCENT" -ge 0 ] && [ "$SCREEN_PERCENT" -le 100 ] || die "--screen-percent must be 0-100"
+
+# Duty-cycled runs default to a warm-up: some devices keep the display lit for a
+# couple of minutes while the app/route loads at startup, and that burst would
+# otherwise inflate the whole-run on-percentage (worst on short runs). The first
+# WARMUP seconds are discarded; the ride is extended by WARMUP so the measured
+# window stays the full DURATION.
+if [ -z "$WARMUP" ]; then
+    if [ "$SCREEN_PERCENT" -gt 0 ] && [ "$SCREEN_PERCENT" -lt 100 ]; then
+        WARMUP=180
+    else
+        WARMUP=0
+    fi
+fi
 
 if [ -z "$DEVICE" ]; then
     mapfile -t DEVS < <("$ADB" devices | awk 'NR>1 && $2=="device"{print $1}')
@@ -346,7 +363,7 @@ bring_to_front() {
 }
 
 elapsed() { echo $(( $(date +%s) - RIDE_START )); }
-remaining() { echo $(( DURATION - $(elapsed) )); }
+remaining() { echo $(( DURATION + WARMUP - $(elapsed) )); }
 
 echo "Device:  $DEVICE"
 echo "Route:   $ROUTE"
@@ -439,6 +456,7 @@ fi
 python3 "$SCRIPT_DIR/avhzy-monitor.py" record \
     --label "$LABEL" ${NOTE:+--note "$NOTE"} \
     --meta "preset=${PRESET:-custom}" --meta "duration_s=$DURATION" \
+    --meta "warmup_s=$WARMUP" \
     --meta "screen_percent=$SCREEN_PERCENT" --meta "screen_period=$SCREEN_PERIOD" \
     --meta "speed_kmh=$SPEED" --meta "time_scale=$TIME_SCALE" \
     --meta "start_km=$START_KM" --meta "dark_map=$DARK_MAP" \
@@ -449,7 +467,7 @@ python3 "$SCRIPT_DIR/avhzy-monitor.py" record \
     --meta "app_version=$APP_VERSION" \
     --meta "app_git=${APP_GIT:-}" \
     --meta "route=$(basename "$ROUTE")" \
-    --warmup 0 --chunk "$CHUNK" --out "$OUT" --quiet > "$TMP_LOG" 2>&1 &
+    --warmup "$WARMUP" --chunk "$CHUNK" --out "$OUT" --quiet > "$TMP_LOG" 2>&1 &
 REC_PID=$!
 sleep 1
 kill -0 "$REC_PID" 2>/dev/null || { cat "$TMP_LOG"; die "power meter recorder exited early"; }
