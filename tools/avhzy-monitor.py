@@ -534,7 +534,7 @@ def cmd_windows(args):
 # against a committed baseline. Rows are sorted by label and carry no
 # timestamps, so comparing two reports only shows what actually changed.
 
-REPORT_HEADER = ["label", "device", "version", "date", "mode", "screen",
+REPORT_HEADER = ["label", "device", "version", "date", "exp", "mode", "screen",
                  "bright", "vol", "speed", "start", "n", "dur s", "avg W",
                  "sd W", "cv %", "on %", "min W", "med W", "max W",
                  "peak W", "floor W", "mWh", "mWh/h", "flags"]
@@ -546,7 +546,7 @@ STANDARD_LEVELS = [("nano", 600), ("small", 1800), ("medium", 7200), ("long", 14
 # isn't part of the setup); everything else that produced the row is included, so
 # the same level measured on two devices (or at two brightnesses/speeds) stays a
 # distinct row instead of overwriting another.
-IDENTITY_COLS = ["label", "device", "version", "screen", "bright", "speed", "start"]
+IDENTITY_COLS = ["label", "device", "version", "exp", "screen", "bright", "speed", "start"]
 
 
 def _identity_cells(header, cells):
@@ -575,6 +575,7 @@ def _setup_key(meta):
     return (
         meta.get("device", "-"),
         meta.get("app_version", "-"),
+        meta.get("experiment", "-"),
         meta.get("dark_map", "-"),
         meta.get("screen_percent", "-"),
         meta.get("brightness", "-"),
@@ -629,6 +630,7 @@ def _agg(label, items):
         "device": meta0.get("device", "-"),
         "version": version,
         "date": date,
+        "exp": meta0.get("experiment") or "-",
         "mode": mode,
         "screen": meta0.get("screen_percent", "-"),
         "bright": meta0.get("brightness", "-"),
@@ -792,7 +794,53 @@ def scan_csv(path, windows=None):
                 os.path.getmtime(path)).isoformat(timespec="seconds")
         except OSError:
             pass
-    return meta, _acc_stats(full), {name: _acc_stats(a) for name, a in levels.items() if a["n"] > 0}
+
+    # If a screen-state sidecar was recorded (tools/screen-state.sh), derive each
+    # window's on-fraction from the REAL display state instead of the power
+    # threshold — see the `screen_log` meta. Aligned by the `# started` wall time.
+    screen = _load_screen_log(path, meta)
+    full_stats = _acc_stats(full)
+    level_stats = {n: _acc_stats(a) for n, a in levels.items() if a["n"] > 0}
+    if screen:
+        for acc, stats in [(full, full_stats)] + [(levels[n], level_stats[n]) for n in level_stats]:
+            frac = _screen_frac(screen, acc)
+            if frac is not None:
+                stats["on_frac"] = frac
+    return meta, full_stats, level_stats
+
+
+def _load_screen_log(path, meta):
+    """Read the screen-state sidecar named by meta['screen_log'] (if any).
+
+    Returns (start_epoch, [(epoch_s, on), ...]) or None."""
+    log = meta.get("screen_log")
+    if not log or not meta.get("started"):
+        return None
+    spath = log if os.path.isabs(log) else os.path.join(os.path.dirname(path), log)
+    try:
+        start = datetime.datetime.fromisoformat(meta["started"]).timestamp()
+        rows = []
+        with open(spath) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                a, _, b = line.partition(",")
+                rows.append((float(a), int(b)))
+        return (start, rows) if rows else None
+    except (OSError, ValueError):
+        return None
+
+
+def _screen_frac(screen, acc):
+    """Fraction of screen-state samples that were ON over the acc's time window."""
+    start, rows = screen
+    if acc["first"] is None or acc["last"] is None:
+        return None
+    t0 = start + acc["first"] / 1000.0
+    t1 = start + acc["last"] / 1000.0
+    sel = [on for (t, on) in rows if t0 <= t <= t1]
+    return (sum(sel) / len(sel)) if sel else None
 
 
 def build_report_rows(files):
@@ -848,7 +896,7 @@ def build_report_rows(files):
 
 
 def report_cells(r):
-    return [r["label"], r["device"], r["version"], r["date"], r["mode"],
+    return [r["label"], r["device"], r["version"], r["date"], r["exp"], r["mode"],
             str(r["screen"]), str(r["bright"]),
             str(r["vol"]), str(r["speed"]), str(r["start"]), str(r["n"]),
             f"{r['dur']:.1f}", f"{r['avg']:.4f}", f"{r['sd']:.4f}", f"{r['cv']:.2f}",
