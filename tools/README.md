@@ -108,8 +108,8 @@ tools/ghost-power-run.sh --label x --preset ultra --dry-run  # preview, no run
 
 Key flags: `--preset`, `--duration`, `--screen-percent`, `--screen-period`,
 `--start-km`, `--brightness`, `--volume`, `--chunk`, `--time-scale`, `--speed`,
-`--reverse`, `--light`, `--device SERIAL`, `--pin`, `--wait-charge`,
-`--allow-charging`, `--out DIR`, `--no-compare`, `--dry-run`.
+`--reverse`, `--light`, `--gps`, `--experiment NAME`, `--device SERIAL`, `--pin`,
+`--wait-charge`, `--allow-charging`, `--out DIR`, `--no-compare`, `--dry-run`.
 
 Default route: `tools/routes/ystad-onnekoppinge-harlosa.gpx` (~170 km,
 exported from RideWithGPS). Every run starts at the same point along the route
@@ -146,6 +146,20 @@ Notes:
   SEC` discards the first SEC seconds (default **180** for duty-cycled runs, `0`
   for 100%-screen) and the ride is extended by the same amount so the measured
   window is still the full `DURATION`.
+- **Real-GPS mode (`--gps`).** Instead of the ghost simulator, start a real-GPS
+  ride and drive it with an adb mock-location provider playing the same route
+  (`tools/mock-route.sh`), so the app follows it through its *normal* navigation
+  path (the debug hook gained a `START_GPS` action for this). Needs
+  `ACCESS_FINE_LOCATION` granted on the device.
+- **Experiments (`--experiment NAME`).** Tag a run with a free-text name — it's
+  recorded in the CSV and shown in the report's **`exp`** column (and is part of
+  the row identity), so experimental runs sit alongside, and stay distinct from,
+  the proper baseline.
+- **Screen-state sidecar.** Every run also records the *real* display on/off
+  state (`tools/screen-state.sh`) into a per-run file next to the CSV, and the
+  report derives `on %` from it rather than a fixed power threshold — so a
+  low-draw screen-on state (e.g. real-GPS mode, ~1.1 W) isn't mis-read as "off".
+  This is app-agnostic and is how any other nav app would be measured too.
 
 ### Device state — `device-state.sh`
 
@@ -201,6 +215,14 @@ rate *you* push, whereas a real device delivers at the rate the *app* requested.
 Note: the Wacom DTHA116 has **no GNSS** (only network/fused), so there's no real
 GNSS radio power to reproduce on it — mock is the only way to drive a route.
 
+**Measuring any other nav app, app-agnostically.** Start that app and its own
+navigation, then run the three generic pieces together: `mock-route.sh` (drive
+it), `screen-state.sh` (record the real display state), and
+`tools/avhzy-monitor.py record --meta screen_log=… ` (the meter), tagging the run
+with a `--meta experiment=NAME` — the report then shows it as an `exp`-tagged row
+right next to this project's rows. For this project's *own* app,
+`ghost-power-run.sh --gps` wires all of that together for you.
+
 ### `power-report.sh` and baselines
 
 `tools/power-baseline.md` (+ `.txt`) is the committed reference table.
@@ -253,8 +275,12 @@ version) so runs from different phones/tablets stay distinguishable, and the
   runs — **diagnostics only**: `peak` flags transient anomalies, `floor`
   approximates the device's idle (screen-off) floor. Neither is meaningful for
   comparing builds across devices.
-- `on %` is the mean screen-on fraction (the validity gate); `flags` is `ok`, or
-  `Ngap` when a run had time gaps (a device/USB drop-out).
+- `exp` is the run's `--experiment` tag (`-` for baseline runs) and is part of the
+  row identity, so experiments and proper runs never overwrite each other.
+- `on %` is the mean screen-on fraction (the validity gate). When a run has a
+  screen-state sidecar it's computed from the **real display state**; otherwise it
+  falls back to the fraction of the run above 1 W. `flags` is `ok`, or `Ngap` when
+  a run had time gaps (a device/USB drop-out).
 - To call a change **real**, compare `avg W` against the spread: for 1-before /
   1-after the uncertainty is ≈ `sd W`·√2, so only differences bigger than ~2× that
   are convincing. More repeats (n≥3) sharpen this a lot.
@@ -327,6 +353,14 @@ Committed to the baseline (avg W, dark / light):
 - **Charging top-off is hit-or-miss too** — several `fast` runs were dropped
   (on % 63–93%) because charging re-activated mid-ride; the report's auto-exclude
   drops those runs.
+- **Ghost vs real-GPS (mock) agree at low screen duty.** An `--gps` +
+  `tools/mock-route.sh` experiment (tagged `--experiment gps-mock`) came out, on
+  the T20 (light): `nano` 0.453 vs 0.478, `small` 0.388 vs 0.401, `long` 0.490 vs
+  0.489, `ultra` 0.536 vs 0.543 W — within a few % of the ghost baseline, so the
+  **mock-GPS method is sound for the duty-cycled levels**. At **100 % screen
+  (`fast`) it is not usable**: two identical runs read **1.19 and 3.72 W**
+  (cv 73 %), i.e. the app's screen-on rendering is erratic in GPS mode. The
+  screen-state sidecar is what makes the `on %` correct here (see above).
 
 To compare two builds, run the same preset(s) for both and `diff` the rows; a
 difference under ~1% is noise unless it's a stable `fast`/`long` comparison.

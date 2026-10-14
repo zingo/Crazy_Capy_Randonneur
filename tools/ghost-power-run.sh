@@ -7,6 +7,9 @@
 # or settings can be compared.
 #
 # Requires the debug APK (the hook it uses is debug-only) and pyserial.
+# By default it uses the app's ghost simulator; --gps instead runs a real-GPS
+# ride and drives it with an adb mock-location provider (tools/mock-route.sh),
+# so the app follows the route through its normal navigation path.
 #
 # Examples:
 #   tools/ghost-power-run.sh --label baseline --preset fast
@@ -51,6 +54,7 @@ ADB="${ADB:-adb}"
 PKG="com.crazycapy.randonneur"
 RECEIVER="$PKG/.debug.DebugControlReceiver"
 A_START="$PKG.debug.START_GHOST"
+A_START_GPS="$PKG.debug.START_GPS"
 A_STOP="$PKG.debug.STOP"
 REMOTE_ROUTE="/data/local/tmp/ghost-power-route.gpx"
 
@@ -78,6 +82,8 @@ DEVICE=""
 OUT="power-runs"
 DO_COMPARE=true
 DRY_RUN=false
+MODE="ghost"
+EXPERIMENT=""
 KEEP_STATE=false
 PIN="${SCREEN_PIN:-}"
 
@@ -104,6 +110,12 @@ Options:
       --wait-charge SEC   cap the pre-run charge wait (default $WAIT_DISCHARGE; 0 = wait forever)
       --reverse           ride the route in reverse
       --light             light map (default: dark)
+      --gps               real-GPS ride driven by an adb mock provider
+                          (tools/mock-route.sh) instead of the ghost simulator;
+                          the app needs ACCESS_FINE_LOCATION granted
+      --experiment NAME   tag this run (recorded in the CSV and shown in the
+                          report's `exp` column) so experimental runs stay
+                          distinct from the baseline
       --settle SEC        settle time after starting the ride (default $SETTLE)
       --warmup SEC        discard the first SEC s (default 180 for duty-cycled
                           runs, 0 for 100%) to skip the app's startup screen burst
@@ -147,6 +159,8 @@ while [ $# -gt 0 ]; do
         --device) DEVICE="$2"; shift 2 ;;
         --pin) PIN="$2"; shift 2 ;;
         -o|--out) OUT="$2"; shift 2 ;;
+        --gps) MODE="gps"; shift ;;
+        --experiment) EXPERIMENT="$2"; shift 2 ;;
         --no-compare) DO_COMPARE=false; shift ;;
         --keep-state) KEEP_STATE=true; shift ;;
         --no-inhibit) shift ;;
@@ -374,6 +388,7 @@ if [ "$SCREEN_PERCENT" -eq 100 ]; then
 else
     echo "Screen:  ${SCREEN_PERCENT}% on, ${SCREEN_PERIOD}s cycle"
 fi
+echo "Mode:    $([ "$MODE" = gps ] && echo "real GPS via mock provider" || echo ghost)${EXPERIMENT:+  · experiment '$EXPERIMENT'}"
 echo "Device:  brightness=${BRIGHTNESS_NOW:-?} battery=${BATTERY_NOW:-?}%"
 echo "Model:   $DEVICE_LABEL"
 echo "Volume:  media ${VOLUME_NOW}"
@@ -388,6 +403,8 @@ if [ "$DRY_RUN" = true ]; then
 fi
 
 REC_PID=""
+MOCK_PID=""
+SCREEN_PID=""
 RIDE_STARTED=false
 RIDE_START=0
 TMP_LOG="$(mktemp -t ghost-power-XXXXXX.log)"
@@ -396,6 +413,14 @@ cleanup() {
         adbd shell am broadcast -a "$A_STOP" -n "$RECEIVER" >/dev/null 2>&1 || true
     fi
     adbd shell svc power stayon false >/dev/null 2>&1 || true
+    if [ -n "$SCREEN_PID" ] && kill -0 "$SCREEN_PID" 2>/dev/null; then
+        kill -TERM "$SCREEN_PID" 2>/dev/null || true
+        wait "$SCREEN_PID" 2>/dev/null || true
+    fi
+    if [ -n "$MOCK_PID" ] && kill -0 "$MOCK_PID" 2>/dev/null; then
+        kill -TERM "$MOCK_PID" 2>/dev/null || true
+        wait "$MOCK_PID" 2>/dev/null || true
+    fi
     if [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null; then
         kill -TERM "$REC_PID" 2>/dev/null || true
         wait "$REC_PID" 2>/dev/null || true
@@ -453,8 +478,15 @@ if [ "$ALLOW_CHARGING" != true ]; then
 fi
 
 # 3. Start the power recording in the background (runs until we SIGTERM it).
+# A sidecar log of the real display state rides alongside it (screen-state.sh),
+# so the report's on % reflects what the screen actually did rather than a fixed
+# power threshold — needed because screen-on draw can sit right at that
+# threshold (e.g. this app in real-GPS mode). The report finds it via screen_log.
+REC_T0="$(date +%s)"
+SCREEN_LOG="screen-$LABEL-$REC_T0.csv"
 python3 "$SCRIPT_DIR/avhzy-monitor.py" record \
     --label "$LABEL" ${NOTE:+--note "$NOTE"} \
+    --meta "screen_log=$SCREEN_LOG" \
     --meta "preset=${PRESET:-custom}" --meta "duration_s=$DURATION" \
     --meta "warmup_s=$WARMUP" \
     --meta "screen_percent=$SCREEN_PERCENT" --meta "screen_period=$SCREEN_PERIOD" \
@@ -467,17 +499,34 @@ python3 "$SCRIPT_DIR/avhzy-monitor.py" record \
     --meta "app_version=$APP_VERSION" \
     --meta "app_git=${APP_GIT:-}" \
     --meta "route=$(basename "$ROUTE")" \
+    --meta "experiment=$EXPERIMENT" \
     --warmup "$WARMUP" --chunk "$CHUNK" --out "$OUT" --quiet > "$TMP_LOG" 2>&1 &
 REC_PID=$!
 sleep 1
 kill -0 "$REC_PID" 2>/dev/null || { cat "$TMP_LOG"; die "power meter recorder exited early"; }
 
-# 4. Start the ghost ride.
-adbd shell am broadcast -a "$A_START" -n "$RECEIVER" \
-    --es route "$REMOTE_ROUTE" \
-    --ed timeScale "$TIME_SCALE" --ed speedKmh "$SPEED" \
-    --ed startM "$START_M" \
-    --ez reverse "$REVERSE" --ez darkMap "$DARK_MAP" >/dev/null
+SCREEN_PID=""
+"$SCRIPT_DIR/screen-state.sh" -s "$DEVICE" -o "$OUT/$SCREEN_LOG" --hz 1 >/dev/null 2>&1 &
+SCREEN_PID=$!
+
+# 4. Start the ride — the built-in ghost simulator, or real-GPS navigation
+#    driven by an adb mock-location provider (tools/mock-route.sh) playing the
+#    same route so the app sees itself riding it.
+if [ "$MODE" = "gps" ]; then
+    adbd shell am broadcast -a "$A_START_GPS" -n "$RECEIVER" \
+        --es route "$REMOTE_ROUTE" \
+        --ed startM "$START_M" \
+        --ez reverse "$REVERSE" --ez darkMap "$DARK_MAP" >/dev/null
+    "$SCRIPT_DIR/mock-route.sh" -r "$ROUTE" -s "$SPEED" --hz 1 \
+        --start-km "$START_KM" --device "$DEVICE" >/dev/null 2>&1 &
+    MOCK_PID=$!
+else
+    adbd shell am broadcast -a "$A_START" -n "$RECEIVER" \
+        --es route "$REMOTE_ROUTE" \
+        --ed timeScale "$TIME_SCALE" --ed speedKmh "$SPEED" \
+        --ed startM "$START_M" \
+        --ez reverse "$REVERSE" --ez darkMap "$DARK_MAP" >/dev/null
+fi
 RIDE_STARTED=true
 RIDE_START=$(date +%s)
 sleep "$SETTLE"
