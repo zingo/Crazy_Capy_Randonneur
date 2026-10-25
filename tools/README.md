@@ -259,8 +259,12 @@ you can tell whether a measurement predates a change. The `on %` column is the
 fraction of the run measured above 1 W; it should track the `screen` target and
 reveals harness glitches (e.g. a screen that never slept reads ~100%). The report
 **auto-excludes any level whose `on %` is more than ~6 points off the target**, so
-a drifted or charging-contaminated run is dropped from that level (but still
-contributes to the shorter levels whose window was clean). The
+a drifted run is dropped from that level (but still contributes to the shorter
+levels whose window was clean). It **also drops charging-contaminated runs**: for
+a duty-cycled level, any chunk (or window) whose mean power is far above the
+expected off+on level — or over a ~1.2 W ceiling — means the device re-activated
+its charger mid-run and silently inflated the average (a screen-state `on %` of
+~15 % won't catch that, so this check is separate). The
 `device` column is auto-detected (`ro.product.manufacturer` + `model`, Android
 version) so runs from different phones/tablets stay distinguishable, and the
 `bright` / `vol` columns record the screen brightness and media volume used.
@@ -277,6 +281,10 @@ version) so runs from different phones/tablets stay distinguishable, and the
   comparing builds across devices.
 - `exp` is the run's `--experiment` tag (`-` for baseline runs) and is part of the
   row identity, so experiments and proper runs never overwrite each other.
+- `batt` is the net battery-level drop over the window (mean across runs), read at
+  the end of the measured window — a cross-check on `mWh` and a hint that a run
+  charged mid-way (level barely moved). Coarse (integer %), so only meaningful on
+  long runs; `-` for runs recorded before it was added.
 - `on %` is the mean screen-on fraction (the validity gate). When a run has a
   screen-state sidecar it's computed from the **real display state**; otherwise it
   falls back to the fraction of the run above 1 W. `flags` is `ok`, or `Ngap` when

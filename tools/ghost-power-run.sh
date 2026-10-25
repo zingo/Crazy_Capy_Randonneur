@@ -566,12 +566,32 @@ while :; do
     fi
 done
 
+# Battery level/status at the end of the measured window (before any top-off), so
+# the net drop over the run is a cross-check on the meter's energy — and a hint
+# that the device was charging mid-run if it barely moved.
+BATTERY_END="$(adbd shell dumpsys battery 2>/dev/null | awk -F: '/level/{gsub(/ /,"",$2);print $2; exit}')"
+BATTERY_END_STATUS="$(adbd shell dumpsys battery 2>/dev/null | awk -F: '/status:/{gsub(/ /,"",$2);print $2; exit}')"
+
 # 6. The ride time is up: stop the recording first so the wake/stop overhead
 #    doesn't dilute the measurement, then bring the app forward and stop the
 #    ride (the stop goes through startService, blocked while backgrounded).
 kill -TERM "$REC_PID" 2>/dev/null || true
 wait "$REC_PID" 2>/dev/null || true
 REC_PID=""
+
+# Append the end-of-window battery reading to this run's CSV (now closed), found
+# by its unique screen_log header line.
+if [ -n "${BATTERY_END:-}" ]; then
+    for f in "$OUT"/*-"$LABEL".csv; do
+        [ -f "$f" ] || continue
+        if grep -q "^# screen_log,$SCREEN_LOG$" "$f" 2>/dev/null; then
+            printf '# battery_end,%s\n# battery_end_status,%s\n' \
+                "${BATTERY_END:-}" "${BATTERY_END_STATUS:-}" >> "$f"
+            break
+        fi
+    done
+fi
+
 bring_to_front
 sleep 1
 adbd shell am broadcast -a "$A_STOP" -n "$RECEIVER" >/dev/null

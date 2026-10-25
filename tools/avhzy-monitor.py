@@ -536,7 +536,7 @@ def cmd_windows(args):
 
 REPORT_HEADER = ["label", "device", "version", "date", "exp", "mode", "screen",
                  "bright", "vol", "speed", "start", "n", "dur s", "avg W",
-                 "sd W", "cv %", "on %", "min W", "med W", "max W",
+                 "sd W", "cv %", "on %", "batt", "min W", "med W", "max W",
                  "peak W", "floor W", "mWh", "mWh/h", "flags"]
 
 
@@ -598,6 +598,17 @@ def _on_valid(on_frac, screen_pct, delta=6.0):
     return abs(on_frac * 100.0 - target) <= delta
 
 
+def _contaminated(stats):
+    """Charging contamination: a duty-cycled chunk whose mean power is far above
+    the expected level means the device re-activated its charger mid-run (which
+    silently inflates the average). The relative check needs >=3 chunks; the
+    absolute ~1.2 W ceiling also catches short (1-2 chunk) windows."""
+    if stats.get("chunk_outlier"):
+        return True
+    cmax = stats.get("chunk_max")
+    return cmax is not None and cmax > 1.2
+
+
 def _level_label(name, meta0):
     # Keep light/dark runs of the same level distinct in the accumulated table.
     mode = _mode_of(meta0)
@@ -625,6 +636,15 @@ def _agg(label, items):
     # A row may aggregate runs from more than one day; show the most recent date.
     dates = sorted({m.get("started", "")[:10] for m, _ in items if m.get("started")})
     date = dates[-1] if dates else "-"
+    # Net battery drop over the measured window (mean across runs), a cross-check
+    # on the meter's energy; stays None if the end level wasn't recorded.
+    deltas = []
+    for m, _ in items:
+        try:
+            deltas.append(int(m.get("battery_end")) - int(m.get("battery")))
+        except (TypeError, ValueError):
+            pass
+    batt = round(statistics.mean(deltas)) if deltas else None
     return {
         "label": label,
         "device": meta0.get("device", "-"),
@@ -643,6 +663,7 @@ def _agg(label, items):
         "sd": sd,
         "cv": cv,
         "on": statistics.mean(s["on_frac"] for s in stats_list),
+        "batt": batt,
         "min": min(means),
         "med": statistics.median(means),
         "max": max(means),
@@ -659,7 +680,8 @@ def _agg(label, items):
 def _new_acc():
     return {"n": 0, "on": 0, "sv": 0.0, "si": 0.0, "sp": 0.0, "sp2": 0.0,
             "min": None, "max": None, "energy": 0.0, "prev": None, "prev_p": 0.0,
-            "hist": {}, "first": None, "last": None, "gaps": 0}
+            "hist": {}, "first": None, "last": None, "gaps": 0,
+            "chunk_means": []}
 
 
 def _upd(a, v, i, p, e):
@@ -703,12 +725,22 @@ def _acc_stats(a):
                 break
     else:
         med = None  # condensed data: the exact median isn't recoverable
+    # Charging-contamination hint: for a duty-cycled run each chunk should look
+    # alike; a chunk whose mean power is far above the rest is the device
+    # re-activating its charger mid-run (which inflates the average silently).
+    cm = a.get("chunk_means") or []
+    outlier = False
+    if len(cm) >= 3:
+        m = statistics.median(cm)
+        outlier = max(cm) > max(2.0 * m, m + 0.4)
     return {
         "samples": n,
         "duration_s": (a["last"] - a["first"]) / 1000.0 if a["first"] is not None else 0.0,
         "avg_v": a["sv"] / n, "avg_a": a["si"] / n, "avg_w": avg,
         "median_w": med, "sd_w": sd, "min_w": a["min"], "max_w": a["max"],
         "energy_wh": a["energy"], "on_frac": a["on"] / n, "gaps": a["gaps"],
+        "chunk_outlier": outlier,
+        "chunk_max": max(cm) if cm else None,
     }
 
 
@@ -724,6 +756,7 @@ def _upd_chunk(a, row):
     a["last"] = e + cm
     a["n"] += n
     a["on"] += int(row[7])
+    a["chunk_means"].append(float(row[3]) / n)
     a["sv"] += float(row[8]); a["si"] += float(row[9])
     a["sp"] += float(row[3]); a["sp2"] += float(row[4])
     mn = float(row[5]); mx = float(row[6])
@@ -874,6 +907,7 @@ def build_report_rows(files):
         for lname, lsec in STANDARD_LEVELS:
             win = [(m, ws[lname]) for m, full, ws in items
                    if lname in ws and full["duration_s"] >= lsec - 0.5
+                   and not _contaminated(ws[lname])
                    and _on_valid(ws[lname]["on_frac"], screen)]
             if win:
                 out.append(_agg(_level_label(lname, meta0), win))
@@ -887,6 +921,7 @@ def build_report_rows(files):
             ref = max(f["duration_s"] for _, f in ultras)
             complete = [(m, f) for m, f in ultras
                         if f["duration_s"] >= 0.98 * ref and f["duration_s"] >= long_s
+                        and not _contaminated(f)
                         and _on_valid(f["on_frac"], screen)]
             if complete:
                 out.append(_agg(_level_label("ultra", meta0), complete))
@@ -901,6 +936,7 @@ def report_cells(r):
             str(r["vol"]), str(r["speed"]), str(r["start"]), str(r["n"]),
             f"{r['dur']:.1f}", f"{r['avg']:.4f}", f"{r['sd']:.4f}", f"{r['cv']:.2f}",
             f"{r['on'] * 100:.1f}",
+            "-" if r["batt"] is None else f"{r['batt']:+d}",
             f"{r['min']:.4f}", f"{r['med']:.4f}", f"{r['max']:.4f}",
             f"{r['peak']:.4f}", f"{r['floor']:.4f}",
             f"{r['mwh']:.2f}", f"{r['mwhh']:.1f}",
