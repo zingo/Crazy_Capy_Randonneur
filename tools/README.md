@@ -155,6 +155,15 @@ Notes:
   recorded in the CSV and shown in the report's **`exp`** column (and is part of
   the row identity), so experimental runs sit alongside, and stay distinct from,
   the proper baseline.
+- **Charging-trimmed averages.** The meter reads USB input, so when the device
+  top-offs mid-run those chunks overstate the app. The report drops chunks flagged
+  as charging (>~1.2 W for a duty-cycled run) from the average and marks the row
+  `charge` in `flags` — so A/B comparisons stay honest on a device that
+  re-charges. (It's about *consistency* for code changes, not absolute accuracy.)
+- **`--recharge-check` (option 1).** After the measured window, stop the app and
+  keep the meter running until the battery returns to its start level — the total
+  `mWh`/energy is then what the run took out of the battery, an independent
+  cross-check on the trimmed average. Slow (refill time), so use it sparingly.
 - **Screen-state sidecar.** Every run also records the *real* display on/off
   state (`tools/screen-state.sh`) into a per-run file next to the CSV, and the
   report derives `on %` from it rather than a fixed power threshold — so a

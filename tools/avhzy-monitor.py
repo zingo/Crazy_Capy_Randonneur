@@ -609,6 +609,23 @@ def _contaminated(stats):
     return cmax is not None and cmax > 1.2
 
 
+CHARGING_CHUNK_W = 1.2
+
+
+def _trimmed_avg(acc, screen_pct):
+    """Mean power over non-charging chunks for a duty-cycled run. The meter reads
+    USB input, so chunks where the charger re-activated (mean above the steady
+    level) are excluded — that keeps A/B comparisons honest on a device that
+    top-offs mid-run. Returns (avg, trimmed) or (None, False)."""
+    chunks = acc.get("chunks") or []
+    if screen_pct >= 100 or not chunks:
+        return None, False
+    clean = [(m, n) for m, n in chunks if m <= CHARGING_CHUNK_W]
+    if not clean:
+        return None, False
+    return sum(m * n for m, n in clean) / sum(n for m, n in clean), len(clean) < len(chunks)
+
+
 def _level_label(name, meta0):
     # Keep light/dark runs of the same level distinct in the accumulated table.
     mode = _mode_of(meta0)
@@ -672,6 +689,7 @@ def _agg(label, items):
         "peak": max(s["max_w"] for s in stats_list),
         "floor": min(s["min_w"] for s in stats_list),
         "gaps": sum(s["gaps"] for s in stats_list),
+        "trimmed": any(s.get("trimmed") for _, s in items),
         "mwh": statistics.mean(s["energy_wh"] * 1000.0 for s in stats_list),
         "mwhh": avg * 1000.0,
     }
@@ -681,7 +699,7 @@ def _new_acc():
     return {"n": 0, "on": 0, "sv": 0.0, "si": 0.0, "sp": 0.0, "sp2": 0.0,
             "min": None, "max": None, "energy": 0.0, "prev": None, "prev_p": 0.0,
             "hist": {}, "first": None, "last": None, "gaps": 0,
-            "chunk_means": []}
+            "chunks": []}
 
 
 def _upd(a, v, i, p, e):
@@ -728,7 +746,7 @@ def _acc_stats(a):
     # Charging-contamination hint: for a duty-cycled run each chunk should look
     # alike; a chunk whose mean power is far above the rest is the device
     # re-activating its charger mid-run (which inflates the average silently).
-    cm = a.get("chunk_means") or []
+    cm = [m for m, _ in (a.get("chunks") or [])]
     outlier = False
     if len(cm) >= 3:
         m = statistics.median(cm)
@@ -756,7 +774,7 @@ def _upd_chunk(a, row):
     a["last"] = e + cm
     a["n"] += n
     a["on"] += int(row[7])
-    a["chunk_means"].append(float(row[3]) / n)
+    a["chunks"].append((float(row[3]) / n, n))
     a["sv"] += float(row[8]); a["si"] += float(row[9])
     a["sp"] += float(row[3]); a["sp2"] += float(row[4])
     mn = float(row[5]); mx = float(row[6])
@@ -836,9 +854,23 @@ def scan_csv(path, windows=None):
     level_stats = {n: _acc_stats(a) for n, a in levels.items() if a["n"] > 0}
     if screen:
         for acc, stats in [(full, full_stats)] + [(levels[n], level_stats[n]) for n in level_stats]:
+            if stats is None:
+                continue
             frac = _screen_frac(screen, acc)
             if frac is not None:
                 stats["on_frac"] = frac
+    try:
+        screen_pct = float(meta.get("screen_percent", "0"))
+    except ValueError:
+        screen_pct = -1.0
+    for acc, stats in [(full, full_stats)] + [(levels[n], level_stats[n]) for n in level_stats]:
+        if stats is None:
+            continue
+        ta, trimmed = _trimmed_avg(acc, screen_pct)
+        if ta is not None and ta > 0:
+            stats["avg_w"] = ta
+            stats["energy_wh"] = ta * stats["duration_s"] / 3600.0
+        stats["trimmed"] = trimmed
     return meta, full_stats, level_stats
 
 
@@ -886,7 +918,7 @@ def build_report_rows(files):
     groups = {}
     for path in files:
         meta, full, windows = scan_csv(path)
-        if not full:
+        if full is None:
             continue
         groups.setdefault(_setup_key(meta), []).append((meta, full, windows))
 
@@ -907,7 +939,6 @@ def build_report_rows(files):
         for lname, lsec in STANDARD_LEVELS:
             win = [(m, ws[lname]) for m, full, ws in items
                    if lname in ws and full["duration_s"] >= lsec - 0.5
-                   and not _contaminated(ws[lname])
                    and _on_valid(ws[lname]["on_frac"], screen)]
             if win:
                 out.append(_agg(_level_label(lname, meta0), win))
@@ -921,13 +952,21 @@ def build_report_rows(files):
             ref = max(f["duration_s"] for _, f in ultras)
             complete = [(m, f) for m, f in ultras
                         if f["duration_s"] >= 0.98 * ref and f["duration_s"] >= long_s
-                        and not _contaminated(f)
                         and _on_valid(f["on_frac"], screen)]
             if complete:
                 out.append(_agg(_level_label("ultra", meta0), complete))
 
     out.sort(key=lambda r: (_level_rank(r["label"]), r["label"]))
     return out
+
+
+def _flags(r):
+    parts = []
+    if r["gaps"]:
+        parts.append(f"{r['gaps']}gap")
+    if r.get("trimmed"):
+        parts.append("charge")
+    return ",".join(parts) if parts else "ok"
 
 
 def report_cells(r):
@@ -940,7 +979,7 @@ def report_cells(r):
             f"{r['min']:.4f}", f"{r['med']:.4f}", f"{r['max']:.4f}",
             f"{r['peak']:.4f}", f"{r['floor']:.4f}",
             f"{r['mwh']:.2f}", f"{r['mwhh']:.1f}",
-            "ok" if r["gaps"] == 0 else f"{r['gaps']}gap"]
+            _flags(r)]
 
 
 def report_md(title, cells):

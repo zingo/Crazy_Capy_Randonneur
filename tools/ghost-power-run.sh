@@ -84,6 +84,7 @@ DO_COMPARE=true
 DRY_RUN=false
 MODE="ghost"
 EXPERIMENT=""
+RECHARGE_CHECK=false
 KEEP_STATE=false
 PIN="${SCREEN_PIN:-}"
 
@@ -116,6 +117,9 @@ Options:
       --experiment NAME   tag this run (recorded in the CSV and shown in the
                           report's `exp` column) so experimental runs stay
                           distinct from the baseline
+      --recharge-check    after the run, keep the meter running until the battery
+                          returns to its start level; the total mWh is then the
+                          run's energy (cross-check on the trimmed average)
       --settle SEC        settle time after starting the ride (default $SETTLE)
       --warmup SEC        discard the first SEC s (default 180 for duty-cycled
                           runs, 0 for 100%) to skip the app's startup screen burst
@@ -161,6 +165,7 @@ while [ $# -gt 0 ]; do
         -o|--out) OUT="$2"; shift 2 ;;
         --gps) MODE="gps"; shift ;;
         --experiment) EXPERIMENT="$2"; shift 2 ;;
+        --recharge-check) RECHARGE_CHECK=true; shift ;;
         --no-compare) DO_COMPARE=false; shift ;;
         --keep-state) KEEP_STATE=true; shift ;;
         --no-inhibit) shift ;;
@@ -500,6 +505,7 @@ python3 "$SCRIPT_DIR/avhzy-monitor.py" record \
     --meta "app_git=${APP_GIT:-}" \
     --meta "route=$(basename "$ROUTE")" \
     --meta "experiment=$EXPERIMENT" \
+    --meta "recharge_check=$RECHARGE_CHECK" \
     --warmup "$WARMUP" --chunk "$CHUNK" --out "$OUT" --quiet > "$TMP_LOG" 2>&1 &
 REC_PID=$!
 sleep 1
@@ -597,6 +603,21 @@ sleep 1
 adbd shell am broadcast -a "$A_STOP" -n "$RECEIVER" >/dev/null
 RIDE_STARTED=false
 screen_on
+
+# --recharge-check (option 1): after the measured window, stop the app and keep
+# the meter running until the battery is back to its start level; the total
+# mWh/energy is then the energy the run actually took out of the battery — an
+# independent cross-check on the (charging-trimmed) average.
+if [ "$RECHARGE_CHECK" = true ]; then
+    echo "recharge-check: waiting for battery to return to ${BATTERY_NOW:-?}%..."
+    screen_off
+    for _ in $(seq 1 720); do
+        lvl="$(adbd shell dumpsys battery 2>/dev/null | awk -F: '/level/{gsub(/ /,"",$2);print $2; exit}')"
+        case "$lvl" in ''|*[!0-9]*) lvl=0 ;; esac
+        [ "$lvl" -ge "${BATTERY_NOW:-100}" ] && { echo "recharge-check: back to ${lvl}%"; break; }
+        sleep 30
+    done
+fi
 
 # 7. Show the run summary and (optionally) compare all runs.
 cat "$TMP_LOG"
