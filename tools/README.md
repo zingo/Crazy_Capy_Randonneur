@@ -370,14 +370,14 @@ Committed to the baseline (avg W, dark / light):
 - **Charging top-off is hit-or-miss too** — several `fast` runs were dropped
   (on % 63–93%) because charging re-activated mid-ride; the report's auto-exclude
   drops those runs.
-- **Ghost vs real-GPS (mock) agree at low screen duty.** An `--gps` +
-  `tools/mock-route.sh` experiment (tagged `--experiment gps-mock`) came out, on
-  the T20 (light): `nano` 0.453 vs 0.478, `small` 0.388 vs 0.401, `long` 0.490 vs
-  0.489, `ultra` 0.536 vs 0.543 W — within a few % of the ghost baseline, so the
-  **mock-GPS method is sound for the duty-cycled levels**. At **100 % screen
-  (`fast`) it is not usable**: two identical runs read **1.19 and 3.72 W**
-  (cv 73 %), i.e. the app's screen-on rendering is erratic in GPS mode. The
-  screen-state sidecar is what makes the `on %` correct here (see above).
+- **Ghost vs real-GPS (mock) agree** once charging is trimmed out. T20 (light),
+  trimmed averages: `nano` 0.455 vs 0.478, `small` 0.404 vs 0.401, `long` 0.373 vs
+  0.368, `ultra` 0.376 vs 0.376 W (gps-mock vs ghost) — the **mock-GPS path tracks
+  the ghost simulator**. The T20 charges as much as the app draws (over an 8.5 h
+  ultra the battery stayed at 100 %, `batt` +0), so the raw USB-input average is
+  inflated (≈0.54 W) — the trimmed average is the truthful **≈0.38–0.40 W**. Only
+  100 %-screen `fast` is unusable in GPS mode (1.19 vs 3.72 W, cv 73 %, erratic
+  rendering). The screen-state sidecar keeps `on %` correct (above).
 
 To compare two builds, run the same preset(s) for both and `diff` the rows; a
 difference under ~1% is noise unless it's a stable `fast`/`long` comparison.
