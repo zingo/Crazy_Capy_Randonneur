@@ -314,7 +314,9 @@ DEVICE_LABEL="${DEVICE_NAME:-unknown} (Android ${DEVICE_ANDROID:-?})"
 # for forensics; a dev build here is always "dirty".
 APP_VERSION="$(adbd shell dumpsys package "$PKG" 2>/dev/null | sed -n 's/.*versionName=\([^ ]*\).*/\1/p' | head -1 | tr -d '\r')"
 APP_VERSION="${APP_VERSION:-?}"
-APP_RELEASE="$(git -C "$SCRIPT_DIR/.." rev-parse --short "v${APP_VERSION}^{}" 2>/dev/null || true)"
+# Version as git sees it: "v0.2.0" exactly at the tag, "v0.2.0-8-g7d665fb" when
+# built past it, "-dirty" with uncommitted changes. Simpler than comparing tags.
+APP_DESCRIBE="$(git -C "$SCRIPT_DIR/.." describe --tags --always --dirty 2>/dev/null || printf 'v%s' "$APP_VERSION")"
 # Default output goes into the versioned source folder (data/power/<version>/), so
 # runs land in the right place automatically; -o still overrides. Ephemeral state
 # stays in the git-ignored power-runs/ scratch dir.
@@ -511,7 +513,7 @@ python3 "$SCRIPT_DIR/avhzy-monitor.py" record \
     --meta "device=$DEVICE_LABEL" \
     --meta "app_version=$APP_VERSION" \
     --meta "app_git=${APP_GIT:-}" \
-    --meta "app_release=${APP_RELEASE:-}" \
+    --meta "app_describe=${APP_DESCRIBE:-}" \
     --meta "route=$(basename "$ROUTE")" \
     --meta "experiment=$EXPERIMENT" \
     --meta "recharge_check=$RECHARGE_CHECK" \

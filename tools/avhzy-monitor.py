@@ -586,14 +586,13 @@ def _setup_key(meta):
 
 
 def _run_version(meta):
-    """0.2.0 when the run is exactly the release commit; 0.2.0-<sha> if it was
-    built from a patched/dirty tree. Missing app_release (older runs) -> version."""
+    """git describe form: v0.2.0 at the tag, v0.2.0-N-g<sha> past it, -dirty when
+    uncommitted. Older runs (no app_describe) fall back to v<versionName>."""
+    d = meta.get("app_describe")
+    if d:
+        return d
     v = meta.get("app_version", "-")
-    rel = meta.get("app_release", "")
-    git = meta.get("app_git", "")
-    if rel and git and git != rel:
-        return f"{v}-{git}"
-    return v
+    return v if v.startswith("v") else f"v{v}"
 
 
 def _mode_of(meta):
