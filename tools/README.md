@@ -265,7 +265,7 @@ baseline can hold several devices at once**: a T20Mini `fast (dark)` row no long
 overwrites the Wacom one. The `version` column records the app's `versionName`
 (read from the device at run time) — **bump it for a power-affecting change**; the
 version *display* comes from `git describe` (`# app_describe`), so it reads exactly
-like the tag: **`v<tag>`** at the release tag, **`v<tag>-N-g<sha>`** when built
+like the tag: **`<tag>`** at the release tag, **`<tag>-N-g<sha>`** when built
 past it, **`-dirty`** with uncommitted changes. That string is part of the row
 identity, so patched runs don't merge with the clean release. No extra git column. `date` is the most recent run's date (from the CSV's `# started`
 header, or the file's mtime if absent). **Because `version` is part of the row

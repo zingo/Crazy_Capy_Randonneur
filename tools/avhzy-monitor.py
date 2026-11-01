@@ -586,13 +586,9 @@ def _setup_key(meta):
 
 
 def _run_version(meta):
-    """git describe form: v<tag> at the tag, v<tag>-N-g<sha> past it, -dirty when
-    uncommitted. Older runs (no app_describe) fall back to v<versionName>."""
-    d = meta.get("app_describe")
-    if d:
-        return d
-    v = meta.get("app_version", "-")
-    return v if v.startswith("v") else f"v{v}"
+    """git describe form (the tag already has the v): <tag> / <tag>-N-g<sha> /
+    -dirty. Older runs fall back to the recorded app_version verbatim."""
+    return meta.get("app_describe") or meta.get("app_version", "-")
 
 
 def _mode_of(meta):
