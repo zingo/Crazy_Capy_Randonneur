@@ -30,6 +30,15 @@ your ears do the navigating — no accounts, no cloud, no ads.
 - **Toggleable extras** – the per-second live notification and the corner popup
   can each be switched off in Settings when you don't need them.
 
+## Power measurements
+
+Every battery claim here is checked against a repeatable measurement, not a guess:
+the app rides a fixed ghost route on real devices while a ~1 kHz USB power meter
+records it. The results are committed as a **[power baseline](https://zingo.github.io/Crazy_Capy_Randonneur/power/baseline.html)**
+— colour-coded by level and device, click a column to sort — and the method (meter,
+harness, presets, warm-up, charging handling, reproducibility) is documented in
+the [power-measurement toolkit](tools/README.md).
+
 ## Highlights
 
 - **Voice turn-by-turn** – speed-aware advance notices ("turn right in 500
