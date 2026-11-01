@@ -574,7 +574,7 @@ def _setup_key(meta):
     """
     return (
         meta.get("device", "-"),
-        meta.get("app_version", "-"),
+        _run_version(meta),
         meta.get("experiment", "-"),
         meta.get("dark_map", "-"),
         meta.get("screen_percent", "-"),
@@ -583,6 +583,12 @@ def _setup_key(meta):
         meta.get("start_km", "-"),
         meta.get("route", "-"),
     )
+
+
+def _run_version(meta):
+    """git describe form (the tag already has the v): <tag> / <tag>-N-g<sha> /
+    -dirty. Older runs fall back to the recorded app_version verbatim."""
+    return meta.get("app_describe") or meta.get("app_version", "-")
 
 
 def _mode_of(meta):
@@ -648,7 +654,7 @@ def _agg(label, items):
         mode = "dark" if meta0["dark_map"].lower() == "true" else "light"
     else:
         mode = "-"
-    versions = {m.get("app_version", "-") for m, _ in items}
+    versions = {_run_version(m) for m, _ in items}
     version = versions.pop() if len(versions) == 1 else "|".join(sorted(versions))
     # A row may aggregate runs from more than one day; show the most recent date.
     dates = sorted({m.get("started", "")[:10] for m, _ in items if m.get("started")})
@@ -933,7 +939,7 @@ def build_report_rows(files):
     """
     groups = {}
     for path in files:
-        if os.path.basename(path).startswith("screen-"):
+        if os.path.basename(path).startswith("screen-") or os.path.basename(path).endswith("_screen.csv"):
             continue  # display-state sidecar, not a power recording
         meta, full, windows = scan_csv(path)
         if full is None:

@@ -1,0 +1,23 @@
+# label,nano
+# app_version,v0.2.0
+# port,/dev/serial/by-id/usb-YK-Lab_Korona_YK003C_in_Application_Mode_5A5AA5A748383931FF085034FFFF4C0D-if00
+# started,2026-10-11T10:24:12
+# interval_ms,1
+# preset,nano
+# duration_s,600
+# screen_percent,15
+# screen_period,60
+# speed_kmh,20
+# time_scale,1
+# start_km,0
+# dark_map,true
+# brightness,70%
+# battery,100
+# battery_status,5
+# volume,3/15 (20%)
+# device,DOOGEE T20Mini (Android 13)
+# route,ystad-onnekoppinge-harlosa.gpx
+elapsed_ms,chunk_ms,n,sum_w,sum_w2,min_w,max_w,on_n,sum_v,sum_a,wh
+0.0,300000.747,299202,211933.5203,312442.0612,0.00373,3.35344,87031,1475056.12924,43996.99704,0.059032
+300001.741,300000.0,299203,174005.6230,225246.1807,0.00269,2.95721,66955,1480579.96439,35923.58731,0.048468
+600002.715,2673.05,2665,4871.4627,8921.5934,1.76711,2.19149,2665,12707.90360,1021.71823,0.001357

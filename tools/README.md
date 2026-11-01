@@ -264,8 +264,10 @@ changed, with Δ W and Δ %). Because the identity includes the device, **one
 baseline can hold several devices at once**: a T20Mini `fast (dark)` row no longer
 overwrites the Wacom one. The `version` column records the app's `versionName`
 (read from the device at run time) — **bump it for a power-affecting change**; the
-git revision is stored in the CSV header (`# app_git`) for forensics but is not
-part of the row. `date` is the most recent run's date (from the CSV's `# started`
+version *display* comes from `git describe` (`# app_describe`), so it reads exactly
+like the tag: **`<tag>`** at the release tag, **`<tag>-N-g<sha>`** when built
+past it, **`-dirty`** with uncommitted changes. That string is part of the row
+identity, so patched runs don't merge with the clean release. No extra git column. `date` is the most recent run's date (from the CSV's `# started`
 header, or the file's mtime if absent). **Because `version` is part of the row
 identity, numbers from before and after a version bump stay distinct rows**, so
 you can tell whether a measurement predates a change. The `on %` column is the
@@ -341,12 +343,12 @@ drops/annotates whatever it still can't trust.
 ```bash
 # 1. measure — by default lands in data/power/<app-version>/ (read from the
 #    device), so runs go into the right version folder automatically; -o overrides.
-#    Writes <ts>-<label>.csv + a screen-state sidecar.
+#    Writes a matched pair: <ts>-<label>_power.csv + <ts>-<label>_screen.csv.
 tools/ghost-power-run.sh --label medium --preset medium            # ghost
 tools/ghost-power-run.sh --gps --experiment my-idea --preset small # real GPS via mock
 
 # 2. regenerate the committed table (+ .txt + sortable .html), deterministically
-#    (built from the committed inputs in data/power/<version>/ — the power CSVs and
+#    (built from the committed inputs in data/power/<tag>/ — the power CSVs and
 #     the screen-state sidecars they reference; add/replace a run's files there
 #     and re-run. The sidecars store only state transitions, so the set is small.)
 tools/power-baseline.sh
