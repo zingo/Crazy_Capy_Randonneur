@@ -1,0 +1,21 @@
+# label,fast
+# app_version,v0.2.0
+# device,Wacom DTHA116 (Android 14)
+# port,/dev/serial/by-id/usb-YK-Lab_Korona_YK003C_in_Application_Mode_5A5AA5A748383931FF085034FFFF4C0D-if00
+# started,2026-09-21T08:43:53
+# interval_ms,1
+# preset,fast
+# duration_s,300
+# screen_percent,100
+# screen_period,60
+# speed_kmh,40
+# time_scale,1
+# start_km,0
+# dark_map,false
+# brightness,70%
+# volume,1/15 (6%)
+# battery,99
+# route,ystad-onnekoppinge-harlosa.gpx
+elapsed_ms,chunk_ms,n,sum_w,sum_w2,min_w,max_w,on_n,sum_v,sum_a,wh
+0.000,300000.873,299208,692215.3005,1601446.9352,2.10799,3.13039,299208,1504493.01881,137665.39377,0.192792
+300001.756,521.031,522,1207.2474,2792.0438,2.30851,2.31584,522,2624.75530,240.09274,0.000335

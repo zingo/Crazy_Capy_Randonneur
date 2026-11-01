@@ -265,7 +265,7 @@ baseline can hold several devices at once**: a T20Mini `fast (dark)` row no long
 overwrites the Wacom one. The `version` column records the app's `versionName`
 (read from the device at run time) — **bump it for a power-affecting change**; the
 version *display* comes from `git describe` (`# app_describe`), so it reads exactly
-like the tag: **`v0.2.0`** at the release tag, **`v0.2.0-8-g7d665fb`** when built
+like the tag: **`v<tag>`** at the release tag, **`v<tag>-N-g<sha>`** when built
 past it, **`-dirty`** with uncommitted changes. That string is part of the row
 identity, so patched runs don't merge with the clean release. No extra git column. `date` is the most recent run's date (from the CSV's `# started`
 header, or the file's mtime if absent). **Because `version` is part of the row
@@ -348,7 +348,7 @@ tools/ghost-power-run.sh --label medium --preset medium            # ghost
 tools/ghost-power-run.sh --gps --experiment my-idea --preset small # real GPS via mock
 
 # 2. regenerate the committed table (+ .txt + sortable .html), deterministically
-#    (built from the committed inputs in data/power/<version>/ — the power CSVs and
+#    (built from the committed inputs in data/power/<tag>/ — the power CSVs and
 #     the screen-state sidecars they reference; add/replace a run's files there
 #     and re-run. The sidecars store only state transitions, so the set is small.)
 tools/power-baseline.sh
