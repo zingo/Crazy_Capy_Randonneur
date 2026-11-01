@@ -264,11 +264,8 @@ changed, with Δ W and Δ %). Because the identity includes the device, **one
 baseline can hold several devices at once**: a T20Mini `fast (dark)` row no longer
 overwrites the Wacom one. The `version` column records the app's `versionName`
 (read from the device at run time) — **bump it for a power-affecting change**; the
-git revision is stored in the CSV header (`# app_git`) for forensics and is folded
-into the version *display*: **`0.2.0`** when the run is exactly the release commit
-(the `v0.2.0` tag), or **`0.2.0-<sha>`** when built from a patched/dirty tree (the
-display version is part of the row identity, so patched runs don't merge with the
-clean release). The extra `git` column isn't needed. `date` is the most recent run's date (from the CSV's `# started`
+git revision is stored in the CSV header (`# app_git`) for forensics but is not
+part of the row. `date` is the most recent run's date (from the CSV's `# started`
 header, or the file's mtime if absent). **Because `version` is part of the row
 identity, numbers from before and after a version bump stay distinct rows**, so
 you can tell whether a measurement predates a change. The `on %` column is the

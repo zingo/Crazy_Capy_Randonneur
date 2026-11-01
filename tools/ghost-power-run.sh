@@ -314,7 +314,6 @@ DEVICE_LABEL="${DEVICE_NAME:-unknown} (Android ${DEVICE_ANDROID:-?})"
 # for forensics; a dev build here is always "dirty".
 APP_VERSION="$(adbd shell dumpsys package "$PKG" 2>/dev/null | sed -n 's/.*versionName=\([^ ]*\).*/\1/p' | head -1 | tr -d '\r')"
 APP_VERSION="${APP_VERSION:-?}"
-APP_RELEASE="$(git -C "$SCRIPT_DIR/.." rev-parse --short "v${APP_VERSION}^{}" 2>/dev/null || true)"
 # Default output goes into the versioned source folder (data/power/<version>/), so
 # runs land in the right place automatically; -o still overrides. Ephemeral state
 # stays in the git-ignored power-runs/ scratch dir.
@@ -510,7 +509,6 @@ python3 "$SCRIPT_DIR/avhzy-monitor.py" record \
     --meta "device=$DEVICE_LABEL" \
     --meta "app_version=$APP_VERSION" \
     --meta "app_git=${APP_GIT:-}" \
-    --meta "app_release=${APP_RELEASE:-}" \
     --meta "route=$(basename "$ROUTE")" \
     --meta "experiment=$EXPERIMENT" \
     --meta "recharge_check=$RECHARGE_CHECK" \
