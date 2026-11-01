@@ -339,7 +339,9 @@ mitigates these (charge-wait, device-state save/restore, warm-up, screen-state
 drops/annotates whatever it still can't trust.
 
 ```bash
-# 1. measure — writes power-runs/<ts>-<label>.csv + a screen-state sidecar
+# 1. measure — by default lands in data/power/<app-version>/ (read from the
+#    device), so runs go into the right version folder automatically; -o overrides.
+#    Writes <ts>-<label>.csv + a screen-state sidecar.
 tools/ghost-power-run.sh --label medium --preset medium            # ghost
 tools/ghost-power-run.sh --gps --experiment my-idea --preset small # real GPS via mock
 
