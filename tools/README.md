@@ -234,7 +234,9 @@ right next to this project's rows. For this project's *own* app,
 
 ### `power-report.sh` and baselines
 
-`tools/power-baseline.md` (+ `.txt`) is the committed reference table.
+`docs/power/baseline.md` (+ `.txt` / colour-coded `.html`) is the committed
+reference table. The `.html` is served via GitHub Pages (source `main` / `docs`)
+at `/power/baseline.html`.
 `tools/power-report.sh` builds a local report, merges it into the baseline (so
 it stays a full table), diffs the two, and can promote the local report to
 become the new baseline — all driven off the `.md` files:
@@ -248,9 +250,9 @@ tools/power-report.sh 'power-runs/condensed/*' --promote   # accept as new basel
 Under the hood (all in `avhzy-monitor.py`):
 
 ```bash
-avhzy-monitor.py report power-runs/condensed/*.csv -o power-runs/latest.md --merge tools/power-baseline.md
-avhzy-monitor.py diff tools/power-baseline.md power-runs/latest.md
-avhzy-monitor.py promote power-runs/latest.md tools/power-baseline.md
+avhzy-monitor.py report power-runs/condensed/*.csv -o power-runs/latest.md --merge docs/power/baseline.md
+avhzy-monitor.py diff docs/power/baseline.md power-runs/latest.md
+avhzy-monitor.py promote power-runs/latest.md docs/power/baseline.md
 ```
 
 The report is written as `power-runs/latest.md`, `.txt`, and a **colour-coded,

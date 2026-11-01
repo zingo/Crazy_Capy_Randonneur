@@ -95,7 +95,7 @@ Device test notes:
   `fast`/`nano`/`small`/`medium`/`long`/`ultra` presets; default route
   `tools/routes/ystad-onnekoppinge-harlosa.gpx`). It relies on the debug-only
   `DebugControlReceiver` in `app/src/debug/`, which never ships in release.
-  `tools/power-baseline.md` is the committed reference table (also `.txt` and a
+  `docs/power/baseline.md` is the committed reference table (also `.txt` and a
   colour-coded, sortable `.html`, regenerated with it);
   `tools/power-report.sh` builds a local report, diffs it against the baseline,
   and can promote it. Light vs dark map makes no measurable power difference.
