@@ -495,7 +495,8 @@ fi
 # power threshold — needed because screen-on draw can sit right at that
 # threshold (e.g. this app in real-GPS mode). The report finds it via screen_log.
 REC_T0="$(date +%s)"
-SCREEN_LOG="screen-$LABEL-$REC_T0.csv"
+RUN_TS="$(date +%Y-%m-%d-%H%M%S)"
+SCREEN_LOG="${RUN_TS}-${LABEL}_screen.csv"
 python3 "$SCRIPT_DIR/avhzy-monitor.py" record \
     --label "$LABEL" ${NOTE:+--note "$NOTE"} \
     --meta "screen_log=$SCREEN_LOG" \
@@ -599,8 +600,13 @@ if [ -n "${BATTERY_END:-}" ]; then
     for f in "$OUT"/*-"$LABEL".csv; do
         [ -f "$f" ] || continue
         if grep -q "^# screen_log,$SCREEN_LOG$" "$f" 2>/dev/null; then
-            printf '# battery_end,%s\n# battery_end_status,%s\n' \
-                "${BATTERY_END:-}" "${BATTERY_END_STATUS:-}" >> "$f"
+            if [ -n "${BATTERY_END:-}" ]; then
+                printf '# battery_end,%s\n# battery_end_status,%s\n' \
+                    "${BATTERY_END:-}" "${BATTERY_END_STATUS:-}" >> "$f"
+            fi
+            # Rename the power CSV to share the run timestamp with the sidecar,
+            # so the pair reads <ts>-<label>_power.csv / <ts>-<label>_screen.csv.
+            mv "$f" "$OUT/${RUN_TS}-${LABEL}_power.csv"
             break
         fi
     done

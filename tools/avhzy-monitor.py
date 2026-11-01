@@ -944,7 +944,7 @@ def build_report_rows(files):
     """
     groups = {}
     for path in files:
-        if os.path.basename(path).startswith("screen-"):
+        if os.path.basename(path).startswith("screen-") or os.path.basename(path).endswith("_screen.csv"):
             continue  # display-state sidecar, not a power recording
         meta, full, windows = scan_csv(path)
         if full is None:

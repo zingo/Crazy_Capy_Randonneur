@@ -2,7 +2,7 @@
 # port,/dev/serial/by-id/usb-YK-Lab_Korona_YK003C_in_Application_Mode_5A5AA5A748383931FF085034FFFF4C0D-if00
 # started,2026-10-14T09:04:25
 # interval_ms,1
-# screen_log,screen-nano-1791961465.csv
+# screen_log,2026-10-14-090425-nano_screen.csv
 # preset,nano
 # duration_s,600
 # warmup_s,180

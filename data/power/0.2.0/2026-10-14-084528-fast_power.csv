@@ -2,7 +2,7 @@
 # port,/dev/serial/by-id/usb-YK-Lab_Korona_YK003C_in_Application_Mode_5A5AA5A748383931FF085034FFFF4C0D-if00
 # started,2026-10-14T08:45:28
 # interval_ms,1
-# screen_log,screen-fast-1791960328.csv
+# screen_log,2026-10-14-084528-fast_screen.csv
 # preset,fast
 # duration_s,300
 # warmup_s,0
