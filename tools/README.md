@@ -33,8 +33,9 @@ meter's own microsecond clock. `avhzy-monitor.py` auto-detects it by device name
 (`korona`/`yk003c`/`shizuku`), falling back to the first `/dev/ttyACM*`; override
 with `--port`. Requires `pyserial`.
 
-Recordings land in the git-ignored `power-runs/` (raw) with the condensed set in
-`power-runs/condensed/`.
+A run from `ghost-power-run.sh` lands in `data/power/<tag>/` (committed); the
+standalone `record` writes to the git-ignored `power-runs/`, condensed to 300 s
+chunks by default.
 
 ### `avhzy-monitor.py`
 
@@ -46,7 +47,7 @@ The recorder and analysis engine.
 
 # Compare runs side by side (label, start, screen %, avg/median/max W, mWh,
 # mWh/h, and % change vs the baseline)
-./tools/avhzy-monitor.py compare power-runs/condensed/*.csv --baseline baseline
+./tools/avhzy-monitor.py compare 'data/power/*/*.csv' --baseline baseline
 
 # Prefix windows: the first 10 min / 30 min / 2 h / 4 h of a longer run
 ./tools/avhzy-monitor.py windows power-runs/<run>.csv \
@@ -353,7 +354,7 @@ tools/ghost-power-run.sh --gps --experiment my-idea --preset small # real GPS vi
 tools/power-baseline.sh
 
 # 3. or a local report diffed against the committed baseline
-tools/power-report.sh 'power-runs/condensed/*.csv'
+tools/power-report.sh
 ```
 
 The same CSVs always produce the same table; only the device changes run to run.
