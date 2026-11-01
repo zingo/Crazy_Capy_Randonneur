@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
 GLOB="power-runs/condensed/*.csv"
-BASELINE="docs/power/baseline.md"
+BASELINE="power/baseline.md"
 OUT_MD="power-runs/latest.md"
 TITLE="local run set"
 PROMOTE=false

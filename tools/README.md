@@ -234,7 +234,7 @@ right next to this project's rows. For this project's *own* app,
 
 ### `power-report.sh` and baselines
 
-`docs/power/baseline.md` (+ `.txt` / colour-coded `.html`) is the committed
+`power/baseline.md` (+ `.txt` / colour-coded `.html`) is the committed
 reference table. The `.html` is served via GitHub Pages (source `main` / `docs`)
 at `/power/baseline.html`.
 `tools/power-report.sh` builds a local report, merges it into the baseline (so
@@ -250,9 +250,9 @@ tools/power-report.sh 'power-runs/condensed/*' --promote   # accept as new basel
 Under the hood (all in `avhzy-monitor.py`):
 
 ```bash
-avhzy-monitor.py report power-runs/condensed/*.csv -o power-runs/latest.md --merge docs/power/baseline.md
-avhzy-monitor.py diff docs/power/baseline.md power-runs/latest.md
-avhzy-monitor.py promote power-runs/latest.md docs/power/baseline.md
+avhzy-monitor.py report power-runs/condensed/*.csv -o power-runs/latest.md --merge power/baseline.md
+avhzy-monitor.py diff power/baseline.md power-runs/latest.md
+avhzy-monitor.py promote power-runs/latest.md power/baseline.md
 ```
 
 The report is written as `power-runs/latest.md`, `.txt`, and a **colour-coded,
@@ -344,7 +344,7 @@ tools/ghost-power-run.sh --label medium --preset medium            # ghost
 tools/ghost-power-run.sh --gps --experiment my-idea --preset small # real GPS via mock
 
 # 2. regenerate the committed table (+ .txt + sortable .html), deterministically
-#    (built from the committed inputs in docs/power/data/ — the power CSVs and
+#    (built from the committed inputs in power/<version>/ — the power CSVs and
 #     the screen-state sidecars they reference; add/replace a run's files there
 #     and re-run. The sidecars store only state transitions, so the set is small.)
 tools/power-baseline.sh
