@@ -328,6 +328,31 @@ for i in $(seq 1 10); do tools/ghost-power-run.sh --label small --preset small; 
 tools/power-report.sh 'power-runs/condensed/*.csv'    # nano/small/medium/... accumulate
 ```
 
+### Reproducibility
+
+Everything here is scripted — **no manual number-crunching, no AI in the loop**.
+A measurement is one command, and the table is one command; both are deterministic
+given their inputs. The **only** non-deterministic factor is the **device**:
+charging/top-off, USB drop-outs, screen-sleep reliability and thermal. The harness
+mitigates these (charge-wait, device-state save/restore, warm-up, screen-state
+`on %`, charging-trimmed averages + `charge`/`Ngap` flags) and the report
+drops/annotates whatever it still can't trust.
+
+```bash
+# 1. measure — writes power-runs/<ts>-<label>.csv + a screen-state sidecar
+tools/ghost-power-run.sh --label medium --preset medium            # ghost
+tools/ghost-power-run.sh --gps --experiment my-idea --preset small # real GPS via mock
+
+# 2. regenerate the committed table (+ .txt + sortable .html), deterministically
+tools/power-baseline.sh
+
+# 3. or a local report diffed against the committed baseline
+tools/power-report.sh 'power-runs/condensed/*.csv'
+```
+
+The same CSVs always produce the same table; only the device changes run to run.
+A human/AI may *trigger* these commands, never edit the numbers.
+
 ### Findings (by device)
 
 **Wacom DTHA116 (Android 14)** — the baseline device. From the committed
