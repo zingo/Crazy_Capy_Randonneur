@@ -79,7 +79,7 @@ ALLOW_CHARGING=false
 NO_WAIT=false
 WAIT_DISCHARGE=3600
 DEVICE=""
-OUT="power-runs"
+OUT=""  # default: data/power/<app-version>/ (resolved after we read it)
 DO_COMPARE=true
 DRY_RUN=false
 MODE="ghost"
@@ -125,7 +125,7 @@ Options:
                           runs, 0 for 100%) to skip the app's startup screen burst
       --device SERIAL     adb device serial (default: the only attached device)
       --pin NNNN          PIN to unlock the screen after wake (or set SCREEN_PIN)
-  -o, --out DIR           output directory (default $OUT)
+  -o, --out DIR           output directory (default data/power/<app-version>/)
       --no-compare        skip the comparison table at the end
       --keep-state        don't restore the device settings on exit; leave the
                           saved state file so you can restore it later with
@@ -270,7 +270,7 @@ adbd() { timeout 30 "$ADB" -s "$DEVICE" "$@"; }
 # screensaver, wake gestures, battery whitelist) so they can be put back. If a
 # previous run was interrupted and left a state file, keep it: it holds the
 # pristine values. Restore with `tools/device-state.sh restore -i <file>`.
-STATE_FILE="$OUT/device-state-${DEVICE}.env"
+STATE_FILE="power-runs/device-state-${DEVICE}.env"  # scratch dir, git-ignored
 STATE_CREATED=false
 if [ ! -f "$STATE_FILE" ]; then
     "$SCRIPT_DIR/device-state.sh" save -s "$DEVICE" -o "$STATE_FILE" >/dev/null 2>&1 || true
@@ -314,6 +314,11 @@ DEVICE_LABEL="${DEVICE_NAME:-unknown} (Android ${DEVICE_ANDROID:-?})"
 # for forensics; a dev build here is always "dirty".
 APP_VERSION="$(adbd shell dumpsys package "$PKG" 2>/dev/null | sed -n 's/.*versionName=\([^ ]*\).*/\1/p' | head -1 | tr -d '\r')"
 APP_VERSION="${APP_VERSION:-?}"
+# Default output goes into the versioned source folder (data/power/<version>/), so
+# runs land in the right place automatically; -o still overrides. Ephemeral state
+# stays in the git-ignored power-runs/ scratch dir.
+[ -n "$OUT" ] || OUT="data/power/$APP_VERSION"
+mkdir -p "$OUT"
 APP_GIT="$(git -C "$SCRIPT_DIR/.." rev-parse --short HEAD 2>/dev/null || true)"
 if [ -n "$APP_GIT" ] && [ -n "$(git -C "$SCRIPT_DIR/.." status --porcelain 2>/dev/null)" ]; then
     APP_GIT="${APP_GIT}-dirty"
@@ -387,6 +392,7 @@ remaining() { echo $(( DURATION + WARMUP - $(elapsed) )); }
 echo "Device:  $DEVICE"
 echo "Route:   $ROUTE"
 echo "Label:   $LABEL${NOTE:+  ($NOTE)}"
+echo "Output:  $OUT"
 echo "Ride:    ${DURATION}s @ x$TIME_SCALE, ${SPEED} km/h, reverse=$REVERSE, darkMap=$DARK_MAP, start=${START_KM} km"
 if [ "$SCREEN_PERCENT" -eq 100 ]; then
     echo "Screen:  always on"

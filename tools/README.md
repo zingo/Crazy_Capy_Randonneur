@@ -234,7 +234,9 @@ right next to this project's rows. For this project's *own* app,
 
 ### `power-report.sh` and baselines
 
-`tools/power-baseline.md` (+ `.txt`) is the committed reference table.
+`docs/power/baseline.md` (+ `.txt` / colour-coded `.html`) is the committed
+reference table. The `.html` is served via GitHub Pages (source `main` / `docs`)
+at `/docs/power/baseline.html`.
 `tools/power-report.sh` builds a local report, merges it into the baseline (so
 it stays a full table), diffs the two, and can promote the local report to
 become the new baseline — all driven off the `.md` files:
@@ -248,9 +250,9 @@ tools/power-report.sh 'power-runs/condensed/*' --promote   # accept as new basel
 Under the hood (all in `avhzy-monitor.py`):
 
 ```bash
-avhzy-monitor.py report power-runs/condensed/*.csv -o power-runs/latest.md --merge tools/power-baseline.md
-avhzy-monitor.py diff tools/power-baseline.md power-runs/latest.md
-avhzy-monitor.py promote power-runs/latest.md tools/power-baseline.md
+avhzy-monitor.py report power-runs/condensed/*.csv -o power-runs/latest.md --merge docs/power/baseline.md
+avhzy-monitor.py diff docs/power/baseline.md power-runs/latest.md
+avhzy-monitor.py promote power-runs/latest.md docs/power/baseline.md
 ```
 
 The report is written as `power-runs/latest.md`, `.txt`, and a **colour-coded,
@@ -325,6 +327,36 @@ more and more runs:
 for i in $(seq 1 10); do tools/ghost-power-run.sh --label small --preset small; done
 tools/power-report.sh 'power-runs/condensed/*.csv'    # nano/small/medium/... accumulate
 ```
+
+### Reproducibility
+
+Everything here is scripted — **no manual number-crunching, no AI in the loop**.
+A measurement is one command, and the table is one command; both are deterministic
+given their inputs. The **only** non-deterministic factor is the **device**:
+charging/top-off, USB drop-outs, screen-sleep reliability and thermal. The harness
+mitigates these (charge-wait, device-state save/restore, warm-up, screen-state
+`on %`, charging-trimmed averages + `charge`/`Ngap` flags) and the report
+drops/annotates whatever it still can't trust.
+
+```bash
+# 1. measure — by default lands in data/power/<app-version>/ (read from the
+#    device), so runs go into the right version folder automatically; -o overrides.
+#    Writes <ts>-<label>.csv + a screen-state sidecar.
+tools/ghost-power-run.sh --label medium --preset medium            # ghost
+tools/ghost-power-run.sh --gps --experiment my-idea --preset small # real GPS via mock
+
+# 2. regenerate the committed table (+ .txt + sortable .html), deterministically
+#    (built from the committed inputs in data/power/<version>/ — the power CSVs and
+#     the screen-state sidecars they reference; add/replace a run's files there
+#     and re-run. The sidecars store only state transitions, so the set is small.)
+tools/power-baseline.sh
+
+# 3. or a local report diffed against the committed baseline
+tools/power-report.sh 'power-runs/condensed/*.csv'
+```
+
+The same CSVs always produce the same table; only the device changes run to run.
+A human/AI may *trigger* these commands, never edit the numbers.
 
 ### Findings (by device)
 

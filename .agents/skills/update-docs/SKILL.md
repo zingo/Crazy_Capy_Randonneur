@@ -58,7 +58,8 @@ with README.md and the actual code.
 
 ## Power baseline
 
-`tools/power-baseline.md` is a generated table (see `tools/README.md`). Regenerate
-it with `python3 tools/avhzy-monitor.py report <globs> -o tools/power-baseline.md`
-— that also rewrites `power-baseline.txt` **and** the colour-coded, sortable
-`power-baseline.html`, so all three stay in sync. Commit them together.
+`docs/power/baseline.md` is a generated table (see `tools/README.md`). Regenerate
+it deterministically with **`tools/power-baseline.sh`** — that rewrites
+`baseline.md`, `baseline.txt` **and** the colour-coded, sortable `baseline.html`,
+so all three stay in sync. Commit them together. (Never hand-edit the numbers;
+the table is a pure function of the CSVs.)

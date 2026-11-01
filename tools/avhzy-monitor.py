@@ -898,14 +898,30 @@ def _load_screen_log(path, meta):
 
 
 def _screen_frac(screen, acc):
-    """Fraction of screen-state samples that were ON over the acc's time window."""
+    """Fraction of the acc's time window the screen was ON (time-weighted from the
+    state transitions; also correct for legacy 1 Hz sample files)."""
     start, rows = screen
-    if acc["first"] is None or acc["last"] is None:
+    if acc["first"] is None or acc["last"] is None or not rows:
         return None
     t0 = start + acc["first"] / 1000.0
     t1 = start + acc["last"] / 1000.0
-    sel = [on for (t, on) in rows if t0 <= t <= t1]
-    return (sum(sel) / len(sel)) if sel else None
+    if t1 <= t0:
+        return None
+    state = rows[0][1]
+    on_time = 0.0
+    prev = t0
+    for (t, on) in rows:
+        if t <= t0:
+            state = on
+            continue
+        if t >= t1:
+            break
+        if state:
+            on_time += t - prev
+        prev, state = t, on
+    if state:
+        on_time += t1 - prev
+    return on_time / (t1 - t0)
 
 
 def build_report_rows(files):
@@ -917,6 +933,8 @@ def build_report_rows(files):
     """
     groups = {}
     for path in files:
+        if os.path.basename(path).startswith("screen-"):
+            continue  # display-state sidecar, not a power recording
         meta, full, windows = scan_csv(path)
         if full is None:
             continue

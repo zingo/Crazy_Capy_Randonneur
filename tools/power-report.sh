@@ -9,7 +9,7 @@
 # are matched by label, so diffing two reports shows exactly what changed.
 #
 # Examples:
-#   tools/power-report.sh                       # report over power-runs/*.csv
+#   tools/power-report.sh                       # report over data/power/*/*.csv
 #   tools/power-report.sh 'power-runs/*nano*'   # only nano runs
 #   tools/power-report.sh --promote             # accept the report as official
 
@@ -18,8 +18,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
-GLOB="power-runs/condensed/*.csv"
-BASELINE="tools/power-baseline.md"
+GLOB="data/power/*/*.csv"
+BASELINE="docs/power/baseline.md"
 OUT_MD="power-runs/latest.md"
 TITLE="local run set"
 PROMOTE=false
