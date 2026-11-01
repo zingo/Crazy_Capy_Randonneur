@@ -32,12 +32,17 @@ your ears do the navigating — no accounts, no cloud, no ads.
 
 ## Power measurements
 
-Every battery claim here is checked against a repeatable measurement, not a guess:
-the app rides a fixed ghost route on real devices while a ~1 kHz USB power meter
-records it. The results are committed as a **[power baseline](https://zingo.github.io/Crazy_Capy_Randonneur/power/baseline.html)**
-— colour-coded by level and device, click a column to sort — and the method (meter,
+We measure, so we can improve. The app can ride a fixed ghost route on real devices
+while a ~1 kHz USB power meter records it; the results live in a committed
+**[power baseline](https://zingo.github.io/Crazy_Capy_Randonneur/power/baseline.html)**
+(colour-coded by level and device, click a column to sort), and the method (meter,
 harness, presets, warm-up, charging handling, reproducibility) is documented in
 the [power-measurement toolkit](tools/README.md).
+
+This is the groundwork, not the verdict: the tooling is in place, but **using it
+to confirm that specific choices actually save power has not been done yet** —
+e.g. whether the dark map or the pre-cached turn previews beat the alternatives is
+the next step (TODO).
 
 ## Highlights
 
