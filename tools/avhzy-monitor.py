@@ -956,7 +956,7 @@ def build_report_rows(files):
             if complete:
                 out.append(_agg(_level_label("ultra", meta0), complete))
 
-    out.sort(key=lambda r: (_level_rank(r["label"]), r["label"]))
+    out.sort(key=lambda r: (_level_rank(r["label"]), r["device"], r["label"]))
     return out
 
 
@@ -1023,7 +1023,7 @@ def cmd_report(args):
     for r in rows:
         cells_row = report_cells(r)
         merged[_identity_cells(REPORT_HEADER, cells_row)] = cells_row
-    cells = [merged[key] for key in sorted(merged, key=lambda k: (_level_rank(k[0]), k))]
+    cells = [merged[key] for key in sorted(merged, key=lambda k: (_level_rank(k[0]), k[1], k))]
 
     title = args.title or "run set"
     md = report_md(title, cells)
@@ -1069,7 +1069,7 @@ def cmd_diff(args):
     ni = new_header.index("avg W")
 
     keys = sorted(set(old_rows) | set(new_rows),
-                  key=lambda k: (_level_rank(k[0]), k))
+                  key=lambda k: (_level_rank(k[0]), k[1], k))
     print(f"{'label':<22} {'device':<28} {'old avg W':>10} {'new avg W':>10} {'delta W':>9} {'delta %':>9}  status")
     print("-" * 108)
     changed = 0
