@@ -1,12 +1,24 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>Crazy Capy Randonneur — docs</title>
-<style>body{font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;max-width:640px;margin:40px auto;padding:0 16px;color:#111}
-a{color:#0b5}code{background:#f2f2f2;padding:1px 4px;border-radius:3px}</style>
+<style>body{font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;max-width:660px;margin:40px auto;padding:0 16px;color:#111}
+a{color:#0b5}code{background:#f2f2f2;padding:1px 4px;border-radius:3px}h2{margin-top:1.6em}</style>
 <h1>Crazy Capy Randonneur — docs</h1>
-<p>Voice-first, battery-extreme bike navigation.</p>
+<p>Voice-first, battery-extreme bike navigation. Most of what's worth documenting
+here is how little power the thing can get away with.</p>
+
+<h2>Power</h2>
+<p>The app is measured on real hardware over repeatable ghost rides and recorded
+at ~1&nbsp;kHz from a USB power meter. The result is a committed
+<a href="power/baseline.html">power baseline</a> — colour-coded by level and
+device, click a column to sort — regenerated from the runs kept in
+<code>data/power/&lt;tag&gt;/</code>.</p>
+<p>How it's measured — the meter, the harness, presets, warm-up, charging
+trimming, and reproducibility — lives in the
+<a href="https://github.com/zingo/Crazy_Capy_Randonneur/blob/main/tools/README.md">power-measurement toolkit docs</a>.</p>
 <ul>
-  <li><a href="power/baseline.html">Power baseline</a> — colour-coded, sortable power measurements
-      (by level and device; ghost vs real-GPS mock).</li>
+  <li><a href="power/baseline.html">Power baseline</a> (rendered, sortable)</li>
+  <li><a href="power/baseline.md">…as Markdown</a> · <a href="power/baseline.txt">…as plain text</a></li>
+  <li><a href="https://github.com/zingo/Crazy_Capy_Randonneur/blob/main/tools/README.md">Power-measurement toolkit (tools/README.md)</a></li>
   <li><a href="https://github.com/zingo/Crazy_Capy_Randonneur">Source repository</a></li>
 </ul>
