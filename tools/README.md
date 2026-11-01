@@ -234,25 +234,26 @@ right next to this project's rows. For this project's *own* app,
 
 ### `power-report.sh` and baselines
 
-`docs/power/baseline.md` (+ `.txt` / colour-coded `.html`) is the committed
-reference table. The `.html` is served via GitHub Pages (source `main` / `docs`)
-at `/docs/power/baseline.html`.
-`tools/power-report.sh` builds a local report, merges it into the baseline (so
-it stays a full table), diffs the two, and can promote the local report to
-become the new baseline — all driven off the `.md` files:
+`docs/power/baseline.md` (plus `.txt` and a colour-coded, sortable `.html`) is the
+committed reference table; the HTML is published by GitHub Pages at
+**<https://zingo.github.io/Crazy_Capy_Randonneur/power/baseline.html>**.
+`tools/power-report.sh` builds a local report from the committed runs
+(`data/power/*/*.csv`), merges it into the baseline (so it stays a full table),
+diffs the two, and can promote the local report to become the new baseline — all
+driven off the `.md` files:
 
 ```bash
-tools/power-report.sh                                  # all of power-runs/condensed
-tools/power-report.sh 'power-runs/condensed/*nano*'    # just nano runs
-tools/power-report.sh 'power-runs/condensed/*' --promote   # accept as new baseline
+tools/power-report.sh                                # all committed runs (data/power/*/*.csv)
+tools/power-report.sh 'data/power/*/*nano*'          # just nano runs
+tools/power-report.sh 'data/power/*/*' --promote     # accept as the new baseline
 ```
 
 Under the hood (all in `avhzy-monitor.py`):
 
 ```bash
-avhzy-monitor.py report power-runs/condensed/*.csv -o power-runs/latest.md --merge docs/power/baseline.md
-avhzy-monitor.py diff docs/power/baseline.md power-runs/latest.md
-avhzy-monitor.py promote power-runs/latest.md docs/power/baseline.md
+avhzy-monitor.py report 'data/power/*/*.csv' -o docs/power/baseline.md --title "official baseline"
+avhzy-monitor.py diff docs/power/baseline.md docs/power/baseline.md
+# (power-baseline.sh is the one-command wrapper: data/power/*/*.csv -> docs/power/baseline.{md,txt,html})
 ```
 
 The report is written as `power-runs/latest.md`, `.txt`, and a **colour-coded,
@@ -262,15 +263,13 @@ Each row is identified by its setting — `label` + `device` + `version` + `scre
 `bright` / `speed` / `start` — so `diff` shows only real changes (added / removed /
 changed, with Δ W and Δ %). Because the identity includes the device, **one
 baseline can hold several devices at once**: a T20Mini `fast (dark)` row no longer
-overwrites the Wacom one. The `version` column records the app's `versionName`
-(read from the device at run time) — **bump it for a power-affecting change**; the
-version *display* comes from `git describe` (`# app_describe`), so it reads exactly
-like the tag: **`<tag>`** at the release tag, **`<tag>-N-g<sha>`** when built
-past it, **`-dirty`** with uncommitted changes. That string is part of the row
-identity, so patched runs don't merge with the clean release. No extra git column. `date` is the most recent run's date (from the CSV's `# started`
-header, or the file's mtime if absent). **Because `version` is part of the row
-identity, numbers from before and after a version bump stay distinct rows**, so
-you can tell whether a measurement predates a change. The `on %` column is the
+overwrites the Wacom one. The `version` column comes from `git describe`
+(`# app_describe`), so it reads exactly like the tag: **`<tag>`** at the release
+tag, **`<tag>-N-g<sha>`** when built past it, **`-dirty`** with uncommitted
+changes. **Bump the tag for a power-affecting change.** Because it's part of the
+row identity, patched runs stay distinct from the clean release (no extra git
+column). `date` is the most recent run's date (from the CSV's `# started` header,
+or the file's mtime if absent). The `on %` column is the
 fraction of the run measured above 1 W; it should track the `screen` target and
 reveals harness glitches (e.g. a screen that never slept reads ~100%). The report
 **auto-excludes any level whose `on %` is more than ~6 points off the target**, so
@@ -327,7 +326,7 @@ more and more runs:
 
 ```bash
 for i in $(seq 1 10); do tools/ghost-power-run.sh --label small --preset small; done
-tools/power-report.sh 'power-runs/condensed/*.csv'    # nano/small/medium/... accumulate
+tools/power-baseline.sh                               # nano/small/medium/... accumulate
 ```
 
 ### Reproducibility
