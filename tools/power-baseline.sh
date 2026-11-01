@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Crazy Capy Randonneur contributors
 # SPDX-License-Identifier: Apache-2.0
 #
-# power-baseline.sh — regenerate power/baseline.{md,txt,html} from the
+# power-baseline.sh — regenerate docs/power/baseline.{md,txt,html} from the
 # recorded runs, deterministically. Run it when no measurement is in progress
 # (a half-written CSV is skipped, but its prefix windows could otherwise skew a
 # batch).
@@ -13,12 +13,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
-OUT="power/baseline.md"
-mkdir -p "$(dirname "$OUT")" docs/power
-# Built from the committed inputs under power/<version>/ (the power CSVs plus the
+OUT="docs/power/baseline.md"
+mkdir -p "$(dirname "$OUT")"
+# Built from the committed inputs under data/power/<version>/ (the power CSVs plus the
 # screen-state sidecars they reference), so the table is reproducible by anyone.
-python3 tools/avhzy-monitor.py report 'power/*/*.csv' \
+python3 tools/avhzy-monitor.py report 'data/power/*/*.csv' \
     -o "$OUT" --title "official baseline" >/dev/null
-# keep a copy under docs/ for GitHub Pages (docs/ is the Pages root)
-cp "${OUT%.md}.html" docs/power/baseline.html
 echo "regenerated $OUT (+ ${OUT%.md}.txt, ${OUT%.md}.html)"

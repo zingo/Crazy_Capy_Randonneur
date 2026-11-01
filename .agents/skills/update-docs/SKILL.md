@@ -58,7 +58,7 @@ with README.md and the actual code.
 
 ## Power baseline
 
-`power/baseline.md` is a generated table (see `tools/README.md`). Regenerate
+`docs/power/baseline.md` is a generated table (see `tools/README.md`). Regenerate
 it deterministically with **`tools/power-baseline.sh`** — that rewrites
 `baseline.md`, `baseline.txt` **and** the colour-coded, sortable `baseline.html`,
 so all three stay in sync. Commit them together. (Never hand-edit the numbers;
