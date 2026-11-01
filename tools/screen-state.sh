@@ -61,7 +61,12 @@ while :; do
         ON) on=1 ;;
         *)  on=0 ;;
     esac
-    echo "$(date +%s),$on" >> "$OUT"
+    # Only record state changes (transitions), not every second: the report
+    # integrates on/off time, so this stays exact but ~50x smaller.
+    if [ "$on" != "${last:-}" ]; then
+        echo "$(date +%s),$on" >> "$OUT"
+        last="$on"
+    fi
     if [ "$DURATION" -gt 0 ] && [ $(( $(date +%s) - start )) -ge "$DURATION" ]; then
         break
     fi

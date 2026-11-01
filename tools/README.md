@@ -344,6 +344,9 @@ tools/ghost-power-run.sh --label medium --preset medium            # ghost
 tools/ghost-power-run.sh --gps --experiment my-idea --preset small # real GPS via mock
 
 # 2. regenerate the committed table (+ .txt + sortable .html), deterministically
+#    (built from the committed inputs in docs/power/data/ — the power CSVs and
+#     the screen-state sidecars they reference; add/replace a run's files there
+#     and re-run. The sidecars store only state transitions, so the set is small.)
 tools/power-baseline.sh
 
 # 3. or a local report diffed against the committed baseline
