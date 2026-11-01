@@ -15,11 +15,10 @@ cd "$SCRIPT_DIR/.."
 
 OUT="docs/power/baseline.md"
 mkdir -p "$(dirname "$OUT")"
+# Wacom = the condensed set; T20Mini = its raw/chunked runs (Oct/Nov — NOT the
+# Sep Wacom raw files, which would double-count against the condensed ones).
 python3 tools/avhzy-monitor.py report \
     'power-runs/condensed/*.csv' \
-    'power-runs/2026-*-fast.csv' \
-    'power-runs/2026-*-nano.csv' \
-    'power-runs/2026-*-small.csv' \
-    'power-runs/2026-*-ultra.csv' \
+    'power-runs/2026-1[01]-*.csv' \
     -o "$OUT" --title "official baseline" >/dev/null
 echo "regenerated $OUT (+ ${OUT%.md}.txt, ${OUT%.md}.html)"
