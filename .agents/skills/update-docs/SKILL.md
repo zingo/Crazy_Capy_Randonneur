@@ -55,3 +55,10 @@ with README.md and the actual code.
 - Every image referenced in README.md must exist:
   `grep -oE 'docs/screenshots/[^)]+' README.md` then check the files.
 - No stale wording: grep for old feature names that no longer apply.
+
+## Power baseline
+
+`tools/power-baseline.md` is a generated table (see `tools/README.md`). Regenerate
+it with `python3 tools/avhzy-monitor.py report <globs> -o tools/power-baseline.md`
+— that also rewrites `power-baseline.txt` **and** the colour-coded, sortable
+`power-baseline.html`, so all three stay in sync. Commit them together.

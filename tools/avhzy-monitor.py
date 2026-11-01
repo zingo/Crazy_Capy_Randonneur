@@ -534,9 +534,9 @@ def cmd_windows(args):
 # against a committed baseline. Rows are sorted by label and carry no
 # timestamps, so comparing two reports only shows what actually changed.
 
-REPORT_HEADER = ["label", "device", "version", "date", "mode", "screen",
+REPORT_HEADER = ["label", "device", "version", "date", "exp", "mode", "screen",
                  "bright", "vol", "speed", "start", "n", "dur s", "avg W",
-                 "sd W", "cv %", "on %", "min W", "med W", "max W",
+                 "sd W", "cv %", "on %", "batt", "min W", "med W", "max W",
                  "peak W", "floor W", "mWh", "mWh/h", "flags"]
 
 
@@ -546,7 +546,7 @@ STANDARD_LEVELS = [("nano", 600), ("small", 1800), ("medium", 7200), ("long", 14
 # isn't part of the setup); everything else that produced the row is included, so
 # the same level measured on two devices (or at two brightnesses/speeds) stays a
 # distinct row instead of overwriting another.
-IDENTITY_COLS = ["label", "device", "version", "screen", "bright", "speed", "start"]
+IDENTITY_COLS = ["label", "device", "version", "exp", "screen", "bright", "speed", "start"]
 
 
 def _identity_cells(header, cells):
@@ -575,6 +575,7 @@ def _setup_key(meta):
     return (
         meta.get("device", "-"),
         meta.get("app_version", "-"),
+        meta.get("experiment", "-"),
         meta.get("dark_map", "-"),
         meta.get("screen_percent", "-"),
         meta.get("brightness", "-"),
@@ -595,6 +596,34 @@ def _on_valid(on_frac, screen_pct, delta=6.0):
     means the screen stuck on/off or the device started charging mid-run."""
     target = 100.0 if screen_pct >= 100 else screen_pct
     return abs(on_frac * 100.0 - target) <= delta
+
+
+def _contaminated(stats):
+    """Charging contamination: a duty-cycled chunk whose mean power is far above
+    the expected level means the device re-activated its charger mid-run (which
+    silently inflates the average). The relative check needs >=3 chunks; the
+    absolute ~1.2 W ceiling also catches short (1-2 chunk) windows."""
+    if stats.get("chunk_outlier"):
+        return True
+    cmax = stats.get("chunk_max")
+    return cmax is not None and cmax > 1.2
+
+
+CHARGING_CHUNK_W = 1.2
+
+
+def _trimmed_avg(acc, screen_pct):
+    """Mean power over non-charging chunks for a duty-cycled run. The meter reads
+    USB input, so chunks where the charger re-activated (mean above the steady
+    level) are excluded — that keeps A/B comparisons honest on a device that
+    top-offs mid-run. Returns (avg, trimmed) or (None, False)."""
+    chunks = acc.get("chunks") or []
+    if screen_pct >= 100 or not chunks:
+        return None, False
+    clean = [(m, n) for m, n in chunks if m <= CHARGING_CHUNK_W]
+    if not clean:
+        return None, False
+    return sum(m * n for m, n in clean) / sum(n for m, n in clean), len(clean) < len(chunks)
 
 
 def _level_label(name, meta0):
@@ -624,11 +653,21 @@ def _agg(label, items):
     # A row may aggregate runs from more than one day; show the most recent date.
     dates = sorted({m.get("started", "")[:10] for m, _ in items if m.get("started")})
     date = dates[-1] if dates else "-"
+    # Net battery drop over the measured window (mean across runs), a cross-check
+    # on the meter's energy; stays None if the end level wasn't recorded.
+    deltas = []
+    for m, _ in items:
+        try:
+            deltas.append(int(m.get("battery_end")) - int(m.get("battery")))
+        except (TypeError, ValueError):
+            pass
+    batt = round(statistics.mean(deltas)) if deltas else None
     return {
         "label": label,
         "device": meta0.get("device", "-"),
         "version": version,
         "date": date,
+        "exp": meta0.get("experiment") or "-",
         "mode": mode,
         "screen": meta0.get("screen_percent", "-"),
         "bright": meta0.get("brightness", "-"),
@@ -641,6 +680,7 @@ def _agg(label, items):
         "sd": sd,
         "cv": cv,
         "on": statistics.mean(s["on_frac"] for s in stats_list),
+        "batt": batt,
         "min": min(means),
         "med": statistics.median(means),
         "max": max(means),
@@ -649,6 +689,7 @@ def _agg(label, items):
         "peak": max(s["max_w"] for s in stats_list),
         "floor": min(s["min_w"] for s in stats_list),
         "gaps": sum(s["gaps"] for s in stats_list),
+        "trimmed": any(s.get("trimmed") for _, s in items),
         "mwh": statistics.mean(s["energy_wh"] * 1000.0 for s in stats_list),
         "mwhh": avg * 1000.0,
     }
@@ -657,7 +698,8 @@ def _agg(label, items):
 def _new_acc():
     return {"n": 0, "on": 0, "sv": 0.0, "si": 0.0, "sp": 0.0, "sp2": 0.0,
             "min": None, "max": None, "energy": 0.0, "prev": None, "prev_p": 0.0,
-            "hist": {}, "first": None, "last": None, "gaps": 0}
+            "hist": {}, "first": None, "last": None, "gaps": 0,
+            "chunks": []}
 
 
 def _upd(a, v, i, p, e):
@@ -701,12 +743,22 @@ def _acc_stats(a):
                 break
     else:
         med = None  # condensed data: the exact median isn't recoverable
+    # Charging-contamination hint: for a duty-cycled run each chunk should look
+    # alike; a chunk whose mean power is far above the rest is the device
+    # re-activating its charger mid-run (which inflates the average silently).
+    cm = [m for m, _ in (a.get("chunks") or [])]
+    outlier = False
+    if len(cm) >= 3:
+        m = statistics.median(cm)
+        outlier = max(cm) > max(2.0 * m, m + 0.4)
     return {
         "samples": n,
         "duration_s": (a["last"] - a["first"]) / 1000.0 if a["first"] is not None else 0.0,
         "avg_v": a["sv"] / n, "avg_a": a["si"] / n, "avg_w": avg,
         "median_w": med, "sd_w": sd, "min_w": a["min"], "max_w": a["max"],
         "energy_wh": a["energy"], "on_frac": a["on"] / n, "gaps": a["gaps"],
+        "chunk_outlier": outlier,
+        "chunk_max": max(cm) if cm else None,
     }
 
 
@@ -722,6 +774,7 @@ def _upd_chunk(a, row):
     a["last"] = e + cm
     a["n"] += n
     a["on"] += int(row[7])
+    a["chunks"].append((float(row[3]) / n, n))
     a["sv"] += float(row[8]); a["si"] += float(row[9])
     a["sp"] += float(row[3]); a["sp2"] += float(row[4])
     mn = float(row[5]); mx = float(row[6])
@@ -792,7 +845,67 @@ def scan_csv(path, windows=None):
                 os.path.getmtime(path)).isoformat(timespec="seconds")
         except OSError:
             pass
-    return meta, _acc_stats(full), {name: _acc_stats(a) for name, a in levels.items() if a["n"] > 0}
+
+    # If a screen-state sidecar was recorded (tools/screen-state.sh), derive each
+    # window's on-fraction from the REAL display state instead of the power
+    # threshold — see the `screen_log` meta. Aligned by the `# started` wall time.
+    screen = _load_screen_log(path, meta)
+    full_stats = _acc_stats(full)
+    level_stats = {n: _acc_stats(a) for n, a in levels.items() if a["n"] > 0}
+    if screen:
+        for acc, stats in [(full, full_stats)] + [(levels[n], level_stats[n]) for n in level_stats]:
+            if stats is None:
+                continue
+            frac = _screen_frac(screen, acc)
+            if frac is not None:
+                stats["on_frac"] = frac
+    try:
+        screen_pct = float(meta.get("screen_percent", "0"))
+    except ValueError:
+        screen_pct = -1.0
+    for acc, stats in [(full, full_stats)] + [(levels[n], level_stats[n]) for n in level_stats]:
+        if stats is None:
+            continue
+        ta, trimmed = _trimmed_avg(acc, screen_pct)
+        if ta is not None and ta > 0:
+            stats["avg_w"] = ta
+            stats["energy_wh"] = ta * stats["duration_s"] / 3600.0
+        stats["trimmed"] = trimmed
+    return meta, full_stats, level_stats
+
+
+def _load_screen_log(path, meta):
+    """Read the screen-state sidecar named by meta['screen_log'] (if any).
+
+    Returns (start_epoch, [(epoch_s, on), ...]) or None."""
+    log = meta.get("screen_log")
+    if not log or not meta.get("started"):
+        return None
+    spath = log if os.path.isabs(log) else os.path.join(os.path.dirname(path), log)
+    try:
+        start = datetime.datetime.fromisoformat(meta["started"]).timestamp()
+        rows = []
+        with open(spath) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                a, _, b = line.partition(",")
+                rows.append((float(a), int(b)))
+        return (start, rows) if rows else None
+    except (OSError, ValueError):
+        return None
+
+
+def _screen_frac(screen, acc):
+    """Fraction of screen-state samples that were ON over the acc's time window."""
+    start, rows = screen
+    if acc["first"] is None or acc["last"] is None:
+        return None
+    t0 = start + acc["first"] / 1000.0
+    t1 = start + acc["last"] / 1000.0
+    sel = [on for (t, on) in rows if t0 <= t <= t1]
+    return (sum(sel) / len(sel)) if sel else None
 
 
 def build_report_rows(files):
@@ -805,7 +918,7 @@ def build_report_rows(files):
     groups = {}
     for path in files:
         meta, full, windows = scan_csv(path)
-        if not full:
+        if full is None:
             continue
         groups.setdefault(_setup_key(meta), []).append((meta, full, windows))
 
@@ -843,20 +956,30 @@ def build_report_rows(files):
             if complete:
                 out.append(_agg(_level_label("ultra", meta0), complete))
 
-    out.sort(key=lambda r: (_level_rank(r["label"]), r["label"]))
+    out.sort(key=lambda r: (_level_rank(r["label"]), r["device"], r["label"]))
     return out
 
 
+def _flags(r):
+    parts = []
+    if r["gaps"]:
+        parts.append(f"{r['gaps']}gap")
+    if r.get("trimmed"):
+        parts.append("charge")
+    return ",".join(parts) if parts else "ok"
+
+
 def report_cells(r):
-    return [r["label"], r["device"], r["version"], r["date"], r["mode"],
+    return [r["label"], r["device"], r["version"], r["date"], r["exp"], r["mode"],
             str(r["screen"]), str(r["bright"]),
             str(r["vol"]), str(r["speed"]), str(r["start"]), str(r["n"]),
             f"{r['dur']:.1f}", f"{r['avg']:.4f}", f"{r['sd']:.4f}", f"{r['cv']:.2f}",
             f"{r['on'] * 100:.1f}",
+            "-" if r["batt"] is None else f"{r['batt']:+d}",
             f"{r['min']:.4f}", f"{r['med']:.4f}", f"{r['max']:.4f}",
             f"{r['peak']:.4f}", f"{r['floor']:.4f}",
             f"{r['mwh']:.2f}", f"{r['mwhh']:.1f}",
-            "ok" if r["gaps"] == 0 else f"{r['gaps']}gap"]
+            _flags(r)]
 
 
 def report_md(title, cells):
@@ -882,6 +1005,57 @@ def report_txt(title, cells):
     return "\n".join(lines) + "\n"
 
 
+
+
+_LEVEL_HUE = {"fast": 210, "nano": 175, "small": 140, "medium": 40, "long": 25, "ultra": 280}
+
+
+def report_html(title, cells):
+    """Colour-coded, click-to-sort HTML view of a report (level = hue, light/dark =
+    tone). Written next to the .md so it stays in sync with the table."""
+    import html as _h
+
+    def row_style(row):
+        lab = row[0]
+        light = "(light)" in lab
+        h = _LEVEL_HUE.get(lab.split(" (")[0], 0)
+        return ("background:hsl(%d,70%%,%s);color:hsl(%d,45%%,%s)"
+                % (h, "88%" if light else "72%", h, "20%" if light else "15%"))
+
+    head = "".join("<th>%s</th>" % _h.escape(c) for c in REPORT_HEADER)
+    body = []
+    for row in cells:
+        tds = "".join(
+            '<td class="n">%s</td>' % _h.escape(c) if i > 2 else '<td>%s</td>' % _h.escape(c)
+            for i, c in enumerate(row))
+        body.append('<tr style="%s">%s</tr>' % (row_style(row), tds))
+    return (
+        '<!doctype html><meta charset="utf-8"><title>%s</title>'
+        '<style>body{font:13px/1.35 -apple-system,Segoe UI,Roboto,sans-serif;margin:16px;background:#fff;color:#111}'
+        'table{border-collapse:collapse}th,td{border:1px solid #bbb;padding:3px 6px;white-space:nowrap}'
+        'th{background:#222;color:#fff;position:sticky;top:0;cursor:pointer;user-select:none;font-weight:600}'
+        'th:after{content:" \2195";opacity:.35}td.n{text-align:right;font-variant-numeric:tabular-nums}'
+        '.legend{margin:8px 0 12px;font-size:12px}.legend span{display:inline-block;padding:2px 8px;margin-right:6px;border-radius:3px}'
+        '</style><h2>%s</h2>'
+        '<div class="legend">hue by level: '
+        '<span style="background:hsl(210,70%%,80%%)">fast</span>'
+        '<span style="background:hsl(175,70%%,80%%)">nano</span>'
+        '<span style="background:hsl(140,70%%,80%%)">small</span>'
+        '<span style="background:hsl(40,70%%,80%%)">medium</span>'
+        '<span style="background:hsl(25,70%%,80%%)">long</span>'
+        '<span style="background:hsl(280,70%%,80%%)">ultra</span>'
+        ' &nbsp;· darker = dark map, lighter = light map · click a header to sort</div>'
+        '<table><thead><tr>%s</tr></thead><tbody>%s</tbody></table>'
+        '<script>document.querySelectorAll("th").forEach(function(th,i){th.onclick=function(){'
+        'var tb=th.closest("table").tBodies[0],rows=[].slice.call(tb.rows);'
+        'var d=(th.dataset.dir==="asc")?"desc":"asc";th.dataset.dir=d;'
+        'rows.sort(function(a,b){var x=a.cells[i].innerText.trim(),y=b.cells[i].innerText.trim();'
+        'var nx=parseFloat(x),ny=parseFloat(y);var v=(!isNaN(nx)&&!isNaN(ny))?nx-ny:x.localeCompare(y);'
+        'return d==="asc"?v:-v;});rows.forEach(function(r){tb.appendChild(r);});};});</script>'
+        % (_h.escape(title), _h.escape(title), head, "".join(body))
+    )
+
+
 def cmd_report(args):
     paths = expand_paths(args.files)
     if not paths:
@@ -900,7 +1074,7 @@ def cmd_report(args):
     for r in rows:
         cells_row = report_cells(r)
         merged[_identity_cells(REPORT_HEADER, cells_row)] = cells_row
-    cells = [merged[key] for key in sorted(merged, key=lambda k: (_level_rank(k[0]), k))]
+    cells = [merged[key] for key in sorted(merged, key=lambda k: (_level_rank(k[0]), k[1], k))]
 
     title = args.title or "run set"
     md = report_md(title, cells)
@@ -912,8 +1086,12 @@ def cmd_report(args):
         txt_path = args.txt or (args.out[:-3] + ".txt" if args.out.endswith(".md") else args.out + ".txt")
         with open(txt_path, "w") as fh:
             fh.write(txt)
+        html_path = (args.out[:-3] + ".html") if args.out.endswith(".md") else (args.out + ".html")
+        with open(html_path, "w") as fh:
+            fh.write(report_html(title, cells))
         print(f"wrote {args.out}")
         print(f"wrote {txt_path}")
+        print(f"wrote {html_path}")
     print(md)
 
 
@@ -946,7 +1124,7 @@ def cmd_diff(args):
     ni = new_header.index("avg W")
 
     keys = sorted(set(old_rows) | set(new_rows),
-                  key=lambda k: (_level_rank(k[0]), k))
+                  key=lambda k: (_level_rank(k[0]), k[1], k))
     print(f"{'label':<22} {'device':<28} {'old avg W':>10} {'new avg W':>10} {'delta W':>9} {'delta %':>9}  status")
     print("-" * 108)
     changed = 0

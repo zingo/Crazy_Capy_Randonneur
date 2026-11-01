@@ -108,8 +108,8 @@ tools/ghost-power-run.sh --label x --preset ultra --dry-run  # preview, no run
 
 Key flags: `--preset`, `--duration`, `--screen-percent`, `--screen-period`,
 `--start-km`, `--brightness`, `--volume`, `--chunk`, `--time-scale`, `--speed`,
-`--reverse`, `--light`, `--device SERIAL`, `--pin`, `--wait-charge`,
-`--allow-charging`, `--out DIR`, `--no-compare`, `--dry-run`.
+`--reverse`, `--light`, `--gps`, `--experiment NAME`, `--device SERIAL`, `--pin`,
+`--wait-charge`, `--allow-charging`, `--out DIR`, `--no-compare`, `--dry-run`.
 
 Default route: `tools/routes/ystad-onnekoppinge-harlosa.gpx` (~170 km,
 exported from RideWithGPS). Every run starts at the same point along the route
@@ -146,6 +146,29 @@ Notes:
   SEC` discards the first SEC seconds (default **180** for duty-cycled runs, `0`
   for 100%-screen) and the ride is extended by the same amount so the measured
   window is still the full `DURATION`.
+- **Real-GPS mode (`--gps`).** Instead of the ghost simulator, start a real-GPS
+  ride and drive it with an adb mock-location provider playing the same route
+  (`tools/mock-route.sh`), so the app follows it through its *normal* navigation
+  path (the debug hook gained a `START_GPS` action for this). Needs
+  `ACCESS_FINE_LOCATION` granted on the device.
+- **Experiments (`--experiment NAME`).** Tag a run with a free-text name — it's
+  recorded in the CSV and shown in the report's **`exp`** column (and is part of
+  the row identity), so experimental runs sit alongside, and stay distinct from,
+  the proper baseline.
+- **Charging-trimmed averages.** The meter reads USB input, so when the device
+  top-offs mid-run those chunks overstate the app. The report drops chunks flagged
+  as charging (>~1.2 W for a duty-cycled run) from the average and marks the row
+  `charge` in `flags` — so A/B comparisons stay honest on a device that
+  re-charges. (It's about *consistency* for code changes, not absolute accuracy.)
+- **`--recharge-check` (option 1).** After the measured window, stop the app and
+  keep the meter running until the battery returns to its start level — the total
+  `mWh`/energy is then what the run took out of the battery, an independent
+  cross-check on the trimmed average. Slow (refill time), so use it sparingly.
+- **Screen-state sidecar.** Every run also records the *real* display on/off
+  state (`tools/screen-state.sh`) into a per-run file next to the CSV, and the
+  report derives `on %` from it rather than a fixed power threshold — so a
+  low-draw screen-on state (e.g. real-GPS mode, ~1.1 W) isn't mis-read as "off".
+  This is app-agnostic and is how any other nav app would be measured too.
 
 ### Device state — `device-state.sh`
 
@@ -201,6 +224,14 @@ rate *you* push, whereas a real device delivers at the rate the *app* requested.
 Note: the Wacom DTHA116 has **no GNSS** (only network/fused), so there's no real
 GNSS radio power to reproduce on it — mock is the only way to drive a route.
 
+**Measuring any other nav app, app-agnostically.** Start that app and its own
+navigation, then run the three generic pieces together: `mock-route.sh` (drive
+it), `screen-state.sh` (record the real display state), and
+`tools/avhzy-monitor.py record --meta screen_log=… ` (the meter), tagging the run
+with a `--meta experiment=NAME` — the report then shows it as an `exp`-tagged row
+right next to this project's rows. For this project's *own* app,
+`ghost-power-run.sh --gps` wires all of that together for you.
+
 ### `power-report.sh` and baselines
 
 `tools/power-baseline.md` (+ `.txt`) is the committed reference table.
@@ -222,7 +253,9 @@ avhzy-monitor.py diff tools/power-baseline.md power-runs/latest.md
 avhzy-monitor.py promote power-runs/latest.md tools/power-baseline.md
 ```
 
-The report is written as both `power-runs/latest.md` and `power-runs/latest.txt`.
+The report is written as `power-runs/latest.md`, `.txt`, and a **colour-coded,
+click-to-sort `latest.html`** (level = hue, light/dark = tone) — all generated
+together, so `power-report.sh` and the baseline get the HTML view for free.
 Each row is identified by its setting — `label` + `device` + `version` + `screen` /
 `bright` / `speed` / `start` — so `diff` shows only real changes (added / removed /
 changed, with Δ W and Δ %). Because the identity includes the device, **one
@@ -237,8 +270,12 @@ you can tell whether a measurement predates a change. The `on %` column is the
 fraction of the run measured above 1 W; it should track the `screen` target and
 reveals harness glitches (e.g. a screen that never slept reads ~100%). The report
 **auto-excludes any level whose `on %` is more than ~6 points off the target**, so
-a drifted or charging-contaminated run is dropped from that level (but still
-contributes to the shorter levels whose window was clean). The
+a drifted run is dropped from that level (but still contributes to the shorter
+levels whose window was clean). It **also drops charging-contaminated runs**: for
+a duty-cycled level, any chunk (or window) whose mean power is far above the
+expected off+on level — or over a ~1.2 W ceiling — means the device re-activated
+its charger mid-run and silently inflated the average (a screen-state `on %` of
+~15 % won't catch that, so this check is separate). The
 `device` column is auto-detected (`ro.product.manufacturer` + `model`, Android
 version) so runs from different phones/tablets stay distinguishable, and the
 `bright` / `vol` columns record the screen brightness and media volume used.
@@ -253,8 +290,16 @@ version) so runs from different phones/tablets stay distinguishable, and the
   runs — **diagnostics only**: `peak` flags transient anomalies, `floor`
   approximates the device's idle (screen-off) floor. Neither is meaningful for
   comparing builds across devices.
-- `on %` is the mean screen-on fraction (the validity gate); `flags` is `ok`, or
-  `Ngap` when a run had time gaps (a device/USB drop-out).
+- `exp` is the run's `--experiment` tag (`-` for baseline runs) and is part of the
+  row identity, so experiments and proper runs never overwrite each other.
+- `batt` is the net battery-level drop over the window (mean across runs), read at
+  the end of the measured window — a cross-check on `mWh` and a hint that a run
+  charged mid-way (level barely moved). Coarse (integer %), so only meaningful on
+  long runs; `-` for runs recorded before it was added.
+- `on %` is the mean screen-on fraction (the validity gate). When a run has a
+  screen-state sidecar it's computed from the **real display state**; otherwise it
+  falls back to the fraction of the run above 1 W. `flags` is `ok`, or `Ngap` when
+  a run had time gaps (a device/USB drop-out).
 - To call a change **real**, compare `avg W` against the spread: for 1-before /
   1-after the uncertainty is ≈ `sd W`·√2, so only differences bigger than ~2× that
   are convincing. More repeats (n≥3) sharpen this a lot.
@@ -327,6 +372,14 @@ Committed to the baseline (avg W, dark / light):
 - **Charging top-off is hit-or-miss too** — several `fast` runs were dropped
   (on % 63–93%) because charging re-activated mid-ride; the report's auto-exclude
   drops those runs.
+- **Ghost vs real-GPS (mock) agree** once charging is trimmed out. T20 (light),
+  trimmed averages: `nano` 0.455 vs 0.478, `small` 0.404 vs 0.401, `long` 0.381 vs
+  0.368, `ultra` 0.385 vs 0.377 W (gps-mock vs ghost) — the **mock-GPS path tracks
+  the ghost simulator**. The T20 charges as much as the app draws (over an 8.5 h
+  ultra the battery stayed at 100 %, `batt` +0), so the raw USB-input average is
+  inflated (≈0.54 W) — the trimmed average is the truthful **≈0.38–0.39 W**. Only
+  100 %-screen `fast` is unusable in GPS mode (1.19 vs 3.72 W, cv 73 %, erratic
+  rendering). The screen-state sidecar keeps `on %` correct (above).
 
 To compare two builds, run the same preset(s) for both and `diff` the rows; a
 difference under ~1% is noise unless it's a stable `fast`/`long` comparison.
