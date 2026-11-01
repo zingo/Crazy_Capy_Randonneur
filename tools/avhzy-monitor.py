@@ -1005,6 +1005,57 @@ def report_txt(title, cells):
     return "\n".join(lines) + "\n"
 
 
+
+
+_LEVEL_HUE = {"fast": 210, "nano": 175, "small": 140, "medium": 40, "long": 25, "ultra": 280}
+
+
+def report_html(title, cells):
+    """Colour-coded, click-to-sort HTML view of a report (level = hue, light/dark =
+    tone). Written next to the .md so it stays in sync with the table."""
+    import html as _h
+
+    def row_style(row):
+        lab = row[0]
+        light = "(light)" in lab
+        h = _LEVEL_HUE.get(lab.split(" (")[0], 0)
+        return ("background:hsl(%d,70%%,%s);color:hsl(%d,45%%,%s)"
+                % (h, "88%" if light else "72%", h, "20%" if light else "15%"))
+
+    head = "".join("<th>%s</th>" % _h.escape(c) for c in REPORT_HEADER)
+    body = []
+    for row in cells:
+        tds = "".join(
+            '<td class="n">%s</td>' % _h.escape(c) if i > 2 else '<td>%s</td>' % _h.escape(c)
+            for i, c in enumerate(row))
+        body.append('<tr style="%s">%s</tr>' % (row_style(row), tds))
+    return (
+        '<!doctype html><meta charset="utf-8"><title>%s</title>'
+        '<style>body{font:13px/1.35 -apple-system,Segoe UI,Roboto,sans-serif;margin:16px;background:#fff;color:#111}'
+        'table{border-collapse:collapse}th,td{border:1px solid #bbb;padding:3px 6px;white-space:nowrap}'
+        'th{background:#222;color:#fff;position:sticky;top:0;cursor:pointer;user-select:none;font-weight:600}'
+        'th:after{content:" \2195";opacity:.35}td.n{text-align:right;font-variant-numeric:tabular-nums}'
+        '.legend{margin:8px 0 12px;font-size:12px}.legend span{display:inline-block;padding:2px 8px;margin-right:6px;border-radius:3px}'
+        '</style><h2>%s</h2>'
+        '<div class="legend">hue by level: '
+        '<span style="background:hsl(210,70%%,80%%)">fast</span>'
+        '<span style="background:hsl(175,70%%,80%%)">nano</span>'
+        '<span style="background:hsl(140,70%%,80%%)">small</span>'
+        '<span style="background:hsl(40,70%%,80%%)">medium</span>'
+        '<span style="background:hsl(25,70%%,80%%)">long</span>'
+        '<span style="background:hsl(280,70%%,80%%)">ultra</span>'
+        ' &nbsp;· darker = dark map, lighter = light map · click a header to sort</div>'
+        '<table><thead><tr>%s</tr></thead><tbody>%s</tbody></table>'
+        '<script>document.querySelectorAll("th").forEach(function(th,i){th.onclick=function(){'
+        'var tb=th.closest("table").tBodies[0],rows=[].slice.call(tb.rows);'
+        'var d=(th.dataset.dir==="asc")?"desc":"asc";th.dataset.dir=d;'
+        'rows.sort(function(a,b){var x=a.cells[i].innerText.trim(),y=b.cells[i].innerText.trim();'
+        'var nx=parseFloat(x),ny=parseFloat(y);var v=(!isNaN(nx)&&!isNaN(ny))?nx-ny:x.localeCompare(y);'
+        'return d==="asc"?v:-v;});rows.forEach(function(r){tb.appendChild(r);});};});</script>'
+        % (_h.escape(title), _h.escape(title), head, "".join(body))
+    )
+
+
 def cmd_report(args):
     paths = expand_paths(args.files)
     if not paths:
@@ -1035,8 +1086,12 @@ def cmd_report(args):
         txt_path = args.txt or (args.out[:-3] + ".txt" if args.out.endswith(".md") else args.out + ".txt")
         with open(txt_path, "w") as fh:
             fh.write(txt)
+        html_path = (args.out[:-3] + ".html") if args.out.endswith(".md") else (args.out + ".html")
+        with open(html_path, "w") as fh:
+            fh.write(report_html(title, cells))
         print(f"wrote {args.out}")
         print(f"wrote {txt_path}")
+        print(f"wrote {html_path}")
     print(md)
 
 

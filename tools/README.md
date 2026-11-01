@@ -253,7 +253,9 @@ avhzy-monitor.py diff tools/power-baseline.md power-runs/latest.md
 avhzy-monitor.py promote power-runs/latest.md tools/power-baseline.md
 ```
 
-The report is written as both `power-runs/latest.md` and `power-runs/latest.txt`.
+The report is written as `power-runs/latest.md`, `.txt`, and a **colour-coded,
+click-to-sort `latest.html`** (level = hue, light/dark = tone) — all generated
+together, so `power-report.sh` and the baseline get the HTML view for free.
 Each row is identified by its setting — `label` + `device` + `version` + `screen` /
 `bright` / `speed` / `start` — so `diff` shows only real changes (added / removed /
 changed, with Δ W and Δ %). Because the identity includes the device, **one
