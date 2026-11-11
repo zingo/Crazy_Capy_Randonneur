@@ -20,9 +20,11 @@ your ears do the navigating — no accounts, no cloud, no ads.
   warm the map tiles along the route *before* you leave (on Wi-Fi, at home).
   On the ride the HUD pops up instantly from those cached images with zero tile
   fetches — and no/less live rendering, so your radio stays quieter. In a
-  controlled benchmark, showing a pre-cached preview cost ~7× less energy and
-  ~6× less CPU than rendering it live, while warming only the map tiles made no
-  measurable difference — see the
+  controlled benchmark, showing a pre-cached preview cost ~1.4–2.5× less energy
+  and ~6–8× less CPU than rendering it live (screen on/off), while warming only
+  the map tiles made no measurable difference. On a ride the saved energy is
+  small next to the display's draw; the bigger wins are much less CPU work and
+  far fewer network/tile fetches (quieter radio, works offline) — see the
   [cache cost benchmark](docs/power/cache-bench.html). If it gets interrupted it
   reports how many turns were cached ("Pre-cached 34/347 · rest on next load")
   and resumes on the next load, skipping what's done.
@@ -45,8 +47,10 @@ the [power-measurement toolkit](tools/README.md).
 
 This is the groundwork, not the verdict. Results so far: whether the dark map
 beats the light one is still being measured (TODO). For pre-caching, a
-controlled benchmark shows a pre-cached preview is ~7× cheaper in energy and
-~6× cheaper in CPU than a live render — see the
+controlled benchmark shows a pre-cached preview uses ~1.4–2.5× less energy and
+~6–8× less CPU than a live render; on a ride the energy difference is small
+beside the screen, while the CPU and network/tile-fetch savings are the
+practical win — see the
 [cache cost benchmark](docs/power/cache-bench.html). That benchmark hook is
 debug-build-only; release builds carry none of it.
 

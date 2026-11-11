@@ -101,7 +101,23 @@ object BenchRunner {
         if (waitNs > 0) Thread.sleep(waitNs / 1_000_000L) else nextAt[0] = System.nanoTime()
     }
 
-    private fun idxFor(k: Int, n: Int): Int = ((k.toLong() * 97L) % n).toInt()
+    private fun idxFor(k: Int, n: Int): Int {
+        if (n <= 1) return 0
+        var stride = 97
+        while (gcd(stride, n) != 1) stride++
+        return ((k.toLong() * stride) % n).toInt()
+    }
+
+    private fun gcd(a: Int, b: Int): Int {
+        var x = a
+        var y = b
+        while (y != 0) {
+            val t = x % y
+            x = y
+            y = t
+        }
+        return x
+    }
 
     private fun boundsFor(track: Track, atM: Double): LatLngBounds {
         val builder = LatLngBounds.Builder()

@@ -184,7 +184,8 @@ object RouteCache {
                     warmCorridor(renderer, track, if (darkBase) STYLE_DARK else STYLE_LIGHT)
                     generateOverview(context, renderer, track, if (darkBase) STYLE_DARK else STYLE_LIGHT)
                 }
-                if (!tilesOnly) for (dark in listOf(false, true)) {
+                if (!tilesOnly) {
+                    for (dark in listOf(false, true)) {
                     if (cancelRequested.get() || RideStore.active) break
                     val style = if (dark) STYLE_DARK else STYLE_LIGHT
                     var done = 0
@@ -206,6 +207,7 @@ object RouteCache {
                         if (cancelRequested.get() || RideStore.active) break
                         status = "Retrying turn ${i + 1}/${turns.size} (${colorName(dark)})"
                         renderAndStore(context, renderer, track, turns[i].distAlongM, dark, style, i, boundsForTurn(track, turns[i].distAlongM))
+                    }
                     }
                 }
                 if (!cancelRequested.get() && !RideStore.active) {

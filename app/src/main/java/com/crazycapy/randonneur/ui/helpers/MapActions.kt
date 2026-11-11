@@ -236,7 +236,7 @@ internal fun moveAndCenter(
     val middle = map.getProjection().toScreenLocation(center)
     val dist = hypot((rider.x - middle.x).toDouble(), (rider.y - middle.y).toDouble())
     val threshold = RECENTER_THRESHOLD * min(mapView.width, mapView.height)
-    val zoom = map.cameraPosition.zoom
+    val zoom = map.cameraPosition?.zoom ?: RIDING_ZOOM
     if (zoom < RIDING_ZOOM - 0.5) {
         map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), RIDING_ZOOM))
     } else if (dist > threshold) {
