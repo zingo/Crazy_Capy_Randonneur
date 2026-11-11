@@ -240,7 +240,10 @@ internal fun NavigationMapScreen(
 
     // Take over the camera when a ride starts; a manual pan releases it.
     LaunchedEffect(RideStore.active) {
-        if (RideStore.active) followRider = true
+        if (RideStore.active) {
+            followRider = true
+            map?.let { centerOnRider(it) }
+        }
     }
 
     // Follow the rider while the screen is on (and follow hasn't been released).
@@ -508,7 +511,7 @@ internal fun NavigationMapScreen(
     // Pre-cache ask dialog.
     LaunchedEffect(RideStore.track) {
         val t = RideStore.track
-        if (t != null && RideStore.precacheEnabled && !RideStore.active && !RouteCache.isCached(context, RouteStore.routeId(t.name), t, RideStore.darkMap)) {
+        if (t != null && RideStore.precacheEnabled && !RideStore.active && !RideStore.precacheAskSuppressed && RouteCache.activeRouteId == null && !RouteCache.isCached(context, RouteStore.routeId(t.name), t, RideStore.darkMap)) {
             val turns = TurnFinder.find(t).size
             if (turns > 0) askPrecacheFor = t
         }
