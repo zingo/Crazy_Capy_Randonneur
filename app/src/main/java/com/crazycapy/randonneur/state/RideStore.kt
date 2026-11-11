@@ -81,6 +81,8 @@ object RideStore {
     /** Index (into TurnFinder.find's sorted turn list) of the upcoming turn, for cache lookup. */
     var nextTurnIndex: Int? by mutableStateOf(null)
 
+    var precacheAskSuppressed: Boolean by mutableStateOf(false)
+
     // ---- Live off-route state ----
 
     var offRouteActive: Boolean by mutableStateOf(false)

@@ -35,6 +35,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.gpx.TrackLoader
 import com.crazycapy.randonneur.service.NavigationService
@@ -48,7 +49,9 @@ class DebugControlReceiver : BroadcastReceiver() {
             when (intent.action) {
                 ACTION_START_GHOST -> startGhost(context, intent)
                 ACTION_START_GPS -> startGps(context, intent)
-                ACTION_STOP -> NavigationService.stop(context)
+                ACTION_PREFILL -> startPrefill(context, intent)
+                ACTION_BENCH -> startBench(context, intent)
+                ACTION_STOP -> { RideStore.precacheAskSuppressed = false; NavigationService.stop(context) }
                 else -> {}
             }
         } catch (e: Exception) {
@@ -93,6 +96,7 @@ class DebugControlReceiver : BroadcastReceiver() {
 
     /** Seeds the resume/deviation fields shared by both ride modes. */
     private fun seedRide(intent: Intent, track: Track) {
+        RideStore.precacheAskSuppressed = true
         RideStore.track = track
         RideStore.status = "Route loaded: ${track.name}"
         RideStore.reverse = intent.getBooleanExtra(EXTRA_REVERSE, false)
@@ -122,6 +126,36 @@ class DebugControlReceiver : BroadcastReceiver() {
             "(resume=${RideStore.resumeAlongM ?: 0.0}, reverse=${RideStore.reverse})")
     }
 
+    private fun startBench(context: Context, intent: Intent) {
+        val track = loadRoute(intent) ?: return
+        RideStore.precacheAskSuppressed = true
+        RideStore.track = track
+        RideStore.darkMap = intent.getBooleanExtra(EXTRA_DARK_MAP, false)
+        val mode = intent.getStringExtra(EXTRA_BENCH_MODE) ?: "live"
+        val iterations = intent.getIntExtra(EXTRA_ITERATIONS, 100)
+        val durationSec = intent.getIntExtra(EXTRA_BENCH_SECONDS, 0)
+        val sleepMs = intent.getLongExtra(EXTRA_BENCH_SLEEP_MS, 0L)
+        val targetRps = intent.getIntExtra(EXTRA_TARGET_RPS, 0)
+        BenchRunner.run(context, track, mode, iterations, durationSec, sleepMs, targetRps)
+        Log.i(TAG, "Started bench mode=$mode iterations=$iterations duration=${durationSec}s rps=$targetRps")
+    }
+
+    private fun startPrefill(context: Context, intent: Intent) {
+        val track = loadRoute(intent) ?: return
+        RideStore.precacheAskSuppressed = true
+        RideStore.track = track
+        RideStore.darkMap = intent.getBooleanExtra(EXTRA_DARK_MAP, true)
+        val tilesOnly = intent.getBooleanExtra(EXTRA_TILES_ONLY, false)
+        val marker = File(context.filesDir, "prefill.done")
+        marker.delete()
+        RouteCache.preCache(context, track, tilesOnly) {
+            runCatching {
+                marker.writeText("${if (tilesOnly) "tiles" else "full"} ${System.currentTimeMillis()}")
+            }
+        }
+        Log.i(TAG, "Started prefill of ${track.name} (tilesOnly=$tilesOnly)")
+    }
+
     /** Reads a numeric extra regardless of whether it was sent as int/long/float/double/string. */
     private fun Intent.numberExtra(key: String, default: Double): Double =
         when (val v = extras?.get(key)) {
@@ -137,6 +171,8 @@ class DebugControlReceiver : BroadcastReceiver() {
         private const val TAG = "DebugControlReceiver"
         const val ACTION_START_GHOST = "com.crazycapy.randonneur.debug.START_GHOST"
         const val ACTION_START_GPS = "com.crazycapy.randonneur.debug.START_GPS"
+        const val ACTION_PREFILL = "com.crazycapy.randonneur.debug.PREFILL"
+        const val ACTION_BENCH = "com.crazycapy.randonneur.debug.BENCH"
         const val ACTION_STOP = "com.crazycapy.randonneur.debug.STOP"
         const val EXTRA_ROUTE = "route"
         const val EXTRA_TIME_SCALE = "timeScale"
@@ -144,5 +180,11 @@ class DebugControlReceiver : BroadcastReceiver() {
         const val EXTRA_REVERSE = "reverse"
         const val EXTRA_DARK_MAP = "darkMap"
         const val EXTRA_START_M = "startM"
+        const val EXTRA_TILES_ONLY = "tilesOnly"
+        const val EXTRA_BENCH_MODE = "benchMode"
+        const val EXTRA_ITERATIONS = "iterations"
+        const val EXTRA_BENCH_SECONDS = "benchSeconds"
+        const val EXTRA_BENCH_SLEEP_MS = "benchSleepMs"
+        const val EXTRA_TARGET_RPS = "targetRps"
     }
 }

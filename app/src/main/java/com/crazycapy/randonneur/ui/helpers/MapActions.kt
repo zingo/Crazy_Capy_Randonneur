@@ -229,14 +229,17 @@ internal fun moveAndCenter(
 
     val center = map.cameraPosition?.target
     if (center == null || mapView.width <= 0 || mapView.height <= 0) {
-        map.animateCamera(CameraUpdateFactory.newLatLng(LatLng(lat, lon)))
+        map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), RIDING_ZOOM))
         return
     }
     val rider = map.getProjection().toScreenLocation(LatLng(lat, lon))
     val middle = map.getProjection().toScreenLocation(center)
     val dist = hypot((rider.x - middle.x).toDouble(), (rider.y - middle.y).toDouble())
     val threshold = RECENTER_THRESHOLD * min(mapView.width, mapView.height)
-    if (dist > threshold) {
+    val zoom = map.cameraPosition.zoom
+    if (zoom < RIDING_ZOOM - 0.5) {
+        map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), RIDING_ZOOM))
+    } else if (dist > threshold) {
         map.animateCamera(CameraUpdateFactory.newLatLng(LatLng(lat, lon)))
     }
 }
