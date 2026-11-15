@@ -200,12 +200,19 @@ private fun RwGpsImportDialog(
     onCancel: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    var url by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf(RideStore.rwgpsUrl) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var routes by remember { mutableStateOf<List<RwGpsParser.RouteSummary>?>(null) }
 
+    val saveTarget: (String) -> Unit = { t ->
+        if (t.isNotBlank()) {
+            RideStore.rwgpsUrl = t
+            RouteStore.saveSettings(context)
+        }
+    }
     val doImport: (String) -> Unit = { target ->
+        saveTarget(url.ifBlank { target })
         scope.launch {
             busy = true; error = null
             val track = withContext(Dispatchers.IO) { RwGpsImport.fetchTrack(target) }
@@ -221,6 +228,7 @@ private fun RwGpsImportDialog(
         }
     }
     val doList: (String) -> Unit = { target ->
+        saveTarget(target)
         scope.launch {
             busy = true; error = null
             val list = withContext(Dispatchers.IO) { RwGpsImport.listRoutes(target) }
@@ -234,7 +242,7 @@ private fun RwGpsImportDialog(
     }
 
     AlertDialog(
-        onDismissRequest = { if (!busy) onCancel() },
+        onDismissRequest = { if (!busy) { saveTarget(url); onCancel() } },
         title = { Text(if (routes == null) "Import from ridewithgps" else "Select a route") },
         text = {
             Column {
@@ -264,14 +272,14 @@ private fun RwGpsImportDialog(
                     }
                 } else {
                     Text(
-                        "Paste a ridewithgps.com route URL (or its numeric id), or a user profile URL/id to pick from their public routes.",
+                        "Paste a ridewithgps.com route URL (or its numeric id), or a user profile URL/id to pick from their public routes. Tip: on ridewithgps.com open your profile, use Share → Copy link, and paste that link here to list your public routes.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = url,
                         onValueChange = { url = it; error = null },
-                        placeholder = { Text("https://ridewithgps.com/routes/37482029") },
+                        placeholder = { Text("https://ridewithgps.com/users/10936047") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
@@ -293,7 +301,7 @@ private fun RwGpsImportDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = { if (!busy) onCancel() }) { Text("Close") }
+            TextButton(onClick = { if (!busy) { saveTarget(url); onCancel() } }) { Text("Close") }
         },
     )
 }
