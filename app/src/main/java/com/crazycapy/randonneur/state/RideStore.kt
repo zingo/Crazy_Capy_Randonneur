@@ -76,6 +76,8 @@ object RideStore {
     /** Ask to pre-cache a route's turn previews (and warm its tiles) after loading it. */
     var precacheEnabled: Boolean by mutableStateOf(true)
 
+    var rwgpsUrl: String by mutableStateOf("https://ridewithgps.com/users/10936047")
+
     // ---- Next-turn preview ----
 
     /** Index (into TurnFinder.find's sorted turn list) of the upcoming turn, for cache lookup. */
