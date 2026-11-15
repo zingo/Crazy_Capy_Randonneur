@@ -68,6 +68,7 @@ import com.crazycapy.randonneur.state.RideMode
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.state.RideHistory
+import com.crazycapy.randonneur.state.RidePoint
 import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.voice.BeepPlanner
 import com.crazycapy.randonneur.voice.BeepSignal
@@ -118,6 +119,7 @@ class NavigationService : Service() {
     private var pausedStartMs = 0L
     private var rideSavedForHistory = false
     private var lastCheckpointMs = 0L
+    private var pointsCommitted = 0
     private val actionPis = HashMap<Int, PendingIntent>()
     private var ticker: Runnable? = null
     private var sim: RouteSimulator? = null
@@ -156,7 +158,7 @@ class NavigationService : Service() {
 
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
-            feedFix(location.latitude, location.longitude, location.accuracy)
+            feedFix(location.latitude, location.longitude, location.accuracy, if (location.hasAltitude()) location.altitude else null)
         }
         @Deprecated("Deprecated in Java")
         override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
@@ -211,7 +213,8 @@ class NavigationService : Service() {
         pausedStartMs = 0L
         rideSavedForHistory = false
         lastCheckpointMs = SystemClock.elapsedRealtime()
-        RideHistory.clearCheckpoint(this)
+        pointsCommitted = 0
+        RideHistory.abort(this)
         tickCounter = 0
 
         RideStore.active = true
@@ -392,7 +395,7 @@ class NavigationService : Service() {
      * fixes arrive on the simulator thread (Compose snapshot state is
      * cross-thread safe and TTS accepts any caller thread).
      */
-    private fun feedFix(lat: Double, lon: Double, accuracyM: Float? = null) {
+    private fun feedFix(lat: Double, lon: Double, accuracyM: Float? = null, eleM: Double? = null) {
         if (!running.get() || RideStore.paused) return
         val nav = engine ?: return
         val nowMs = SystemClock.elapsedRealtime()
@@ -406,12 +409,14 @@ class NavigationService : Service() {
         if (RideStore.active) {
             val pts = RideStore.riddenPoints
             if (pts.isEmpty()) {
-                if (accuracyM == null || accuracyM <= 30f) RideStore.riddenPoints = listOf(lat to lon)
+                if (accuracyM == null || accuracyM <= 30f) {
+                    RideStore.riddenPoints = listOf(RidePoint(lat, lon, nowMs, eleM, hrProvider.currentHr()))
+                }
             } else if (plausible) {
                 RideStore.riddenM += moved
                 val last = pts.last()
-                if (Geo.distanceMeters(last.first, last.second, lat, lon) >= TRACE_POINT_M) {
-                    RideStore.riddenPoints = pts + (lat to lon)
+                if (Geo.distanceMeters(last.lat, last.lon, lat, lon) >= TRACE_POINT_M) {
+                    RideStore.riddenPoints = pts + RidePoint(lat, lon, nowMs, eleM, hrProvider.currentHr())
                 }
             }
         }
@@ -483,13 +488,34 @@ class NavigationService : Service() {
         }
     }
 
+    private fun appendTracePoints() {
+        val pts = RideStore.riddenPoints
+        if (pts.size <= pointsCommitted) return
+        RideHistory.checkpoint(
+            this, startWallMs,
+            pts.subList(pointsCommitted, pts.size),
+            RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh,
+        )
+        pointsCommitted = pts.size
+    }
+
     private fun maybeCheckpointRide() {
         if (RideStore.mode != RideMode.GPS || RideStore.paused || !RideStore.active) return
         val now = SystemClock.elapsedRealtime()
         if (now - lastCheckpointMs < CHECKPOINT_MS) return
         if (RideStore.riddenM < 20.0) return
         lastCheckpointMs = now
-        RideHistory.checkpoint(this, RideStore.riddenPoints, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh)
+        appendTracePoints()
+    }
+
+    private fun saveRideHistory() {
+        if (RideStore.mode == RideMode.GPS && RideStore.riddenM >= 50.0) {
+            appendTracePoints()
+            RideHistory.finalizeRide(this, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh)
+        } else {
+            RideHistory.abort(this)
+        }
+        rideSavedForHistory = true
     }
 
     private fun activeElapsedMs(now: Long = SystemClock.elapsedRealtime()): Long {
@@ -851,7 +877,7 @@ class NavigationService : Service() {
         pausedStartMs = SystemClock.elapsedRealtime()
         RideStore.speedKmh = 0.0
         RideStore.status = "Paused"
-        RideHistory.checkpoint(this, RideStore.riddenPoints, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh)
+        appendTracePoints()
         stopBeeps()
         updateNotification("Paused\nTap Resume to continue")
     }
@@ -868,17 +894,7 @@ class NavigationService : Service() {
     }
 
     private fun stopRide(message: String) {
-        if (RideStore.mode == RideMode.GPS && RideStore.riddenM >= 50.0) {
-            RideHistory.save(
-                this,
-                RideStore.riddenPoints,
-                startWallMs,
-                RideStore.elapsedSec,
-                RideStore.riddenM,
-                RideStore.maxSpeedKmh,
-            )
-        }
-        rideSavedForHistory = true
+        saveRideHistory()
         if (!arrived.get()) {
             saveLastRideState()
         } else {
@@ -962,8 +978,7 @@ class NavigationService : Service() {
 
     override fun onDestroy() {
         if (!rideSavedForHistory && RideStore.mode == RideMode.GPS && RideStore.riddenM >= 50.0) {
-            RideHistory.save(this, RideStore.riddenPoints, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh)
-            rideSavedForHistory = true
+            saveRideHistory()
         }
         running.set(false)
         stopTicker()

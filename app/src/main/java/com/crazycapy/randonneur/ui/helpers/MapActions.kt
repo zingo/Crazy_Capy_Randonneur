@@ -23,6 +23,7 @@ import com.crazycapy.randonneur.gpx.Waypoint
 import com.crazycapy.randonneur.nav.Geo
 import com.crazycapy.randonneur.radar.RadarVehicle
 import com.crazycapy.randonneur.radar.RadarVehicleSize
+import com.crazycapy.randonneur.state.RidePoint
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.voice.SpeechMarker
 import com.google.gson.JsonObject
@@ -88,7 +89,7 @@ internal fun brightenDarkRoads(style: Style) {
 }
 
 /** Replace the route polyline and waypoint markers on the map. */
-internal fun refreshRidden(map: MapLibreMap, points: List<Pair<Double, Double>>) {
+internal fun refreshRidden(map: MapLibreMap, points: List<RidePoint>) {
     runCatching {
         val style = map.getStyle() ?: return
         if (points.size < 2) {
@@ -96,7 +97,7 @@ internal fun refreshRidden(map: MapLibreMap, points: List<Pair<Double, Double>>)
             style.removeSource("ridden-source")
             return
         }
-        val line = LineString.fromLngLats(points.map { Point.fromLngLat(it.second, it.first) })
+        val line = LineString.fromLngLats(points.map { Point.fromLngLat(it.lon, it.lat) })
         val source = style.getSourceAs<GeoJsonSource>("ridden-source")
         if (source != null) {
             source.setGeoJson(line)

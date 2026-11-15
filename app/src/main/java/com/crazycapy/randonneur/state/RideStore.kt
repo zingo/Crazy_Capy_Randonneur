@@ -129,7 +129,7 @@ object RideStore {
     var riddenM: Double by mutableStateOf(0.0)
 
     /** Decimated breadcrumb of the ridden path (lat, lon). */
-    var riddenPoints: List<Pair<Double, Double>> by mutableStateOf(emptyList())
+    var riddenPoints: List<RidePoint> by mutableStateOf(emptyList())
 
     /** Total route length, in metres (convenience mirror of track.lengthMeters). */
     var totalM: Double by mutableStateOf(0.0)
