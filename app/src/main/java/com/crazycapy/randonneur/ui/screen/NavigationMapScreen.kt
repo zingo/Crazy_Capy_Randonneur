@@ -26,6 +26,9 @@ import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -402,6 +405,25 @@ internal fun NavigationMapScreen(
     Scaffold(
         floatingActionButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                if (RideStore.active) {
+                    FloatingActionButton(
+                        onClick = { if (RideStore.paused) NavigationService.resume(context) else NavigationService.pause(context) },
+                        modifier = Modifier.size(48.dp),
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    ) {
+                        Icon(if (RideStore.paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                            contentDescription = if (RideStore.paused) "Resume" else "Pause")
+                    }
+                    FloatingActionButton(
+                        onClick = { NavigationService.stop(context) },
+                        modifier = Modifier.size(48.dp),
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    ) {
+                        Icon(Icons.Filled.Stop, contentDescription = "Stop and save ride")
+                    }
+                }
                 if (RideStore.active && !followRider) {
                     FloatingActionButton(
                         onClick = {

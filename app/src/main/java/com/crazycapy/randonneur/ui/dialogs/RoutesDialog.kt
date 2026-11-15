@@ -73,6 +73,7 @@ internal fun RoutesDialog(
 ) {
     val busyId = RouteCache.activeRouteId
     var showRwgps by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Saved routes") },
@@ -179,12 +180,20 @@ internal fun RoutesDialog(
             Row {
                 TextButton(onClick = { onImport(); onDismiss() }) { Text("Import") }
                 TextButton(onClick = { showRwgps = true }) { Text("RWGPS") }
+                TextButton(onClick = { showHistory = true }) { Text("Rides") }
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Close") }
         },
     )
+    if (showHistory) {
+        RideHistoryDialog(
+            context = context,
+            onDone = { showHistory = false; onDismiss() },
+            onCancel = { showHistory = false },
+        )
+    }
     if (showRwgps) {
         RwGpsImportDialog(
             context = context,

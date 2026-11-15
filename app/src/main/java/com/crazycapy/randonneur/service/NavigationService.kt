@@ -27,6 +27,7 @@ package com.crazycapy.randonneur.service
 import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
+import android.app.PendingIntent
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
@@ -66,6 +67,7 @@ import com.crazycapy.randonneur.sim.RouteSimulator
 import com.crazycapy.randonneur.state.RideMode
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.cache.RouteCache
+import com.crazycapy.randonneur.state.RideHistory
 import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.voice.BeepPlanner
 import com.crazycapy.randonneur.voice.BeepSignal
@@ -111,6 +113,9 @@ class NavigationService : Service() {
     private val ghostGeneration = AtomicInteger(0)
 
     private var startRealtimeMs = 0L
+    private var startWallMs = 0L
+    private var pausedTotalMs = 0L
+    private var pausedStartMs = 0L
     private var ticker: Runnable? = null
     private var sim: RouteSimulator? = null
     private var radarSim: RadarSimulator? = null
@@ -173,6 +178,8 @@ class NavigationService : Service() {
             ACTION_START_GPS -> startRide(RideMode.GPS)
             ACTION_START_GHOST -> startRide(RideMode.GHOST)
             ACTION_TOGGLE_REVERSE -> toggleReverse()
+            ACTION_PAUSE -> pauseRide()
+            ACTION_RESUME -> resumeRide()
             else -> stopRide("Navigation stopped")
         }
         return START_NOT_STICKY
@@ -196,9 +203,13 @@ class NavigationService : Service() {
         lastFixAtMs = null
         liveCoveredM = 0.0
         startRealtimeMs = SystemClock.elapsedRealtime()
+        startWallMs = System.currentTimeMillis()
+        pausedTotalMs = 0L
+        pausedStartMs = 0L
         tickCounter = 0
 
         RideStore.active = true
+        RideStore.paused = false
         RideStore.mode = mode
         RideStore.remainingM = track.lengthMeters
         RideStore.coveredM = 0.0
@@ -375,7 +386,7 @@ class NavigationService : Service() {
      * cross-thread safe and TTS accepts any caller thread).
      */
     private fun feedFix(lat: Double, lon: Double) {
-        if (!running.get()) return
+        if (!running.get() || RideStore.paused) return
         val nav = engine ?: return
         val nowMs = SystemClock.elapsedRealtime()
 
@@ -459,8 +470,14 @@ class NavigationService : Service() {
         }
     }
 
+    private fun activeElapsedMs(now: Long = SystemClock.elapsedRealtime()): Long {
+        var paused = pausedTotalMs
+        if (RideStore.paused && pausedStartMs > 0) paused += now - pausedStartMs
+        return (now - startRealtimeMs - paused).coerceAtLeast(0)
+    }
+
     private fun updateAvgSpeed() {
-        val elapsed = (SystemClock.elapsedRealtime() - startRealtimeMs) / 1000.0
+        val elapsed = activeElapsedMs() / 1000.0
         if (elapsed > 2.0 && RideStore.coveredM > 0.0) {
             RideStore.avgSpeedKmh = RideStore.coveredM / elapsed * 3.6
         } else if (RideStore.mode == RideMode.GHOST) {
@@ -486,7 +503,7 @@ class NavigationService : Service() {
         val runnable = object : Runnable {
             override fun run() {
                 if (!running.get()) return
-                RideStore.elapsedSec = (SystemClock.elapsedRealtime() - startRealtimeMs) / 1000
+                RideStore.elapsedSec = activeElapsedMs() / 1000
                 RideStore.hr = hrProvider.currentHr()
                 updateAvgSpeed()
                 if (RideStore.radarLostAtMs != null && !radarLostAnnounced) {
@@ -805,7 +822,36 @@ class NavigationService : Service() {
         RideStore.resumeRouteName = t.name
     }
 
+    private fun pauseRide() {
+        if (!running.get() || RideStore.paused) return
+        RideStore.paused = true
+        pausedStartMs = SystemClock.elapsedRealtime()
+        RideStore.speedKmh = 0.0
+        RideStore.status = "Paused"
+        stopBeeps()
+        updateNotification("Paused\nTap Resume to continue")
+    }
+
+    private fun resumeRide() {
+        if (!running.get() || !RideStore.paused) return
+        val now = SystemClock.elapsedRealtime()
+        if (pausedStartMs > 0) pausedTotalMs += now - pausedStartMs
+        pausedStartMs = 0
+        RideStore.paused = false
+        RideStore.status = "Riding…"
+        updateNotification("Riding…")
+    }
+
     private fun stopRide(message: String) {
+        if (RideStore.mode == RideMode.GPS && RideStore.riddenM >= 50.0) {
+            RideHistory.save(
+                this,
+                RideStore.riddenPoints,
+                startWallMs,
+                RideStore.elapsedSec,
+                RideStore.riddenM,
+            )
+        }
         if (!arrived.get()) {
             saveLastRideState()
         } else {
@@ -830,6 +876,7 @@ class NavigationService : Service() {
         // TODO clearing RideStore should probably be refactored to it's own function to make this more readable. 
         RideStore.status = message
         RideStore.active = false
+        RideStore.paused = false
         RideStore.mode = RideMode.IDLE
         RideStore.lat = null
         RideStore.lon = null
@@ -923,8 +970,12 @@ class NavigationService : Service() {
             title = text
             body = ""
         }
+        val pauseLabel = if (RideStore.paused) "Resume" else "Pause"
+        val pauseIcon = if (RideStore.paused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_nav_notification)
+            .addAction(pauseIcon, pauseLabel, actionPending(if (RideStore.paused) ACTION_RESUME else ACTION_PAUSE, 2))
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", actionPending(ACTION_STOP, 3))
             .setContentTitle(title)
             .setContentText(body.ifEmpty { null })
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
@@ -934,6 +985,13 @@ class NavigationService : Service() {
             .setOnlyAlertOnce(true)
             .build()
     }
+
+    private fun actionPending(action: String, code: Int): PendingIntent =
+        PendingIntent.getService(
+            this, code,
+            Intent(this, NavigationService::class.java).setAction(action),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     private fun updateNotification(text: String) {
         try {
@@ -950,6 +1008,8 @@ class NavigationService : Service() {
         private const val ACTION_START_GPS = "com.crazycapy.randonneur.action.START_GPS"
         private const val ACTION_START_GHOST = "com.crazycapy.randonneur.action.START_GHOST"
         private const val ACTION_TOGGLE_REVERSE = "com.crazycapy.randonneur.action.TOGGLE_REVERSE"
+        private const val ACTION_PAUSE = "com.crazycapy.randonneur.action.PAUSE"
+        private const val ACTION_RESUME = "com.crazycapy.randonneur.action.RESUME"
         private const val ACTION_STOP = "com.crazycapy.randonneur.action.STOP"
         private const val CHANNEL_ID = "navigation"
         private const val NOTIF_ID = 1
@@ -963,6 +1023,12 @@ class NavigationService : Service() {
 
         fun toggleReverse(context: Context) =
             context.startService(Intent(context, NavigationService::class.java).setAction(ACTION_TOGGLE_REVERSE))
+
+        fun pause(context: Context) =
+            context.startService(Intent(context, NavigationService::class.java).setAction(ACTION_PAUSE))
+
+        fun resume(context: Context) =
+            context.startService(Intent(context, NavigationService::class.java).setAction(ACTION_RESUME))
 
         fun stop(context: Context) =
             context.startService(Intent(context, NavigationService::class.java).setAction(ACTION_STOP))

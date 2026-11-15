@@ -129,6 +129,10 @@ Device test notes:
   ridden total (two dots show which). The main map is always north-up.
 - The path actually ridden is drawn as a blue line (`refreshRidden`), separate
   from the green route line, so off-route detours remain visible.
+- Ride history: GPS rides are saved on Stop to `files/rides/` (GPX + `index.txt`);
+  Routes → Rides shows distance/time/avg and can load one as a route. Pause
+  freezes fixes/stats, Resume continues; paused time is excluded from elapsed
+  time and average speed.
 - On-map controls: pinch to zoom (no zoom buttons); a bottom-centre `MapScaleBar`
   sized from MapLibre's `Projection.getMetersPerPixelAtLatitude`, and a
   top-right `MapCompass` shown only when the map is rotated (tap = snap north).

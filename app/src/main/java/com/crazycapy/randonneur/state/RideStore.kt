@@ -37,6 +37,8 @@ object RideStore {
     var status: String? by mutableStateOf(null)
 
     var active: Boolean by mutableStateOf(false)
+
+    var paused: Boolean by mutableStateOf(false)
     var mode: RideMode by mutableStateOf(RideMode.IDLE)
 
     // ---- Ride configuration ----
@@ -234,6 +236,7 @@ object RideStore {
 
     fun reset() {
         active = false
+        paused = false
         mode = RideMode.IDLE
         lat = null
         lon = null
