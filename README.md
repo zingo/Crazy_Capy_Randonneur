@@ -64,7 +64,7 @@ debug-build-only; release builds carry none of it.
   gentle left/right beeps cue the next turn, quickening as it nears (never
   faster than every 2 s). Separate volume sliders for beeps and voice.
 - **Your own routes** – import GPX, TCX, KML… by sharing a file to the app,
-  opening a downloaded file with Capy ("Open with"), or via the in-app picker.
+  opening a downloaded file with Crazy Capy Randonneur ("Open with"), or via the in-app picker.
   Routes are stored on-device in a one-tap library; ride any of them in reverse.
 - **RWGPS import** – paste a ridewithgps.com route URL/id or a user profile
   URL/id to import the route and its brevet controls (the dialog starts with a
@@ -89,7 +89,7 @@ debug-build-only; release builds carry none of it.
 - **Live rear-radar (optional)** – when the separate
   [android-bike-radar-overlay](https://github.com/partymola/android-bike-radar-overlay)
   app is installed and you have allowed Crazy Capy on its access screen, Crazy
-  Capy consumes its rear-radar stream and draws real overtaking traffic on the
+  Crazy Capy Randonneur consumes its rear-radar stream and draws real overtaking traffic on the
   map, alongside a radar battery chip, a tail-light toggle and a toggle that
   hides the overlay app's own on-screen radar while you are watching the map.
   Nothing is used when the overlay app is absent, nothing is read until you
