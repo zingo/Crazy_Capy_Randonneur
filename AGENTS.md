@@ -124,8 +124,11 @@ Device test notes:
 - Distance phrasing: use `Phrases.formatDistance`/`formatShort` (units `m`/`km`,
   `0` → `"0 m"`). Speed shown as e.g. `32.0 km/h` via `formatKmh`.
 - HUD is a 3×2 grid (Speed | distance covered | time / Average | distance
-  remaining | tap-to-cycle ETA mode) with a north-up `TurnPreview` beside it. The
-  main map is always north-up.
+  remaining | tap-to-cycle ETA mode) with a north-up `TurnPreview` beside it.
+  Tapping the covered cell switches between on-route distance and the actual
+  ridden total (two dots show which). The main map is always north-up.
+- The path actually ridden is drawn as a blue line (`refreshRidden`), separate
+  from the green route line, so off-route detours remain visible.
 - On-map controls: pinch to zoom (no zoom buttons); a bottom-centre `MapScaleBar`
   sized from MapLibre's `Projection.getMetersPerPixelAtLatitude`, and a
   top-right `MapCompass` shown only when the map is rotated (tap = snap north).

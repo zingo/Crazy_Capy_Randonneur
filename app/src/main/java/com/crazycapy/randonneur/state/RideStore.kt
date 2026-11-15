@@ -118,6 +118,15 @@ object RideStore {
     /** Distance already covered along the route, in metres. */
     var coveredM: Double by mutableStateOf(0.0)
 
+    /** Progress along the route, in metres (projected onto the track). */
+    var routeM: Double by mutableStateOf(0.0)
+
+    /** Distance actually ridden, integrated from fixes (off-route included). */
+    var riddenM: Double by mutableStateOf(0.0)
+
+    /** Decimated breadcrumb of the ridden path (lat, lon). */
+    var riddenPoints: List<Pair<Double, Double>> by mutableStateOf(emptyList())
+
     /** Total route length, in metres (convenience mirror of track.lengthMeters). */
     var totalM: Double by mutableStateOf(0.0)
 
@@ -229,6 +238,9 @@ object RideStore {
         bearing = null
         remainingM = null
         coveredM = 0.0
+        routeM = 0.0
+        riddenM = 0.0
+        riddenPoints = emptyList()
         totalM = 0.0
         speedKmh = 0.0
         avgSpeedKmh = 0.0

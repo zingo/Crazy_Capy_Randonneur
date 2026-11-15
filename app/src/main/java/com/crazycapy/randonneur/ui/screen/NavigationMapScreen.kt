@@ -95,6 +95,7 @@ import com.crazycapy.randonneur.ui.helpers.fitRoute
 import com.crazycapy.randonneur.ui.helpers.loadMapStyle
 import com.crazycapy.randonneur.ui.helpers.moveAndCenter
 import com.crazycapy.randonneur.ui.helpers.nearestWaypoint
+import com.crazycapy.randonneur.ui.helpers.refreshRidden
 import com.crazycapy.randonneur.ui.helpers.refreshRoute
 import com.crazycapy.randonneur.ui.helpers.tapToleranceMeters
 import com.crazycapy.randonneur.ui.helpers.updateIdleDot
@@ -205,6 +206,7 @@ internal fun NavigationMapScreen(
         val m = map ?: return@LaunchedEffect
         loadMapStyle(m, RideStore.darkMap) { style ->
             refreshRoute(m, track)
+            refreshRidden(m, RideStore.riddenPoints)
             if (RideStore.active) centerOnRider(m)
             else if (track != null) fitRoute(m, track)
             else if (idleLat != null && idleLon != null) {
@@ -224,6 +226,14 @@ internal fun NavigationMapScreen(
         refreshRoute(m, track)
         cpPopup = null
         if (track != null && !RideStore.active) fitRoute(m, track)
+    }
+
+    // Redraw the ridden breadcrumb (throttled: every 5 points, or when cleared).
+    val trace = RideStore.riddenPoints
+    LaunchedEffect(map, trace.isEmpty(), trace.size / 5, RideStore.mapVisible) {
+        val m = map ?: return@LaunchedEffect
+        if (!RideStore.mapVisible) return@LaunchedEffect
+        refreshRidden(m, trace)
     }
 
     // Tap a checkpoint marker to open its text popup.

@@ -88,6 +88,24 @@ internal fun brightenDarkRoads(style: Style) {
 }
 
 /** Replace the route polyline and waypoint markers on the map. */
+internal fun refreshRidden(map: MapLibreMap, points: List<Pair<Double, Double>>) {
+    runCatching {
+        val style = map.getStyle() ?: return
+        style.removeLayer("ridden-layer")
+        style.removeSource("ridden-source")
+        if (points.size < 2) return
+        val line = LineString.fromLngLats(points.map { Point.fromLngLat(it.second, it.first) })
+        style.addSource(GeoJsonSource("ridden-source", line))
+        style.addLayer(
+            LineLayer("ridden-layer", "ridden-source").withProperties(
+                PropertyFactory.lineColor(0xFF1E88E5.toInt()),
+                PropertyFactory.lineWidth(4f),
+                PropertyFactory.lineOpacity(0.9f),
+            )
+        )
+    }
+}
+
 internal fun refreshRoute(map: MapLibreMap, track: Track?) {
     val t = track ?: return
     runCatching {
