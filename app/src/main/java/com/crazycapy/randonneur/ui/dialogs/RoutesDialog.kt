@@ -4,6 +4,7 @@
  */
 package com.crazycapy.randonneur.ui.dialogs
 
+import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -200,7 +201,16 @@ private fun RwGpsImportDialog(
     onCancel: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    var url by remember { mutableStateOf(RideStore.rwgpsUrl) }
+    val clipboardUrl = remember {
+        runCatching {
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val text = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString().orEmpty()
+            Regex("https?://(?:www\\.)?ridewithgps\\.com/(?:users|routes)/\\d+").find(text)?.value
+        }.getOrNull()
+    }
+    val useClipboard = clipboardUrl != null &&
+        (RideStore.rwgpsUrl.isBlank() || RideStore.rwgpsUrl == RideStore.DEFAULT_RWGPS_URL)
+    var url by remember { mutableStateOf(if (useClipboard) clipboardUrl!! else RideStore.rwgpsUrl) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var routes by remember { mutableStateOf<List<RwGpsParser.RouteSummary>?>(null) }
@@ -283,6 +293,14 @@ private fun RwGpsImportDialog(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                     )
+                    if (useClipboard) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Using the ridewithgps link from your clipboard.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
                     if (busy) {
                         Text("Working…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)

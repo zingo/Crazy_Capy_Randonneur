@@ -63,12 +63,13 @@ debug-build-only; release builds carry none of it.
 - **Turn beeps, too** – not many navigators do this: alongside the voice,
   gentle left/right beeps cue the next turn, quickening as it nears (never
   faster than every 2 s). Separate volume sliders for beeps and voice.
-- **Your own routes** – import GPX, TCX, KML… by sharing a file to the app or
-  via the in-app picker. Routes are stored on-device in a one-tap library; ride
-  any of them in reverse.
+- **Your own routes** – import GPX, TCX, KML… by sharing a file to the app,
+  opening a downloaded file with Capy ("Open with"), or via the in-app picker.
+  Routes are stored on-device in a one-tap library; ride any of them in reverse.
 - **RWGPS import** – paste a ridewithgps.com route URL/id or a user profile
   URL/id to import the route and its brevet controls (the dialog starts with a
-  ready-to-use profile link and remembers the last URL you used).
+  ready-to-use profile link, remembers the last URL you used, and can pick up a
+  ridewithgps link you copied to the clipboard).
   Reads the route's public JSON (POIs become checkpoints), so no account or
   premium needed.
 - **Training HUD** – a compact top-left 3×2 grid with speed, distance covered,
