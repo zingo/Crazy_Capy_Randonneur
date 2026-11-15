@@ -72,8 +72,8 @@ debug-build-only; release builds carry none of it.
 - **Training HUD** – a compact top-left 3×2 grid with speed, distance covered,
   elapsed time, average speed, distance left (switches to distance-to-next
   checkpoint while riding, e.g. `12.4 km CP 3`) and a tap-to-cycle ETA /
-  time-left / total-time / ETA-CPx readout, beside a live preview of the route
-  ahead at the next turn.
+  time-left / total-time / ETA-CPx readout (dots under it show the selected
+  mode), beside a live preview of the route ahead at the next turn.
 - **Waypoint head-up** – POIs baked into your GPX are projected onto the route
   and announced as you approach. Named checkpoints are drawn on the map; tap one
   to read its description.
