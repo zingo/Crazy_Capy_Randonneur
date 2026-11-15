@@ -39,24 +39,31 @@ internal fun StartRideDialog(
     var radarSim by remember { mutableStateOf(RideStore.radarSimEnabled) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (mode == RideMode.GHOST) "Start ghost ride" else "Start navigation") },
+        title = { Text(when (mode) { RideMode.GHOST -> "Start ghost ride"; RideMode.FREE -> "Start free ride"; else -> "Start navigation" }) },
         text = {
             Column {
-                Text(
-                    if (reverse) "Riding the route in reverse" else "Riding the route as recorded",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Spacer(Modifier.height(8.dp))
-                Switch(
-                    checked = reverse,
-                    onCheckedChange = { reverse = it },
-                    modifier = Modifier.align(Alignment.Start),
-                )
-                Text(
-                    "Reverse direction",
-                    modifier = Modifier.align(Alignment.Start),
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                if (mode == RideMode.FREE) {
+                    Text(
+                        "Ride without a route. Speed, distance, the ridden track and a GPX file are recorded.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                } else {
+                    Text(
+                        if (reverse) "Riding the route in reverse" else "Riding the route as recorded",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Switch(
+                        checked = reverse,
+                        onCheckedChange = { reverse = it },
+                        modifier = Modifier.align(Alignment.Start),
+                    )
+                    Text(
+                        "Reverse direction",
+                        modifier = Modifier.align(Alignment.Start),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
                 if (mode == RideMode.GHOST) {
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -82,7 +89,7 @@ internal fun StartRideDialog(
                 RideStore.radarSimEnabled = radarSim
                 if (mode == RideMode.GHOST) RouteStore.saveSettings(context)
                 onStart(reverse)
-            }) { Text(if (mode == RideMode.GHOST) "Start ghost" else "Navigate") }
+            }) { Text(when (mode) { RideMode.GHOST -> "Start ghost"; RideMode.FREE -> "Start"; else -> "Navigate" }) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

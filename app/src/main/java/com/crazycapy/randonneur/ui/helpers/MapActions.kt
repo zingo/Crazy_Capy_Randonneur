@@ -117,11 +117,17 @@ internal fun refreshRidden(map: MapLibreMap, points: List<RidePoint>) {
 }
 
 internal fun refreshRoute(map: MapLibreMap, track: Track?) {
-    val t = track ?: return
     runCatching {
         val style = map.getStyle() ?: return
         style.removeLayer("route-layer")
         style.removeSource("route-source")
+        if (track == null) {
+            style.removeLayer("poi-label-layer")
+            style.removeLayer("poi-layer")
+            style.removeSource("poi-source")
+            return
+        }
+        val t = track
         val line = LineString.fromLngLats(t.points.map { Point.fromLngLat(it.lon, it.lat) })
         style.addSource(GeoJsonSource("route-source", line))
         style.addLayer(

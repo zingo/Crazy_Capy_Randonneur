@@ -80,6 +80,9 @@ debug-build-only; release builds carry none of it.
   mode), beside a live preview of the route ahead at the next turn. Tap the
   covered distance to switch between distance along the route and the actual
   distance ridden; the ridden path is drawn as a blue line on the map.
+- **Free ride** – start without a route: no green line or guidance, but speed,
+  actual distance, average/max, the blue breadcrumb and a GPX are recorded just
+  like a routed ride (the HUD swaps distance-left/ETA for max speed).
 - **Ride history & pause** – Pause/Stop buttons sit above the map controls.
   Pause freezes tracking; Stop saves the actual ridden track (off-route
   included) as a standard GPX 1.1 with time, elevation and heart rate (Garmin
