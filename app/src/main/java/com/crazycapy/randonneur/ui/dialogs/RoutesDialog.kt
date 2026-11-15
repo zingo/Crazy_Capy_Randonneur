@@ -272,7 +272,7 @@ private fun RwGpsImportDialog(
                     }
                 } else {
                     Text(
-                        "Paste a ridewithgps.com route URL (or its numeric id), or a user profile URL/id to pick from their public routes.",
+                        "Paste a ridewithgps.com route URL (or its numeric id), or a user profile URL/id to pick from their public routes. Tip: on ridewithgps.com open your profile, use Share → Copy link, and paste that link here to list your public routes.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Spacer(Modifier.height(8.dp))
