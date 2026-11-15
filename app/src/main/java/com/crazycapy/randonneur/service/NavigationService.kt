@@ -117,6 +117,7 @@ class NavigationService : Service() {
     private var pausedTotalMs = 0L
     private var pausedStartMs = 0L
     private var rideSavedForHistory = false
+    private var lastCheckpointMs = 0L
     private val actionPis = HashMap<Int, PendingIntent>()
     private var ticker: Runnable? = null
     private var sim: RouteSimulator? = null
@@ -209,6 +210,8 @@ class NavigationService : Service() {
         pausedTotalMs = 0L
         pausedStartMs = 0L
         rideSavedForHistory = false
+        lastCheckpointMs = SystemClock.elapsedRealtime()
+        RideHistory.clearCheckpoint(this)
         tickCounter = 0
 
         RideStore.active = true
@@ -480,6 +483,15 @@ class NavigationService : Service() {
         }
     }
 
+    private fun maybeCheckpointRide() {
+        if (RideStore.mode != RideMode.GPS || RideStore.paused || !RideStore.active) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastCheckpointMs < CHECKPOINT_MS) return
+        if (RideStore.riddenM < 20.0) return
+        lastCheckpointMs = now
+        RideHistory.checkpoint(this, RideStore.riddenPoints, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh)
+    }
+
     private fun activeElapsedMs(now: Long = SystemClock.elapsedRealtime()): Long {
         var paused = pausedTotalMs
         if (RideStore.paused && pausedStartMs > 0) paused += now - pausedStartMs
@@ -516,6 +528,7 @@ class NavigationService : Service() {
                 RideStore.elapsedSec = activeElapsedMs() / 1000
                 RideStore.hr = hrProvider.currentHr()
                 updateAvgSpeed()
+                maybeCheckpointRide()
                 if (RideStore.radarLostAtMs != null && !radarLostAnnounced) {
                     radarLostAnnounced = true
                     announceRadarLost()
@@ -838,6 +851,7 @@ class NavigationService : Service() {
         pausedStartMs = SystemClock.elapsedRealtime()
         RideStore.speedKmh = 0.0
         RideStore.status = "Paused"
+        RideHistory.checkpoint(this, RideStore.riddenPoints, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh)
         stopBeeps()
         updateNotification("Paused\nTap Resume to continue")
     }
@@ -1027,6 +1041,7 @@ class NavigationService : Service() {
     companion object {
         private const val TRACE_MIN_STEP_M = 2.0
         private const val TRACE_POINT_M = 20.0
+        private const val CHECKPOINT_MS = 300_000L
         private const val ACTION_START_GPS = "com.crazycapy.randonneur.action.START_GPS"
         private const val ACTION_START_GHOST = "com.crazycapy.randonneur.action.START_GHOST"
         private const val ACTION_TOGGLE_REVERSE = "com.crazycapy.randonneur.action.TOGGLE_REVERSE"

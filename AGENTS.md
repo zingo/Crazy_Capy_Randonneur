@@ -132,7 +132,9 @@ Device test notes:
 - Ride history: GPS rides are saved on Stop to `files/rides/` (GPX + `index.txt`);
   Routes → Rides shows distance/time/avg and can load one as a route. Pause
   freezes fixes/stats, Resume continues; paused time is excluded from elapsed
-  time and average speed.
+  time and average speed. A crash-safe checkpoint is written every 5 min
+  (`inprogress.meta` + GPX, atomic) and promoted into the history on the next
+  launch.
 - On-map controls: pinch to zoom (no zoom buttons); a bottom-centre `MapScaleBar`
   sized from MapLibre's `Projection.getMetersPerPixelAtLatitude`, and a
   top-right `MapCompass` shown only when the map is rotated (tap = snap north).
