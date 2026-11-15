@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.delay
@@ -141,8 +144,8 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                     modifier = Modifier.weight(1f),
                 )
                 Metric(
-                    value = "%.1f".format(RideStore.mapZoomLevel),
-                    unit = "zoom",
+                    value = timeFmt,
+                    unit = currentTime,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -168,6 +171,8 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                         val i = etaModes.indexOf(etaCurrent)
                         etaMode = etaModes[(i + 1) % etaModes.size]
                     },
+                    dots = etaModes.size,
+                    dotActive = etaModes.indexOf(etaCurrent),
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -197,9 +202,11 @@ private fun Metric(
     unit: String,
     valueColor: Color = if (RideStore.darkMap) Color.White else Color(0xFF1A1A1A),
     onClick: (() -> Unit)? = null,
+    dots: Int = 0,
+    dotActive: Int = 0,
 ) {
     Column(
-        (if (onClick != null) modifier.clickable(onClick = onClick) else modifier),
+        (if (onClick != null) modifier.clickable(onClickLabel = "Change", role = Role.Button, onClick = onClick) else modifier),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
@@ -209,8 +216,20 @@ private fun Metric(
             fontWeight = FontWeight.Bold,
             maxLines = 1,
         )
+        if (dots > 1) {
+            Row(
+                Modifier.padding(top = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                val activeColor = if (RideStore.darkMap) Color(0xFF7CC29A) else Color(0xFF2E5D46)
+                val dimColor = if (RideStore.darkMap) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.2f)
+                for (i in 0 until dots) {
+                    Box(Modifier.size(4.dp).background(if (i == dotActive) activeColor else dimColor, CircleShape))
+                }
+            }
+        }
         Text(
-            unit,
+            if (onClick != null && dots <= 1) "$unit \u21bb" else unit,
             color = if (RideStore.darkMap) Color(0xFFBABABA) else Color(0xFF666666),
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,

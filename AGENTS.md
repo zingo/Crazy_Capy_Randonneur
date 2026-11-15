@@ -123,7 +123,7 @@ Device test notes:
   Keep `NavigationService` for Android-touching glue only.
 - Distance phrasing: use `Phrases.formatDistance`/`formatShort` (units `m`/`km`,
   `0` → `"0 m"`). Speed shown as e.g. `32.0 km/h` via `formatKmh`.
-- HUD is a 3×2 grid (Speed | distance covered | map zoom / Average | distance
+- HUD is a 3×2 grid (Speed | distance covered | time / Average | distance
   remaining | tap-to-cycle ETA mode) with a north-up `TurnPreview` beside it. The
   main map is always north-up.
 - On-map controls: pinch to zoom (no zoom buttons); a bottom-centre `MapScaleBar`
