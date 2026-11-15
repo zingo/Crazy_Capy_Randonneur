@@ -12,6 +12,8 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.LaunchedEffect
+import androidx.core.view.WindowCompat
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import com.crazycapy.randonneur.gpx.TrackLoader
@@ -38,6 +40,12 @@ class MainActivity : ComponentActivity() {
         RadarClient.launchConsent = { consentLauncher.launch(RadarClient.requestAccessIntent()) }
 
         setContent {
+            LaunchedEffect(RideStore.darkMap) {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !RideStore.darkMap
+                    isAppearanceLightNavigationBars = !RideStore.darkMap
+                }
+            }
             MaterialTheme {
                 NavigationMapScreen(
                     onImportRequest = { picker.launch(arrayOf("*/*")) },
