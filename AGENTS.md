@@ -140,6 +140,9 @@ Device test notes:
   file is GPX 1.1 with time, elevation and Garmin `gpxtpx:hr` ("cycling").
   Both Rides and saved Routes can be exported via a FileProvider
   (`<applicationId>.files`) and renamed; rename keeps the storage id stable.
+- Radar targets are drawn whenever the radar is connected, not only during a
+  ride; when idle the heading is derived from successive GPS fixes so dots keep
+  their correct orientation (no ride/NavEngine needed).
 - On-map controls: pinch to zoom (no zoom buttons); a bottom-centre `MapScaleBar`
   sized from MapLibre's `Projection.getMetersPerPixelAtLatitude`, and a
   top-right `MapCompass` shown only when the map is rotated (tap = snap north).
