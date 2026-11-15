@@ -76,7 +76,9 @@ object RideStore {
     /** Ask to pre-cache a route's turn previews (and warm its tiles) after loading it. */
     var precacheEnabled: Boolean by mutableStateOf(true)
 
-    var rwgpsUrl: String by mutableStateOf("https://ridewithgps.com/users/10936047")
+    const val DEFAULT_RWGPS_URL = "https://ridewithgps.com/users/10936047"
+
+    var rwgpsUrl: String by mutableStateOf(DEFAULT_RWGPS_URL)
 
     // ---- Next-turn preview ----
 

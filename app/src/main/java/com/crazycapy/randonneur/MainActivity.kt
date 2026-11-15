@@ -69,9 +69,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleShareIntent(intent: Intent?) {
-        if (intent?.action == Intent.ACTION_SEND) {
-            val stream = intent.extras?.get(Intent.EXTRA_STREAM) as? Uri
-            if (stream != null) loadRoute(stream)
+        when (intent?.action) {
+            Intent.ACTION_SEND -> {
+                val stream = intent.extras?.get(Intent.EXTRA_STREAM) as? Uri
+                if (stream != null) loadRoute(stream)
+            }
+            Intent.ACTION_VIEW -> intent.data?.let { loadRoute(it) }
+            else -> {}
         }
     }
 
