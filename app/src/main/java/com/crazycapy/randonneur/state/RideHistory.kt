@@ -126,6 +126,27 @@ object RideHistory {
         TrackLoader.loadString(f.readText(), f.nameWithoutExtension)
     }.getOrNull()
 
+    fun fileFor(context: Context, id: String): File? = rideFile(context, id).takeIf { it.exists() }
+
+    fun renameRide(context: Context, id: String, newName: String) {
+        val name = newName.trim().ifBlank { return }
+        val rides = list(context)
+        val ride = rides.firstOrNull { it.id == id } ?: return
+        val updated = ride.copy(name = name)
+        val lines = indexFile(context).readLines().map { line ->
+            if (line.startsWith("$id\t")) updated.toLine() else line
+        }
+        atomicWrite(indexFile(context), lines.joinToString("\n"))
+        val f = rideFile(context, id)
+        if (f.exists()) {
+            val xml = f.readText().replaceFirst(
+                Regex("<name>.*?</name>"),
+                "<name>" + esc(name) + "</name>",
+            )
+            atomicWrite(f, xml)
+        }
+    }
+
     fun delete(context: Context, id: String) {
         runCatching { rideFile(context, id).delete() }
         runCatching {

@@ -6,6 +6,8 @@ package com.crazycapy.randonneur.ui.dialogs
 
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -43,7 +45,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import java.io.File
 import com.crazycapy.randonneur.cache.RouteCache
+import com.crazycapy.randonneur.ui.helpers.copyToUri
+import com.crazycapy.randonneur.ui.helpers.shareGpx
 import com.crazycapy.randonneur.gpx.RwGpsParser
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
@@ -74,6 +79,13 @@ internal fun RoutesDialog(
     val busyId = RouteCache.activeRouteId
     var showRwgps by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
+    var renameTargetId by remember { mutableStateOf<String?>(null) }
+    var exportTarget by remember { mutableStateOf<File?>(null) }
+    val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gpx+xml")) { uri ->
+        val f = exportTarget
+        if (uri != null && f != null) copyToUri(context, f, uri)
+        exportTarget = null
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Saved routes") },
@@ -161,6 +173,30 @@ internal fun RoutesDialog(
                                         },
                                     )
                                 }
+                                RouteStore.fileFor(context, route.id)?.let { file ->
+                                    DropdownMenuItem(
+                                        text = { Text("Export GPX") },
+                                        onClick = {
+                                            showMenu = false
+                                            shareGpx(context, file, route.name)
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Save GPX…") },
+                                        onClick = {
+                                            showMenu = false
+                                            exportTarget = file
+                                            saveLauncher.launch(route.name + ".gpx")
+                                        },
+                                    )
+                                }
+                                DropdownMenuItem(
+                                    text = { Text("Rename") },
+                                    onClick = {
+                                        showMenu = false
+                                        renameTargetId = route.id
+                                    },
+                                )
                                 DropdownMenuItem(
                                     text = { Text("Delete route", color = MaterialTheme.colorScheme.error) },
                                     onClick = {
@@ -187,6 +223,31 @@ internal fun RoutesDialog(
             TextButton(onClick = onDismiss) { Text("Close") }
         },
     )
+    renameTargetId?.let { id ->
+        val route = RouteStore.routes.firstOrNull { it.id == id }
+        if (route != null) {
+            var text by remember(id) { mutableStateOf(route.name) }
+            AlertDialog(
+                onDismissRequest = { renameTargetId = null },
+                title = { Text("Rename route") },
+                text = {
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        RouteStore.renameRoute(context, id, text)
+                        renameTargetId = null
+                    }) { Text("Save") }
+                },
+                dismissButton = { TextButton(onClick = { renameTargetId = null }) { Text("Cancel") } },
+            )
+        }
+    }
     if (showHistory) {
         RideHistoryDialog(
             context = context,

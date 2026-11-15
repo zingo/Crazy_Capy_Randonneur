@@ -115,6 +115,21 @@ object RouteStore {
         return sr
     }
 
+    fun fileFor(context: Context, id: String): File? =
+        File(dataDir(context), "$id.gpx").takeIf { it.exists() }
+
+    fun renameRoute(context: Context, id: String, newName: String) {
+        val name = newName.trim().ifBlank { return }
+        val existing = routes.firstOrNull { it.id == id } ?: return
+        routes = routes.map { if (it.id == id) it.copy(name = name) else it }
+        writeIndex(context)
+        val track = loadTrack(context, id) ?: return
+        val renamed = Track(name, track.points, track.waypoints)
+        val gpx = java.io.StringWriter()
+        runCatching { GpxWriter.write(renamed, gpx) }
+        runCatching { File(dataDir(context), "$id.gpx").writeText(gpx.toString()) }
+    }
+
     fun deleteRoute(context: Context, id: String) {
         runCatching { File(dataDir(context), "$id.gpx").delete() }
         routes = routes.filterNot { it.id == id }
