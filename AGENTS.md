@@ -135,6 +135,8 @@ Device test notes:
   time and average speed. Checkpoints every 5 min append new points to a log
   (plus a tiny atomic meta line) and are promoted on the next launch; the final
   file is GPX 1.1 with time, elevation and Garmin `gpxtpx:hr` ("cycling").
+  Both Rides and saved Routes can be exported via a FileProvider
+  (`<applicationId>.files`) and renamed; rename keeps the storage id stable.
 - On-map controls: pinch to zoom (no zoom buttons); a bottom-centre `MapScaleBar`
   sized from MapLibre's `Projection.getMetersPerPixelAtLatitude`, and a
   top-right `MapCompass` shown only when the map is rotated (tap = snap north).
