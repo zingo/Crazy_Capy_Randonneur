@@ -37,6 +37,8 @@ object RideStore {
     var status: String? by mutableStateOf(null)
 
     var active: Boolean by mutableStateOf(false)
+
+    var paused: Boolean by mutableStateOf(false)
     var mode: RideMode by mutableStateOf(RideMode.IDLE)
 
     // ---- Ride configuration ----
@@ -127,13 +129,15 @@ object RideStore {
     var riddenM: Double by mutableStateOf(0.0)
 
     /** Decimated breadcrumb of the ridden path (lat, lon). */
-    var riddenPoints: List<Pair<Double, Double>> by mutableStateOf(emptyList())
+    var riddenPoints: List<RidePoint> by mutableStateOf(emptyList())
 
     /** Total route length, in metres (convenience mirror of track.lengthMeters). */
     var totalM: Double by mutableStateOf(0.0)
 
     /** Instantaneous speed in km/h (0 while standing still). */
     var speedKmh: Double by mutableStateOf(0.0)
+
+    var maxSpeedKmh: Double by mutableStateOf(0.0)
 
     /** Rolling average speed since ride start, km/h. */
     var avgSpeedKmh: Double by mutableStateOf(0.0)
@@ -234,6 +238,7 @@ object RideStore {
 
     fun reset() {
         active = false
+        paused = false
         mode = RideMode.IDLE
         lat = null
         lon = null
@@ -245,6 +250,7 @@ object RideStore {
         riddenPoints = emptyList()
         totalM = 0.0
         speedKmh = 0.0
+        maxSpeedKmh = 0.0
         avgSpeedKmh = 0.0
         elapsedSec = 0L
         hr = null

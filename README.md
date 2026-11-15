@@ -64,8 +64,9 @@ debug-build-only; release builds carry none of it.
   gentle left/right beeps cue the next turn, quickening as it nears (never
   faster than every 2 s). Separate volume sliders for beeps and voice.
 - **Your own routes** – import GPX, TCX, KML… by sharing a file to the app,
-  opening a downloaded file with Crazy Capy Randonneur ("Open with"), or via the in-app picker.
-  Routes are stored on-device in a one-tap library; ride any of them in reverse.
+  opening a downloaded file with Crazy Capy Randonneur ("Open with"), or via the
+  in-app picker. Routes are stored on-device in a one-tap library; ride any of
+  them in reverse. Each route can be exported (share or save as GPX) or renamed.
 - **RWGPS import** – paste a ridewithgps.com route URL/id or a user profile
   URL/id to import the route and its brevet controls (the dialog starts with a
   ready-to-use profile link, remembers the last URL you used, and can pick up a
@@ -79,6 +80,14 @@ debug-build-only; release builds carry none of it.
   mode), beside a live preview of the route ahead at the next turn. Tap the
   covered distance to switch between distance along the route and the actual
   distance ridden; the ridden path is drawn as a blue line on the map.
+- **Ride history & pause** – Pause/Stop buttons sit above the map controls.
+  Pause freezes tracking; Stop saves the actual ridden track (off-route
+  included) as a standard GPX 1.1 with time, elevation and heart rate (Garmin
+  TrackPointExtension), so it imports into Garmin/Strava/Coros. Progress is
+  appended every 5 minutes (no full rewrite), so an interrupted ride is recovered
+  on the next launch. Routes → Rides lists distance, duration, average and max
+  speed, and each ride can be exported/saved as GPX, renamed, or loaded back as
+  a route (useful if you found a better way than the original).
 - **Waypoint head-up** – POIs baked into your GPX are projected onto the route
   and announced as you approach. Named checkpoints are drawn on the map; tap one
   to read its description.

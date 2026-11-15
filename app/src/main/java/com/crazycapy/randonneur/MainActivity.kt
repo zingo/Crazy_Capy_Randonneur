@@ -16,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import com.crazycapy.randonneur.gpx.TrackLoader
 import com.crazycapy.randonneur.radar.RadarClient
+import com.crazycapy.randonneur.state.RideHistory
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.ui.screen.NavigationMapScreen
@@ -29,6 +30,10 @@ class MainActivity : ComponentActivity() {
         RouteStore.init(appContext)
         RouteStore.loadSettings(appContext)
         loadResumeState(appContext)
+        if (!RideStore.active) {
+            val recovered = RideHistory.recoverInProgress(appContext)
+            if (recovered != null) RideStore.status = "Recovered unfinished ride: ${recovered.name}"
+        }
         handleShareIntent(intent)
         RadarClient.launchConsent = { consentLauncher.launch(RadarClient.requestAccessIntent()) }
 
