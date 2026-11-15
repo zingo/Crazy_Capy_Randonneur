@@ -202,6 +202,9 @@ class NavigationService : Service() {
         RideStore.mode = mode
         RideStore.remainingM = track.lengthMeters
         RideStore.coveredM = 0.0
+        RideStore.riddenM = 0.0
+        RideStore.routeM = 0.0
+        RideStore.riddenPoints = emptyList()
         RideStore.totalM = track.lengthMeters
         RideStore.speedKmh = 0.0
         RideStore.bearing = null
@@ -378,6 +381,19 @@ class NavigationService : Service() {
 
         val moved = lastFixAtMs?.let { Geo.distanceMeters(lastFixLat, lastFixLon, lat, lon) } ?: 0.0
 
+        if (RideStore.active) {
+            val pts = RideStore.riddenPoints
+            if (pts.isEmpty()) {
+                RideStore.riddenPoints = listOf(lat to lon)
+            } else if (lastFixAtMs != null && moved >= TRACE_MIN_STEP_M) {
+                RideStore.riddenM += moved
+                val last = pts.last()
+                if (Geo.distanceMeters(last.first, last.second, lat, lon) >= TRACE_POINT_M) {
+                    RideStore.riddenPoints = pts + (lat to lon)
+                }
+            }
+        }
+
         if (RideStore.mode == RideMode.GHOST) {
             // Ghost ride: speed is the simulated cruise speed (may change live).
             RideStore.speedKmh = RideStore.ghostSpeedKmh
@@ -404,6 +420,7 @@ class NavigationService : Service() {
         lastFixLon = lon
 
         nav.update(lat, lon, RideStore.speedKmh)
+        RideStore.routeM = nav.distanceAlongM
         RideStore.lat = lat
         RideStore.lon = lon
         if (RideStore.mode == RideMode.GHOST) {
@@ -928,6 +945,8 @@ class NavigationService : Service() {
     }
 
     companion object {
+        private const val TRACE_MIN_STEP_M = 2.0
+        private const val TRACE_POINT_M = 20.0
         private const val ACTION_START_GPS = "com.crazycapy.randonneur.action.START_GPS"
         private const val ACTION_START_GHOST = "com.crazycapy.randonneur.action.START_GHOST"
         private const val ACTION_TOGGLE_REVERSE = "com.crazycapy.randonneur.action.TOGGLE_REVERSE"

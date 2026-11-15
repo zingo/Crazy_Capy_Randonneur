@@ -69,12 +69,16 @@ fun TrainingHud(modifier: Modifier = Modifier) {
 
     val speed = RideStore.speedKmh
     val avg = RideStore.avgSpeedKmh
-    val covered = RideStore.coveredM
+    val covered = RideStore.routeM
     val total = RideStore.totalM.takeIf { it > 0 } ?: RideStore.track?.lengthMeters ?: 0.0
     val leftM = RideStore.remainingM ?: total
     val previewM = RideStore.nextTurnM
 
+    var coveredMode by remember { mutableStateOf(CoveredMode.ROUTE) }
     val coveredFmt = Phrases.formatShort(covered)
+    val riddenFmt = Phrases.formatShort(RideStore.riddenM)
+    val covFmt = if (coveredMode == CoveredMode.RIDE) riddenFmt else coveredFmt
+    val covUnit = covFmt.substringAfter(" ") + if (coveredMode == CoveredMode.RIDE) " ridden" else " route"
     val cpM = RideStore.nextPoiM
     val cpIndex = RideStore.nextPoiIndex
     val leftValue: String
@@ -139,8 +143,13 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                     modifier = Modifier.weight(1f),
                 )
                 Metric(
-                    value = coveredFmt.substringBefore(" "),
-                    unit = coveredFmt.substringAfter(" "),
+                    value = covFmt.substringBefore(" "),
+                    unit = covUnit,
+                    onClick = {
+                        coveredMode = if (coveredMode == CoveredMode.ROUTE) CoveredMode.RIDE else CoveredMode.ROUTE
+                    },
+                    dots = 2,
+                    dotActive = coveredMode.ordinal,
                     modifier = Modifier.weight(1f),
                 )
                 Metric(
@@ -194,6 +203,8 @@ fun TrainingHud(modifier: Modifier = Modifier) {
         }
     }
 }
+
+private enum class CoveredMode { ROUTE, RIDE }
 
 @Composable
 private fun Metric(
