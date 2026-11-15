@@ -22,6 +22,7 @@ object RideHistory {
         val durationSec: Long,
         val distanceM: Double,
         val avgKmh: Double,
+        val maxKmh: Double = 0.0,
     )
 
     private fun dir(context: Context): File = File(context.filesDir, "rides").apply { mkdirs() }
@@ -39,6 +40,7 @@ object RideHistory {
                 p[3].toLongOrNull() ?: return@mapNotNull null,
                 p[4].toDoubleOrNull() ?: return@mapNotNull null,
                 p[5].toDoubleOrNull() ?: return@mapNotNull null,
+                p.getOrNull(6)?.toDoubleOrNull() ?: 0.0,
             )
         }.sortedByDescending { it.startedAtMs }
     }.getOrDefault(emptyList())
@@ -49,6 +51,7 @@ object RideHistory {
         startedAtMs: Long,
         durationSec: Long,
         distanceM: Double,
+        maxKmh: Double = 0.0,
     ): SavedRide? {
         if (points.size < 2 || distanceM < 20.0) return null
         val id = "ride-$startedAtMs"
@@ -65,7 +68,7 @@ object RideHistory {
         }
         runCatching { File(dir(context), "$id.gpx").writeText(gpx) }.getOrElse { return null }
         val avg = if (durationSec > 0) distanceM / durationSec * 3.6 else 0.0
-        val ride = SavedRide(id, name, startedAtMs, durationSec, distanceM, avg)
+        val ride = SavedRide(id, name, startedAtMs, durationSec, distanceM, avg, maxKmh)
         runCatching {
             val old = indexFile(context).takeIf { it.exists() }?.readLines().orEmpty()
             indexFile(context).writeText((listOf(ride.toLine()) + old).joinToString("\n"))
@@ -88,5 +91,5 @@ object RideHistory {
     }
 
     private fun SavedRide.toLine() =
-        listOf(id, name, startedAtMs.toString(), durationSec.toString(), distanceM.toString(), avgKmh.toString()).joinToString("\t")
+        listOf(id, name, startedAtMs.toString(), durationSec.toString(), distanceM.toString(), avgKmh.toString(), maxKmh.toString()).joinToString("\t")
 }

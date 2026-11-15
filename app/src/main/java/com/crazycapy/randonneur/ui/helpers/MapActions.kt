@@ -91,18 +91,27 @@ internal fun brightenDarkRoads(style: Style) {
 internal fun refreshRidden(map: MapLibreMap, points: List<Pair<Double, Double>>) {
     runCatching {
         val style = map.getStyle() ?: return
-        style.removeLayer("ridden-layer")
-        style.removeSource("ridden-source")
-        if (points.size < 2) return
+        if (points.size < 2) {
+            style.removeLayer("ridden-layer")
+            style.removeSource("ridden-source")
+            return
+        }
         val line = LineString.fromLngLats(points.map { Point.fromLngLat(it.second, it.first) })
-        style.addSource(GeoJsonSource("ridden-source", line))
-        style.addLayer(
-            LineLayer("ridden-layer", "ridden-source").withProperties(
-                PropertyFactory.lineColor(0xFF1E88E5.toInt()),
-                PropertyFactory.lineWidth(4f),
-                PropertyFactory.lineOpacity(0.9f),
+        val source = style.getSourceAs<GeoJsonSource>("ridden-source")
+        if (source != null) {
+            source.setGeoJson(line)
+        } else {
+            style.addSource(GeoJsonSource("ridden-source", line))
+        }
+        if (style.getLayer("ridden-layer") == null) {
+            style.addLayer(
+                LineLayer("ridden-layer", "ridden-source").withProperties(
+                    PropertyFactory.lineColor(0xFF1E88E5.toInt()),
+                    PropertyFactory.lineWidth(4f),
+                    PropertyFactory.lineOpacity(0.9f),
+                )
             )
-        )
+        }
     }
 }
 

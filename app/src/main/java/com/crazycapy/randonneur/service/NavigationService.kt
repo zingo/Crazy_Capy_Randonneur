@@ -116,6 +116,8 @@ class NavigationService : Service() {
     private var startWallMs = 0L
     private var pausedTotalMs = 0L
     private var pausedStartMs = 0L
+    private var rideSavedForHistory = false
+    private val actionPis = HashMap<Int, PendingIntent>()
     private var ticker: Runnable? = null
     private var sim: RouteSimulator? = null
     private var radarSim: RadarSimulator? = null
@@ -153,7 +155,7 @@ class NavigationService : Service() {
 
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
-            feedFix(location.latitude, location.longitude)
+            feedFix(location.latitude, location.longitude, location.accuracy)
         }
         @Deprecated("Deprecated in Java")
         override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
@@ -206,6 +208,7 @@ class NavigationService : Service() {
         startWallMs = System.currentTimeMillis()
         pausedTotalMs = 0L
         pausedStartMs = 0L
+        rideSavedForHistory = false
         tickCounter = 0
 
         RideStore.active = true
@@ -218,6 +221,7 @@ class NavigationService : Service() {
         RideStore.riddenPoints = emptyList()
         RideStore.totalM = track.lengthMeters
         RideStore.speedKmh = 0.0
+        RideStore.maxSpeedKmh = 0.0
         RideStore.bearing = null
         RideStore.avgSpeedKmh = 0.0
         RideStore.elapsedSec = 0L
@@ -385,18 +389,22 @@ class NavigationService : Service() {
      * fixes arrive on the simulator thread (Compose snapshot state is
      * cross-thread safe and TTS accepts any caller thread).
      */
-    private fun feedFix(lat: Double, lon: Double) {
+    private fun feedFix(lat: Double, lon: Double, accuracyM: Float? = null) {
         if (!running.get() || RideStore.paused) return
         val nav = engine ?: return
         val nowMs = SystemClock.elapsedRealtime()
 
         val moved = lastFixAtMs?.let { Geo.distanceMeters(lastFixLat, lastFixLon, lat, lon) } ?: 0.0
+        val dtSec = lastFixAtMs?.let { (nowMs - it) / 1000.0 } ?: 0.0
+        var plausible = moved >= TRACE_MIN_STEP_M && dtSec in 0.5..60.0
+        if (plausible && moved / dtSec * 3.6 > 120.0) plausible = false
+        if (accuracyM != null && accuracyM > 30f) plausible = false
 
         if (RideStore.active) {
             val pts = RideStore.riddenPoints
             if (pts.isEmpty()) {
-                RideStore.riddenPoints = listOf(lat to lon)
-            } else if (lastFixAtMs != null && moved >= TRACE_MIN_STEP_M) {
+                if (accuracyM == null || accuracyM <= 30f) RideStore.riddenPoints = listOf(lat to lon)
+            } else if (plausible) {
                 RideStore.riddenM += moved
                 val last = pts.last()
                 if (Geo.distanceMeters(last.first, last.second, lat, lon) >= TRACE_POINT_M) {
@@ -408,6 +416,7 @@ class NavigationService : Service() {
         if (RideStore.mode == RideMode.GHOST) {
             // Ghost ride: speed is the simulated cruise speed (may change live).
             RideStore.speedKmh = RideStore.ghostSpeedKmh
+            RideStore.maxSpeedKmh = maxOf(RideStore.maxSpeedKmh, RideStore.ghostSpeedKmh)
         } else {
             val lastAt = lastFixAtMs
             if (lastAt != null && moved > 0.5) {
@@ -416,6 +425,7 @@ class NavigationService : Service() {
                     val s = moved / dt * 3.6
                     if (s < 120.0) {
                         RideStore.speedKmh = s
+                        RideStore.maxSpeedKmh = maxOf(RideStore.maxSpeedKmh, s)
                         liveCoveredM += moved
                     }
                 }
@@ -478,8 +488,8 @@ class NavigationService : Service() {
 
     private fun updateAvgSpeed() {
         val elapsed = activeElapsedMs() / 1000.0
-        if (elapsed > 2.0 && RideStore.coveredM > 0.0) {
-            RideStore.avgSpeedKmh = RideStore.coveredM / elapsed * 3.6
+        if (elapsed > 2.0 && RideStore.riddenM > 0.0) {
+            RideStore.avgSpeedKmh = RideStore.riddenM / elapsed * 3.6
         } else if (RideStore.mode == RideMode.GHOST) {
             RideStore.avgSpeedKmh = RideStore.ghostSpeedKmh
         }
@@ -838,6 +848,7 @@ class NavigationService : Service() {
         if (pausedStartMs > 0) pausedTotalMs += now - pausedStartMs
         pausedStartMs = 0
         RideStore.paused = false
+        lastFixAtMs = null
         RideStore.status = "Riding…"
         updateNotification("Riding…")
     }
@@ -850,8 +861,10 @@ class NavigationService : Service() {
                 startWallMs,
                 RideStore.elapsedSec,
                 RideStore.riddenM,
+                RideStore.maxSpeedKmh,
             )
         }
+        rideSavedForHistory = true
         if (!arrived.get()) {
             saveLastRideState()
         } else {
@@ -934,6 +947,10 @@ class NavigationService : Service() {
     }
 
     override fun onDestroy() {
+        if (!rideSavedForHistory && RideStore.mode == RideMode.GPS && RideStore.riddenM >= 50.0) {
+            RideHistory.save(this, RideStore.riddenPoints, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh)
+            rideSavedForHistory = true
+        }
         running.set(false)
         stopTicker()
         turnActive = false
@@ -974,7 +991,10 @@ class NavigationService : Service() {
         val pauseIcon = if (RideStore.paused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_nav_notification)
-            .addAction(pauseIcon, pauseLabel, actionPending(if (RideStore.paused) ACTION_RESUME else ACTION_PAUSE, 2))
+            .addAction(
+                pauseIcon, pauseLabel,
+                actionPending(if (RideStore.paused) ACTION_RESUME else ACTION_PAUSE, if (RideStore.paused) 4 else 2),
+            )
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", actionPending(ACTION_STOP, 3))
             .setContentTitle(title)
             .setContentText(body.ifEmpty { null })
@@ -987,11 +1007,13 @@ class NavigationService : Service() {
     }
 
     private fun actionPending(action: String, code: Int): PendingIntent =
-        PendingIntent.getService(
-            this, code,
-            Intent(this, NavigationService::class.java).setAction(action),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        actionPis.getOrPut(code) {
+            PendingIntent.getService(
+                this, code,
+                Intent(this, NavigationService::class.java).setAction(action),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
 
     private fun updateNotification(text: String) {
         try {

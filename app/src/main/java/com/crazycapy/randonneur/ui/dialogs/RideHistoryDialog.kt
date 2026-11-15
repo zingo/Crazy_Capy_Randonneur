@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.state.RideHistory
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
@@ -53,15 +54,16 @@ internal fun RideHistoryDialog(
                             Column(Modifier.weight(1f)) {
                                 Text(ride.name, style = MaterialTheme.typography.bodyMedium)
                                 Text(
-                                    "${Phrases.formatDistance(ride.distanceM)} · ${formatDuration(ride.durationSec)} · ${"%.1f".format(ride.avgKmh)} km/h",
+                                    "${Phrases.formatDistance(ride.distanceM)} · ${formatDuration(ride.durationSec)} · ${"%.1f".format(ride.avgKmh)} km/h avg · ${"%.1f".format(ride.maxKmh)} max",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
                             TextButton(onClick = {
                                 val track = RideHistory.loadTrack(context, ride.id) ?: return@TextButton
-                                RideStore.track = track
-                                RideStore.status = "Route loaded: ${track.name}"
-                                RouteStore.saveTrack(context, track)
+                                val named = Track(ride.name, track.points, track.waypoints)
+                                RideStore.track = named
+                                RideStore.status = "Route loaded: ${named.name}"
+                                RouteStore.saveTrack(context, named)
                                 onDone()
                             }) { Text("Use") }
                             TextButton(onClick = {

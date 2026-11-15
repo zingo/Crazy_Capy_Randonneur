@@ -137,6 +137,8 @@ object RideStore {
     /** Instantaneous speed in km/h (0 while standing still). */
     var speedKmh: Double by mutableStateOf(0.0)
 
+    var maxSpeedKmh: Double by mutableStateOf(0.0)
+
     /** Rolling average speed since ride start, km/h. */
     var avgSpeedKmh: Double by mutableStateOf(0.0)
 
@@ -248,6 +250,7 @@ object RideStore {
         riddenPoints = emptyList()
         totalM = 0.0
         speedKmh = 0.0
+        maxSpeedKmh = 0.0
         avgSpeedKmh = 0.0
         elapsedSec = 0L
         hr = null

@@ -81,7 +81,7 @@ debug-build-only; release builds carry none of it.
   distance ridden; the ridden path is drawn as a blue line on the map.
 - **Ride history & pause** – Pause/Stop buttons sit above the map controls.
   Pause freezes tracking; Stop saves the actual ridden track (off-route
-  included). Routes → Rides lists distance, duration and average speed, and can
+  included). Routes → Rides lists distance, duration, average and max speed, and can
   load a saved ride back as a route.
 - **Waypoint head-up** – POIs baked into your GPX are projected onto the route
   and announced as you approach. Named checkpoints are drawn on the map; tap one
