@@ -27,6 +27,7 @@ import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import com.crazycapy.randonneur.nav.Geo
 import com.crazycapy.randonneur.state.RideMode
 import com.crazycapy.randonneur.state.RideStore
 import es.jjrh.bikeradar.ipc.IRadarListener
@@ -416,9 +417,16 @@ object RadarClient {
      *  projected even when not navigating. [bearing] is the course in degrees
      *  or null when unknown; passing null keeps the previous heading. */
     fun updateRiderPosition(lat: Double, lon: Double, bearing: Double?) {
+        var course = bearing
+        val prevLat = lastLat
+        val prevLon = lastLon
+        if (course == null && prevLat != null && prevLon != null) {
+            val moved = Geo.distanceMeters(prevLat, prevLon, lat, lon)
+            if (moved >= 2.0) course = Geo.bearingDegrees(prevLat, prevLon, lat, lon)
+        }
         lastLat = lat
         lastLon = lon
-        if (bearing != null) lastBearing = bearing
+        if (course != null) lastBearing = course
     }
 
     /** Ghost simulator pushes already-projected targets through the same

@@ -103,6 +103,8 @@ debug-build-only; release builds carry none of it.
   Crazy Capy Randonneur consumes its rear-radar stream and draws real overtaking traffic on the
   map, alongside a radar battery chip, a tail-light toggle and a toggle that
   hides the overlay app's own on-screen radar while you are watching the map.
+  Targets show whenever the radar is connected — no ride or route needed; the
+  heading is taken from your movement so the dots stay correctly oriented.
   Nothing is used when the overlay app is absent, nothing is read until you
   allow it, and the whole feature has an off switch in Settings. If the radar
   stream drops out mid-ride, the last targets fade out with a red blinking ring
