@@ -18,6 +18,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -54,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -490,6 +495,23 @@ internal fun NavigationMapScreen(
     ) { insets ->
         Box(Modifier.fillMaxSize().padding(bottom = insets.calculateBottomPadding())) {
             AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+            val statusTopDp = with(androidx.compose.ui.platform.LocalDensity.current) {
+                WindowInsets.statusBars.getTop(this).toDp()
+            }
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(statusTopDp + 16.dp)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                (if (RideStore.darkMap) Color.Black else Color.White).copy(alpha = 0.35f),
+                                (if (RideStore.darkMap) Color.Black else Color.White).copy(alpha = 0f),
+                            )
+                        )
+                    )
+            )
             Column(Modifier.align(Alignment.TopStart).statusBarsPadding().padding(top = 8.dp, start = 8.dp)) {
                 TrainingHud()
                 RadarStatusBar(Modifier.padding(top = 6.dp))
