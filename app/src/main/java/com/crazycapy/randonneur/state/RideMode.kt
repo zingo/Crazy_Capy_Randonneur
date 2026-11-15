@@ -16,4 +16,4 @@ package com.crazycapy.randonneur.state
  * │    IDLE → (startGps / startGhost) → GPS / GHOST → (stop) → IDLE        │
  * └─────────────────────────────────────────────────────────────────────────┘
  */
-enum class RideMode { IDLE, GPS, GHOST }
+enum class RideMode { IDLE, GPS, GHOST, FREE }

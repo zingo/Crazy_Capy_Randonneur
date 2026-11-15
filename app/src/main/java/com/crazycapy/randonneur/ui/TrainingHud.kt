@@ -65,11 +65,12 @@ fun TrainingHud(modifier: Modifier = Modifier) {
     // Keep showing the box after the ride ends so the finished stats remain
     // visible, and once a route is loaded (even before starting); suppress it
     // on a fresh launch where there is nothing to show.
-    if (!RideStore.active && RideStore.track == null && RideStore.coveredM == 0.0 && RideStore.elapsedSec == 0L) return
+    if (!RideStore.active && RideStore.track == null && RideStore.coveredM == 0.0 && RideStore.riddenM == 0.0 && RideStore.elapsedSec == 0L) return
 
     val speed = RideStore.speedKmh
     val avg = RideStore.avgSpeedKmh
-    val covered = RideStore.routeM
+    val isFreeRide = RideStore.track == null
+    val covered = if (isFreeRide) RideStore.riddenM else RideStore.routeM
     val total = RideStore.totalM.takeIf { it > 0 } ?: RideStore.track?.lengthMeters ?: 0.0
     val leftM = RideStore.remainingM ?: total
     val previewM = RideStore.nextTurnM
@@ -77,8 +78,8 @@ fun TrainingHud(modifier: Modifier = Modifier) {
     var coveredMode by remember { mutableStateOf(CoveredMode.ROUTE) }
     val coveredFmt = Phrases.formatShort(covered)
     val riddenFmt = Phrases.formatShort(RideStore.riddenM)
-    val covFmt = if (coveredMode == CoveredMode.RIDE) riddenFmt else coveredFmt
-    val covUnit = covFmt.substringAfter(" ") + if (coveredMode == CoveredMode.RIDE) " ridden" else " route"
+    val covFmt = if (isFreeRide || coveredMode == CoveredMode.RIDE) riddenFmt else coveredFmt
+    val covUnit = covFmt.substringAfter(" ") + if (isFreeRide || coveredMode == CoveredMode.RIDE) " ridden" else " route"
     val cpM = RideStore.nextPoiM
     val cpIndex = RideStore.nextPoiIndex
     val leftValue: String
@@ -145,10 +146,10 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                 Metric(
                     value = covFmt.substringBefore(" "),
                     unit = covUnit,
-                    onClick = {
-                        coveredMode = if (coveredMode == CoveredMode.ROUTE) CoveredMode.RIDE else CoveredMode.ROUTE
+                    onClick = if (isFreeRide) null else {
+                        { coveredMode = if (coveredMode == CoveredMode.ROUTE) CoveredMode.RIDE else CoveredMode.ROUTE }
                     },
-                    dots = 2,
+                    dots = if (isFreeRide) 0 else 2,
                     dotActive = coveredMode.ordinal,
                     modifier = Modifier.weight(1f),
                 )
@@ -168,22 +169,30 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                     unit = "km/h",
                     modifier = Modifier.weight(1f),
                 )
-                Metric(
-                    value = leftValue,
-                    unit = leftUnit,
-                    modifier = Modifier.weight(1f),
-                )
-                Metric(
-                    value = etaDisplay,
-                    unit = etaUnit,
-                    onClick = {
-                        val i = etaModes.indexOf(etaCurrent)
-                        etaMode = etaModes[(i + 1) % etaModes.size]
-                    },
-                    dots = etaModes.size,
-                    dotActive = etaModes.indexOf(etaCurrent),
-                    modifier = Modifier.weight(1f),
-                )
+                if (isFreeRide) {
+                    Metric(
+                        value = if (RideStore.maxSpeedKmh > 0) formatKmh(RideStore.maxSpeedKmh) else "--",
+                        unit = "km/h max",
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    Metric(
+                        value = leftValue,
+                        unit = leftUnit,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Metric(
+                        value = etaDisplay,
+                        unit = etaUnit,
+                        onClick = {
+                            val i = etaModes.indexOf(etaCurrent)
+                            etaMode = etaModes[(i + 1) % etaModes.size]
+                        },
+                        dots = etaModes.size,
+                        dotActive = etaModes.indexOf(etaCurrent),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
 

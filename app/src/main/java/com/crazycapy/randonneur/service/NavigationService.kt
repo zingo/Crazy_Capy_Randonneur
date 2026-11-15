@@ -182,6 +182,7 @@ class NavigationService : Service() {
         when (intent?.action) {
             ACTION_START_GPS -> startRide(RideMode.GPS)
             ACTION_START_GHOST -> startRide(RideMode.GHOST)
+            ACTION_START_FREE -> startRide(RideMode.FREE)
             ACTION_TOGGLE_REVERSE -> toggleReverse()
             ACTION_PAUSE -> pauseRide()
             ACTION_RESUME -> resumeRide()
@@ -194,10 +195,11 @@ class NavigationService : Service() {
 
     private fun startRide(mode: RideMode) {
         val track = RideStore.track
-        if (track == null) {
+        if (mode != RideMode.FREE && track == null) {
             stopRide("No route loaded")
             return
         }
+        if (mode == RideMode.FREE) RideStore.track = null
         if (running.get()) {
             stopRide("Ride restarted")
         }
@@ -220,12 +222,12 @@ class NavigationService : Service() {
         RideStore.active = true
         RideStore.paused = false
         RideStore.mode = mode
-        RideStore.remainingM = track.lengthMeters
+        RideStore.remainingM = track?.lengthMeters
         RideStore.coveredM = 0.0
         RideStore.riddenM = 0.0
         RideStore.routeM = 0.0
         RideStore.riddenPoints = emptyList()
-        RideStore.totalM = track.lengthMeters
+        RideStore.totalM = track?.lengthMeters ?: 0.0
         RideStore.speedKmh = 0.0
         RideStore.maxSpeedKmh = 0.0
         RideStore.bearing = null
@@ -248,30 +250,62 @@ class NavigationService : Service() {
         RideStore.radarTargets = emptyList()
         radarSim = null
 
-        startForeground(NOTIF_ID, buildNotification("Preparing ${track.name}…"))
+        startForeground(NOTIF_ID, buildNotification(if (mode == RideMode.FREE) "Preparing free ride…" else "Preparing ${track?.name ?: "route"}…"))
 
-        val nav = NavEngine(track)
+        val nav: NavEngine?
         val reverse = RideStore.reverse
-        if (reverse) nav.setReverse(true)
-        val resume = RideStore.resumeAlongM
-        if (resume != null && resume > 10.0 && resume < track.lengthMeters - 10.0) {
-            nav.seedAlong(resume)
-            RideStore.remainingM = nav.remainingM
+        var resume: Double? = null
+        if (track != null && mode != RideMode.FREE) {
+            nav = NavEngine(track)
+            if (reverse) nav.setReverse(true)
+            resume = RideStore.resumeAlongM
+            if (resume != null && resume > 10.0 && resume < track.lengthMeters - 10.0) {
+                nav.seedAlong(resume)
+                RideStore.remainingM = nav.remainingM
+            }
+            nav.addListener { event -> handleNavEvent(event) }
+            refreshPoiTracker()
+        } else {
+            nav = null
         }
-        nav.addListener { event -> handleNavEvent(event) }
         engine = nav
-        refreshPoiTracker()
 
         acquireWakeLock()
         startTicker()
 
         when (mode) {
             RideMode.GPS -> {
-                startGps(track, nav)
+                startGps(track!!, nav!!)
                 RadarClient.start(this)
             }
-            RideMode.GHOST -> startGhost(track, nav, reverse, resume)
+            RideMode.GHOST -> startGhost(track!!, nav!!, reverse, resume)
+            RideMode.FREE -> {
+                startFreeGps()
+                RadarClient.start(this)
+            }
             RideMode.IDLE -> Unit
+        }
+    }
+
+    private fun startFreeGps() {
+        RideStore.status = "Free ride"
+        updateNotification("Free ride\nRecording GPS track")
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            stopRide("Location needed to record a free ride")
+            return
+        }
+        val lm = getSystemService(LOCATION_SERVICE) as LocationManager
+        locationManager = lm
+        runCatching {
+            lm.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                GPS_INTERVAL_MS,
+                0f,
+                locationListener,
+                Looper.getMainLooper(),
+            )
         }
     }
 
@@ -397,7 +431,8 @@ class NavigationService : Service() {
      */
     private fun feedFix(lat: Double, lon: Double, accuracyM: Float? = null, eleM: Double? = null) {
         if (!running.get() || RideStore.paused) return
-        val nav = engine ?: return
+        val nav = engine
+        if (nav == null && RideStore.mode != RideMode.FREE) return
         val nowMs = SystemClock.elapsedRealtime()
 
         val moved = lastFixAtMs?.let { Geo.distanceMeters(lastFixLat, lastFixLon, lat, lon) } ?: 0.0
@@ -448,18 +483,20 @@ class NavigationService : Service() {
         lastFixLat = lat
         lastFixLon = lon
 
-        nav.update(lat, lon, RideStore.speedKmh)
-        RideStore.routeM = nav.distanceAlongM
+        nav?.update(lat, lon, RideStore.speedKmh)
+        RideStore.routeM = nav?.distanceAlongM ?: 0.0
         RideStore.lat = lat
         RideStore.lon = lon
-        if (RideStore.mode == RideMode.GHOST) {
-            RideStore.coveredM = nav.distanceAlongM
+        if (RideStore.mode == RideMode.FREE) {
+            RideStore.coveredM = RideStore.riddenM
+        } else if (RideStore.mode == RideMode.GHOST) {
+            RideStore.coveredM = RideStore.routeM
         } else {
-            RideStore.coveredM = max(liveCoveredM, nav.distanceAlongM)
+            RideStore.coveredM = max(liveCoveredM, RideStore.routeM)
         }
         updateAvgSpeed()
-        updatePoi()
-        updateRadarSim(moved)
+        if (nav != null) updatePoi()
+        if (RideStore.track != null) updateRadarSim(moved)
     }
 
     /**
@@ -500,7 +537,7 @@ class NavigationService : Service() {
     }
 
     private fun maybeCheckpointRide() {
-        if (RideStore.mode != RideMode.GPS || RideStore.paused || !RideStore.active) return
+        if ((RideStore.mode != RideMode.GPS && RideStore.mode != RideMode.FREE) || RideStore.paused || !RideStore.active) return
         val now = SystemClock.elapsedRealtime()
         if (now - lastCheckpointMs < CHECKPOINT_MS) return
         if (RideStore.riddenM < 20.0) return
@@ -509,7 +546,7 @@ class NavigationService : Service() {
     }
 
     private fun saveRideHistory() {
-        if (RideStore.mode == RideMode.GPS && RideStore.riddenM >= 50.0) {
+        if ((RideStore.mode == RideMode.GPS || RideStore.mode == RideMode.FREE) && RideStore.riddenM >= 50.0) {
             appendTracePoints()
             RideHistory.finalizeRide(this, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh)
         } else {
@@ -719,6 +756,9 @@ class NavigationService : Service() {
 
     /** Compact next + next-next turn guidance for the lock-screen notification. */
     private fun notifSummary(): String {
+        if (RideStore.mode == RideMode.FREE || RideStore.track == null) {
+            return "Free ride\n${Phrases.formatDistance(RideStore.riddenM)} · ${"%.1f".format(RideStore.speedKmh)} km/h"
+        }
         if (RideStore.offRouteActive) {
             return "Off route · ${Phrases.formatDistance(RideStore.offRouteM)}"
         }
@@ -977,7 +1017,7 @@ class NavigationService : Service() {
     }
 
     override fun onDestroy() {
-        if (!rideSavedForHistory && RideStore.mode == RideMode.GPS && RideStore.riddenM >= 50.0) {
+        if (!rideSavedForHistory && (RideStore.mode == RideMode.GPS || RideStore.mode == RideMode.FREE) && RideStore.riddenM >= 50.0) {
             saveRideHistory()
         }
         running.set(false)
@@ -1059,6 +1099,7 @@ class NavigationService : Service() {
         private const val CHECKPOINT_MS = 300_000L
         private const val ACTION_START_GPS = "com.crazycapy.randonneur.action.START_GPS"
         private const val ACTION_START_GHOST = "com.crazycapy.randonneur.action.START_GHOST"
+        private const val ACTION_START_FREE = "com.crazycapy.randonneur.action.START_FREE"
         private const val ACTION_TOGGLE_REVERSE = "com.crazycapy.randonneur.action.TOGGLE_REVERSE"
         private const val ACTION_PAUSE = "com.crazycapy.randonneur.action.PAUSE"
         private const val ACTION_RESUME = "com.crazycapy.randonneur.action.RESUME"
@@ -1072,6 +1113,9 @@ class NavigationService : Service() {
 
         fun startGhost(context: Context) =
             context.startForegroundService(Intent(context, NavigationService::class.java).setAction(ACTION_START_GHOST))
+
+        fun startFree(context: Context) =
+            context.startForegroundService(Intent(context, NavigationService::class.java).setAction(ACTION_START_FREE))
 
         fun toggleReverse(context: Context) =
             context.startService(Intent(context, NavigationService::class.java).setAction(ACTION_TOGGLE_REVERSE))

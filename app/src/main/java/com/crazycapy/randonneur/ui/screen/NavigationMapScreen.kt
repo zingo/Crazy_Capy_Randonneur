@@ -394,6 +394,7 @@ internal fun NavigationMapScreen(
         if (granted) {
             when (pendingStart) {
                 RideMode.GHOST -> NavigationService.startGhost(context)
+                RideMode.FREE -> { NavigationService.startFree(context); map?.centerOnLastKnown(context) }
                 else -> { NavigationService.startGps(context); map?.centerOnLastKnown(context) }
             }
         } else status = "Location needed to start navigation"
@@ -474,8 +475,11 @@ internal fun NavigationMapScreen(
                         if (!RideStore.active) {
                             OutlinedButton(onClick = { showRoutes = true }, Modifier.weight(1f)) { Text("Routes") }
                             if (track != null) OutlinedButton(onClick = { pendingStart = RideMode.GPS }, Modifier.weight(1f)) { Text("Navigate") }
+                            OutlinedButton(onClick = { pendingStart = RideMode.FREE }, Modifier.weight(1f)) { Text("Free ride") }
                         } else {
-                            OutlinedButton(onClick = { NavigationService.toggleReverse(context) }, Modifier.weight(1f)) { Text(if (RideStore.reverse) "Original dir" else "Reverse dir") }
+                            if (RideStore.mode != RideMode.FREE) {
+                                OutlinedButton(onClick = { NavigationService.toggleReverse(context) }, Modifier.weight(1f)) { Text(if (RideStore.reverse) "Original dir" else "Reverse dir") }
+                            }
                             Button(onClick = { NavigationService.stop(context) }, Modifier.weight(1f)) { Text("Stop") }
                         }
                     }
@@ -535,7 +539,13 @@ internal fun NavigationMapScreen(
         StartRideDialog(mode = mode, onDismiss = { pendingStart = null }, onStart = { reverseOn ->
             RideStore.reverse = reverseOn; RideStore.resumeAlongM = null; RideStore.resumeElapsedSec = null; RideStore.resumeRouteName = null
             if (mode == RideMode.GHOST) RideStore.ghostTimeScale = 1.0
-            val start: () -> Unit = { if (mode == RideMode.GHOST) NavigationService.startGhost(context) else { NavigationService.startGps(context); map?.centerOnLastKnown(context) } }
+            val start: () -> Unit = {
+                when (mode) {
+                    RideMode.GHOST -> NavigationService.startGhost(context)
+                    RideMode.FREE -> { NavigationService.startFree(context); map?.centerOnLastKnown(context) }
+                    else -> { NavigationService.startGps(context); map?.centerOnLastKnown(context) }
+                }
+            }
             if (hasLocation) { start(); pendingStart = null } else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         })
     }
