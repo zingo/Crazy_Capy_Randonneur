@@ -14,6 +14,8 @@
             <intent-filter>
                 <action android:name="com.crazycapy.randonneur.debug.START_GHOST" />
                 <action android:name="com.crazycapy.randonneur.debug.START_GPS" />
+                <action android:name="com.crazycapy.randonneur.debug.PREFILL" />
+                <action android:name="com.crazycapy.randonneur.debug.BENCH" />
                 <action android:name="com.crazycapy.randonneur.debug.STOP" />
             </intent-filter>
         </receiver>

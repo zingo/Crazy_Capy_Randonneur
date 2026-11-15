@@ -160,8 +160,11 @@ object RouteCache {
      * background. Cheap to call repeatedly: misses or already-cached turns are
      * skipped. The job yields byte for byte to MapLibre's global tile cache so a
      * second route overlapping the same area warms a second time for free.
+     *
+     * [tilesOnly] warms the corridor tiles (+ overview) but skips the per-turn
+     * preview renders (debug benchmark variant). [onDone] runs when finished.
      */
-    fun preCache(context: Context, track: Track) {
+    fun preCache(context: Context, track: Track, tilesOnly: Boolean = false, onDone: (() -> Unit)? = null) {
         val routeId = RouteStore.routeId(track.name)
         if (activeRouteId != null) cancel()
         cancelRequested.set(false)
@@ -177,7 +180,12 @@ object RouteCache {
                 val turns = TurnFinder.find(track)
                 val darkBase = RideStore.darkMap
                 val colorName = { dark: Boolean -> if (dark) "dark" else "light" }
-                for (dark in listOf(false, true)) {
+                if (!cancelRequested.get() && !RideStore.active) {
+                    warmCorridor(renderer, track, if (darkBase) STYLE_DARK else STYLE_LIGHT)
+                    generateOverview(context, renderer, track, if (darkBase) STYLE_DARK else STYLE_LIGHT)
+                }
+                if (!tilesOnly) {
+                    for (dark in listOf(false, true)) {
                     if (cancelRequested.get() || RideStore.active) break
                     val style = if (dark) STYLE_DARK else STYLE_LIGHT
                     var done = 0
@@ -200,19 +208,22 @@ object RouteCache {
                         status = "Retrying turn ${i + 1}/${turns.size} (${colorName(dark)})"
                         renderAndStore(context, renderer, track, turns[i].distAlongM, dark, style, i, boundsForTurn(track, turns[i].distAlongM))
                     }
+                    }
                 }
                 if (!cancelRequested.get() && !RideStore.active) {
-                    warmCorridor(renderer, track, if (darkBase) STYLE_DARK else STYLE_LIGHT)
-                    generateOverview(context, renderer, track, if (darkBase) STYLE_DARK else STYLE_LIGHT)
-                    val missing = turns.indices.count { i ->
-                        !turnFile(context, routeId, false, i).exists() ||
-                            !turnFile(context, routeId, true, i).exists()
-                    }
-                    status = if (missing == 0) {
-                        "Pre-cached ${track.name} ✓"
+                    status = if (tilesOnly) {
+                        "Pre-cached tiles ${track.name} ✓"
                     } else {
-                        val cached = turns.size - missing
-                        "Pre-cached ${cached}/${turns.size} turns · rest on next load"
+                        val missing = turns.indices.count { i ->
+                            !turnFile(context, routeId, false, i).exists() ||
+                                !turnFile(context, routeId, true, i).exists()
+                        }
+                        if (missing == 0) {
+                            "Pre-cached ${track.name} ✓"
+                        } else {
+                            val cached = turns.size - missing
+                            "Pre-cached ${cached}/${turns.size} turns · rest on next load"
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -227,6 +238,7 @@ object RouteCache {
                     activeRouteId = null
                     cancelRequested.set(false)
                 }
+                onDone?.invoke()
                 thread.quitSafely()
             }
         }
@@ -354,7 +366,7 @@ object RouteCache {
  * shows up as "call to OpenGL ES API with no current context" and 45/90 s
  * timeouts. A single reusable instance avoids that entirely.
  */
-private class ReusedSnapshotter(context: Context) {
+internal class ReusedSnapshotter(context: Context) {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
     private val gen = java.util.concurrent.atomic.AtomicInteger(0)
