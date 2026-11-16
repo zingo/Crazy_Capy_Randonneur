@@ -131,23 +131,16 @@ debug-build-only; release builds carry none of it.
 
 ## Screenshots
 
-Captured with the on-device ghost-ride simulator – no real riding needed. Light
-and dark map styles are both shown; the rear-radar shots show simulated traffic
-following the road behind the rider.
+Screens from the T20Mini. Light and dark maps are both supported; the new free
+ride, ride history and ride detail views are included.
 
-| Ghost ride with HUD (light map) | Ghost ride with HUD (dark map) | Turn preview (light map) |
+| Route ready (light map) | Free ride start | Free ride HUD (dark map) |
 | --- | --- | --- |
-| ![Ghost ride with HUD, light map](docs/screenshots/2026-09-13-06-hud-light.png) | ![Ghost ride with HUD, dark map](docs/screenshots/2026-09-13-07-hud-dark.png) | ![Turn preview, light map](docs/screenshots/2026-09-13-08-turn-preview-light.png) |
+| ![Route loaded with the HUD](docs/screenshots/2026-11-16-01-route-loaded.png) | ![Free ride start dialog](docs/screenshots/2026-11-16-02-free-ride-dialog.png) | ![Free ride HUD](docs/screenshots/2026-11-16-03-free-ride-hud.png) |
 
-| Turn preview (dark map) | Route loaded with checkpoint markers | Saved routes library (cache status) |
+| Ride history | Ride detail with elevation/speed chart | Saved routes |
 | --- | --- | --- |
-| ![Turn preview, dark map](docs/screenshots/2026-09-13-09-turn-preview-dark.png) | ![Route loaded with checkpoint markers](docs/screenshots/2026-09-13-03-route-checkpoints.png) | ![Saved routes](docs/screenshots/2026-09-13-04-saved-routes.png) |
-
-| Settings | Rear-radar traffic (light map) | Rear-radar traffic (dark map) |
-| --- | --- | --- |
-| ![Settings](docs/screenshots/2026-09-13-05-settings.png) | ![Rear-radar traffic, light map](docs/screenshots/2026-09-13-01-ghost-ride-radar-light.png) | ![Rear-radar traffic, dark map](docs/screenshots/2026-09-13-02-ghost-ride-radar-dark.png) |
-
----
+| ![Ride history](docs/screenshots/2026-11-16-04-rides.png) | ![Ride detail](docs/screenshots/2026-11-16-05-ride-detail.png) | ![Saved routes](docs/screenshots/2026-11-16-06-saved-routes.png) |
 
 ## Getting started
 
