@@ -7,6 +7,7 @@ package com.crazycapy.randonneur.ui.dialogs
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,6 +46,7 @@ internal fun RideHistoryDialog(
     var rides by remember { mutableStateOf(RideHistory.list(context)) }
     var renameTarget by remember { mutableStateOf<RideHistory.SavedRide?>(null) }
     var exportTarget by remember { mutableStateOf<File?>(null) }
+    var detailTarget by remember { mutableStateOf<RideHistory.SavedRide?>(null) }
     val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gpx+xml")) { uri ->
         val f = exportTarget
         if (uri != null && f != null) copyToUri(context, f, uri)
@@ -61,7 +63,7 @@ internal fun RideHistoryDialog(
                 } else {
                     rides.forEach { ride ->
                         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
-                            Column(Modifier.weight(1f)) {
+                            Column(Modifier.weight(1f).clickable { detailTarget = ride }) {
                                 Text(ride.name, style = MaterialTheme.typography.bodyMedium)
                                 Text(
                                     "${Phrases.formatDistance(ride.distanceM)} · moving ${formatDuration(ride.durationSec)} · total ${formatDuration(ride.totalSec)} · paused ${formatDuration((ride.totalSec - ride.durationSec).coerceAtLeast(0))} · ${"%.1f".format(ride.avgKmh)} km/h avg · ↑${ride.ascentM.roundToInt()} ↓${ride.descentM.roundToInt()} m",
@@ -99,6 +101,10 @@ internal fun RideHistoryDialog(
         confirmButton = {},
         dismissButton = { TextButton(onClick = onCancel) { Text("Close") } },
     )
+
+    detailTarget?.let { ride ->
+        RideDetailDialog(context = context, ride = ride, onClose = { detailTarget = null })
+    }
 
     renameTarget?.let { ride ->
         var text by remember(ride.id) { mutableStateOf(ride.name) }
