@@ -8,11 +8,11 @@ import android.content.Context
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.gpx.TrackLoader
 import com.crazycapy.randonneur.nav.Geo
+import java.time.Instant
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.text.SimpleDateFormat
-import java.time.Instant
 import java.util.Date
 import java.util.Locale
 
@@ -137,6 +137,37 @@ object RideHistory {
         if (!logFile(context).exists()) { metaFile(context).delete(); return null }
         return finalizeRide(context, 0L, 0L, 0.0, 0.0, 0L)
     }
+
+    data class SeriesPoint(val tMs: Long, val eleM: Double?, val hr: Int?, val speedKmh: Double)
+
+    /** Parse a saved ride's GPX into a time/elevation/HR/speed series for charts. */
+    fun loadSeries(context: Context, id: String): List<SeriesPoint> = runCatching {
+        val f = rideFile(context, id)
+        if (!f.exists()) return emptyList()
+        val text = f.readText()
+        val rx = Regex("<trkpt[^>]*lat=\"([^\"]+)\"[^>]*lon=\"([^\"]+)\"[^>]*>(.*?)</trkpt>", RegexOption.DOT_MATCHES_ALL)
+        val out = ArrayList<SeriesPoint>()
+        var prevLat: Double? = null
+        var prevLon: Double? = null
+        var prevT: Long? = null
+        for (m in rx.findAll(text)) {
+            val lat = m.groupValues[1].toDoubleOrNull() ?: continue
+            val lon = m.groupValues[2].toDoubleOrNull() ?: continue
+            val body = m.groupValues[3]
+            val ele = Regex("<ele>([-0-9.]+)</ele>").find(body)?.groupValues?.get(1)?.toDoubleOrNull()
+            val t = Regex("<time>([^<]+)</time>").find(body)?.groupValues?.get(1)
+                ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+                ?: continue
+            val hr = Regex("<gpxtpx:hr>(\\d+)</gpxtpx:hr>").find(body)?.groupValues?.get(1)?.toIntOrNull()
+            var speed = 0.0
+            if (prevLat != null && prevLon != null && prevT != null && t > prevT!!) {
+                speed = Geo.distanceMeters(prevLat!!, prevLon!!, lat, lon) / ((t - prevT!!) / 1000.0) * 3.6
+            }
+            out.add(SeriesPoint(t, ele, hr, speed.coerceIn(0.0, 120.0)))
+            prevLat = lat; prevLon = lon; prevT = t
+        }
+        out
+    }.getOrDefault(emptyList())
 
     fun loadTrack(context: Context, id: String): Track? = runCatching {
         val f = rideFile(context, id)
