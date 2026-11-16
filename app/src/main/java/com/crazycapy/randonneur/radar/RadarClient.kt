@@ -248,6 +248,11 @@ object RadarClient {
 
     /** Ride stop: keep the service bound (so the always-visible controls and
      *  idle map targets keep working) and refresh status. */
+    /** Release the binding while the app is backgrounded and no ride is active. */
+    fun suspendForBackground() {
+        if (!RideStore.active) unbind()
+    }
+
     fun stop(context: Context) {
         refreshStatus()
     }

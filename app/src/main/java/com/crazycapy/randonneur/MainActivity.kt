@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
         // We are no longer drawing the map, and nothing on the overlay app's
         // side hands the rider their own radar display back on its own.
         RadarClient.releaseOverlay()
+        RadarClient.suspendForBackground()
     }
 
     private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->

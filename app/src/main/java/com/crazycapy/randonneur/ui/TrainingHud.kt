@@ -166,7 +166,7 @@ fun TrainingHud(modifier: Modifier = Modifier) {
             ) {
                 Metric(
                     value = if (avg > 0) formatKmh(avg) else "--",
-                    unit = "km/h",
+                    unit = "km/h avg",
                     modifier = Modifier.weight(1f),
                 )
                 if (isFreeRide) {

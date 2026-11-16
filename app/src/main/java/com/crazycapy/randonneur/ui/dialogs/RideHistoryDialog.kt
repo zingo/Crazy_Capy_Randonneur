@@ -34,6 +34,7 @@ import com.crazycapy.randonneur.ui.helpers.shareGpx
 import com.crazycapy.randonneur.voice.Phrases
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlin.math.roundToInt
 
 @Composable
 internal fun RideHistoryDialog(
@@ -63,7 +64,7 @@ internal fun RideHistoryDialog(
                             Column(Modifier.weight(1f)) {
                                 Text(ride.name, style = MaterialTheme.typography.bodyMedium)
                                 Text(
-                                    "${Phrases.formatDistance(ride.distanceM)} · ${formatDuration(ride.durationSec)} · ${"%.1f".format(ride.avgKmh)} km/h avg · ${"%.1f".format(ride.maxKmh)} max",
+                                    "${Phrases.formatDistance(ride.distanceM)} · ${formatDuration(ride.durationSec)} · ${"%.1f".format(ride.avgKmh)} km/h avg · ${"%.1f".format(ride.maxKmh)} max · ↑${ride.ascentM.roundToInt()} ↓${ride.descentM.roundToInt()} m",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                                 Row {
