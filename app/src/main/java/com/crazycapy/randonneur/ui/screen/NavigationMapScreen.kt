@@ -239,9 +239,9 @@ internal fun NavigationMapScreen(
         if (track != null && !RideStore.active) fitRoute(m, track)
     }
 
-    // Redraw the ridden breadcrumb (throttled: every 5 points, or when cleared).
+    // Redraw the ridden breadcrumb on every new point (and when cleared).
     val trace = RideStore.riddenPoints
-    LaunchedEffect(map, trace.isEmpty(), trace.size / 5, RideStore.mapVisible) {
+    LaunchedEffect(map, trace.isEmpty(), trace.size, RideStore.mapVisible) {
         val m = map ?: return@LaunchedEffect
         if (!RideStore.mapVisible) return@LaunchedEffect
         refreshRidden(m, trace)
