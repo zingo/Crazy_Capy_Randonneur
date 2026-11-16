@@ -531,7 +531,7 @@ internal fun NavigationMapScreen(
     }
 
     // Dialogs triggered by state flags.
-    if (showSettings) SettingsDialog(onDismiss = { showSettings = false }, onShowLicenses = { showLicenses = true }, onShowRoutes = { showRoutes = true }, onStartGhost = { pendingStart = RideMode.GHOST }, ghostAvailable = track != null, versionName = BuildConfig.VERSION_NAME, versionCode = BuildConfig.VERSION_CODE, buildType = BuildConfig.BUILD_TYPE)
+    if (showSettings) SettingsDialog(onDismiss = { showSettings = false }, onShowLicenses = { showLicenses = true }, onShowRoutes = { showRoutes = true }, onStartGhost = { pendingStart = if (RideStore.track != null) RideMode.GHOST else RideMode.FREE }, ghostAvailable = true, versionName = BuildConfig.VERSION_NAME, versionCode = BuildConfig.VERSION_CODE, buildType = BuildConfig.BUILD_TYPE)
     if (showLicenses) LicensesDialog(onDismiss = { showLicenses = false })
     cpPopup?.let { wpt ->
         AlertDialog(
