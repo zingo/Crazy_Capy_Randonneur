@@ -120,6 +120,9 @@ class NavigationService : Service() {
     private var rideSavedForHistory = false
     private var lastCheckpointMs = 0L
     private var pointsCommitted = 0
+    private var autoStopSinceMs = 0L
+    private var autoMoveSinceMs = 0L
+    private var lastEleM: Double? = null
     private val actionPis = HashMap<Int, PendingIntent>()
     private var ticker: Runnable? = null
     private var sim: RouteSimulator? = null
@@ -216,6 +219,9 @@ class NavigationService : Service() {
         rideSavedForHistory = false
         lastCheckpointMs = SystemClock.elapsedRealtime()
         pointsCommitted = 0
+        autoStopSinceMs = 0L
+        autoMoveSinceMs = 0L
+        lastEleM = null
         RideHistory.abort(this)
         tickCounter = 0
 
@@ -230,6 +236,9 @@ class NavigationService : Service() {
         RideStore.totalM = track?.lengthMeters ?: 0.0
         RideStore.speedKmh = 0.0
         RideStore.maxSpeedKmh = 0.0
+        RideStore.ascentM = 0.0
+        RideStore.descentM = 0.0
+        RideStore.autoPaused = false
         RideStore.bearing = null
         RideStore.avgSpeedKmh = 0.0
         RideStore.elapsedSec = 0L
@@ -441,7 +450,22 @@ class NavigationService : Service() {
         if (plausible && moved / dtSec * 3.6 > 120.0) plausible = false
         if (accuracyM != null && accuracyM > 30f) plausible = false
 
-        if (RideStore.active) {
+        if (RideStore.active && RideStore.mode != RideMode.GHOST && !RideStore.paused) {
+            val instKmh = if (dtSec in 0.5..60.0) moved / dtSec * 3.6 else 0.0
+            if (RideStore.autoPaused) {
+                if (instKmh >= AUTO_RESUME_KMH) {
+                    if (autoMoveSinceMs == 0L) autoMoveSinceMs = nowMs
+                    if (nowMs - autoMoveSinceMs >= AUTO_RESUME_MS) autoResume()
+                } else autoMoveSinceMs = 0L
+            } else {
+                if (instKmh <= AUTO_STOP_KMH) {
+                    if (autoStopSinceMs == 0L) autoStopSinceMs = nowMs
+                    if (nowMs - autoStopSinceMs >= AUTO_STOP_MS) autoPause()
+                } else autoStopSinceMs = 0L
+            }
+        }
+
+        if (RideStore.active && !RideStore.autoPaused) {
             val pts = RideStore.riddenPoints
             if (pts.isEmpty()) {
                 if (accuracyM == null || accuracyM <= 30f) {
@@ -482,6 +506,14 @@ class NavigationService : Service() {
         lastFixAtMs = nowMs
         lastFixLat = lat
         lastFixLon = lon
+        if (eleM != null && RideStore.active && !RideStore.paused && !RideStore.autoPaused) {
+            val prev = lastEleM
+            if (prev != null) {
+                val d = eleM - prev
+                if (d >= 1.0) RideStore.ascentM += d else if (d <= -1.0) RideStore.descentM -= d
+            }
+            lastEleM = eleM
+        }
 
         nav?.update(lat, lon, RideStore.speedKmh)
         RideStore.routeM = nav?.distanceAlongM ?: 0.0
@@ -548,7 +580,7 @@ class NavigationService : Service() {
     private fun saveRideHistory() {
         if ((RideStore.mode == RideMode.GPS || RideStore.mode == RideMode.FREE) && RideStore.riddenM >= 50.0) {
             appendTracePoints()
-            RideHistory.finalizeRide(this, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh)
+            RideHistory.finalizeRide(this, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh, RideStore.totalElapsedSec)
         } else {
             RideHistory.abort(this)
         }
@@ -557,7 +589,7 @@ class NavigationService : Service() {
 
     private fun activeElapsedMs(now: Long = SystemClock.elapsedRealtime()): Long {
         var paused = pausedTotalMs
-        if (RideStore.paused && pausedStartMs > 0) paused += now - pausedStartMs
+        if ((RideStore.paused || RideStore.autoPaused) && pausedStartMs > 0) paused += now - pausedStartMs
         return (now - startRealtimeMs - paused).coerceAtLeast(0)
     }
 
@@ -588,7 +620,11 @@ class NavigationService : Service() {
         val runnable = object : Runnable {
             override fun run() {
                 if (!running.get()) return
-                RideStore.elapsedSec = activeElapsedMs() / 1000
+                val movingSec = activeElapsedMs() / 1000
+                val totalSec = (SystemClock.elapsedRealtime() - startRealtimeMs) / 1000
+                RideStore.elapsedSec = movingSec
+                RideStore.totalElapsedSec = totalSec
+                RideStore.pausedSec = (totalSec - movingSec).coerceAtLeast(0)
                 RideStore.hr = hrProvider.currentHr()
                 updateAvgSpeed()
                 maybeCheckpointRide()
@@ -911,8 +947,33 @@ class NavigationService : Service() {
         RideStore.resumeRouteName = t.name
     }
 
+    private fun autoPause() {
+        if (!running.get() || RideStore.paused || RideStore.autoPaused) return
+        RideStore.autoPaused = true
+        pausedStartMs = SystemClock.elapsedRealtime()
+        autoStopSinceMs = 0L
+        autoMoveSinceMs = 0L
+        RideStore.status = "Auto-paused"
+    }
+
+    private fun autoResume() {
+        if (!RideStore.autoPaused) return
+        val now = SystemClock.elapsedRealtime()
+        if (pausedStartMs > 0) pausedTotalMs += now - pausedStartMs
+        pausedStartMs = 0
+        RideStore.autoPaused = false
+        autoMoveSinceMs = 0L
+        RideStore.status = "Riding…"
+    }
+
     private fun pauseRide() {
         if (!running.get() || RideStore.paused) return
+        if (RideStore.autoPaused) {
+            val now = SystemClock.elapsedRealtime()
+            if (pausedStartMs > 0) pausedTotalMs += now - pausedStartMs
+            pausedStartMs = 0
+            RideStore.autoPaused = false
+        }
         RideStore.paused = true
         pausedStartMs = SystemClock.elapsedRealtime()
         RideStore.speedKmh = 0.0
@@ -960,6 +1021,7 @@ class NavigationService : Service() {
         RideStore.status = message
         RideStore.active = false
         RideStore.paused = false
+        RideStore.autoPaused = false
         RideStore.mode = RideMode.IDLE
         RideStore.lat = null
         RideStore.lon = null
@@ -1097,6 +1159,10 @@ class NavigationService : Service() {
         private const val TRACE_MIN_STEP_M = 2.0
         private const val TRACE_POINT_M = 20.0
         private const val CHECKPOINT_MS = 300_000L
+        private const val AUTO_STOP_KMH = 2.0
+        private const val AUTO_RESUME_KMH = 5.0
+        private const val AUTO_STOP_MS = 10_000L
+        private const val AUTO_RESUME_MS = 3_000L
         private const val ACTION_START_GPS = "com.crazycapy.randonneur.action.START_GPS"
         private const val ACTION_START_GHOST = "com.crazycapy.randonneur.action.START_GHOST"
         private const val ACTION_START_FREE = "com.crazycapy.randonneur.action.START_FREE"

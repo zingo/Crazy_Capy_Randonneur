@@ -97,6 +97,7 @@ import com.crazycapy.randonneur.ui.components.showResumeOffer
 import com.crazycapy.randonneur.ui.dialogs.LicensesDialog
 import com.crazycapy.randonneur.ui.dialogs.RoutesDialog
 import com.crazycapy.randonneur.ui.dialogs.SettingsDialog
+import com.crazycapy.randonneur.ui.dialogs.RideHistoryDialog
 import com.crazycapy.randonneur.ui.dialogs.StartRideDialog
 import com.crazycapy.randonneur.ui.helpers.centerOnLastKnown
 import com.crazycapy.randonneur.ui.helpers.centerOnRider
@@ -174,6 +175,7 @@ internal fun NavigationMapScreen(
     var showLicenses by remember { mutableStateOf(false) }
     var showRoutes by remember { mutableStateOf(false) }
     var pendingStart by remember { mutableStateOf<RideMode?>(null) }
+    var showRideHistory by remember { mutableStateOf(false) }
     var askPrecacheFor by remember { mutableStateOf<Track?>(null) }
     var cpPopup by remember { mutableStateOf<Waypoint?>(null) }
     var followRider by remember { mutableStateOf(true) }
@@ -482,6 +484,7 @@ internal fun NavigationMapScreen(
                             OutlinedButton(onClick = { showRoutes = true }, Modifier.weight(1f)) { Text("Routes") }
                             if (track != null) OutlinedButton(onClick = { pendingStart = RideMode.GPS }, Modifier.weight(1f)) { Text("Navigate") }
                             OutlinedButton(onClick = { pendingStart = RideMode.FREE }, Modifier.weight(1f)) { Text("Free ride") }
+                            OutlinedButton(onClick = { showRideHistory = true }, Modifier.weight(1f)) { Text("Rides") }
                         } else {
                             if (RideStore.mode != RideMode.FREE) {
                                 OutlinedButton(onClick = { NavigationService.toggleReverse(context) }, Modifier.weight(1f)) { Text(if (RideStore.reverse) "Original dir" else "Reverse dir") }
@@ -555,6 +558,13 @@ internal fun NavigationMapScreen(
                     }) { Text("Open Bike Radar") }
                 }
             },
+        )
+    }
+    if (showRideHistory) {
+        RideHistoryDialog(
+            context = context,
+            onDone = { showRideHistory = false },
+            onCancel = { showRideHistory = false },
         )
     }
     if (showRoutes) RoutesDialog(context = context, onDismiss = { showRoutes = false }, onLoad = onLoadSavedRoute, onDelete = { RouteStore.deleteRoute(context, it) }, onImport = onImportRequest)

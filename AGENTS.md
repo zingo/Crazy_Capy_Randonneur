@@ -135,7 +135,9 @@ Device test notes:
 - Ride history: GPS rides are saved on Stop to `files/rides/` (GPX + `index.txt`);
   Routes → Rides shows distance/time/avg and can load one as a route. Pause
   freezes fixes/stats, Resume continues; paused time is excluded from elapsed
-  time and average speed. Checkpoints every 5 min append new points to a log
+  time and average speed. GPS/free rides auto-pause after 10 s below 2 km/h
+  (resume after 3 s above 5 km/h), and ascent/descent are recorded from
+  altitude (1 m deadband). Checkpoints every 5 min append new points to a log
   (plus a tiny atomic meta line) and are promoted on the next launch; the final
   file is GPX 1.1 with time, elevation and Garmin `gpxtpx:hr` ("cycling").
   Both Rides and saved Routes can be exported via a FileProvider

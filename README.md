@@ -83,10 +83,11 @@ debug-build-only; release builds carry none of it.
 - **Free ride** – start without a route: no green line or guidance, but speed,
   actual distance, average/max, the blue breadcrumb and a GPX are recorded just
   like a routed ride (the HUD swaps distance-left/ETA for max speed).
-- **Ride history & pause** – Pause/Stop buttons sit above the map controls.
-  Pause freezes tracking; Stop saves the actual ridden track (off-route
-  included) as a standard GPX 1.1 with time, elevation and heart rate (Garmin
-  TrackPointExtension), so it imports into Garmin/Strava/Coros. Progress is
+- **Ride history & pause** – Auto-pause when you stop (10 s below 2 km/h,
+  resumes when moving again), plus manual Pause/Stop above the map controls.
+  Average speed is moving average; ascent/descent are recorded. Pause freezes tracking; Stop saves the actual ridden track (off-route
+  included) as a standard GPX 1.1 with time, elevation (heart rate when a provider is connected), so it imports into
+  Garmin/Strava/Coros. Progress is
   appended every 5 minutes (no full rewrite), so an interrupted ride is recovered
   on the next launch. Routes → Rides lists distance, duration, average and max
   speed, and each ride can be exported/saved as GPX, renamed, or loaded back as

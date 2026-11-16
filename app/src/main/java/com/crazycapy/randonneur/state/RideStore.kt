@@ -139,6 +139,12 @@ object RideStore {
 
     var maxSpeedKmh: Double by mutableStateOf(0.0)
 
+    var ascentM: Double by mutableStateOf(0.0)
+    var descentM: Double by mutableStateOf(0.0)
+    var autoPaused: Boolean by mutableStateOf(false)
+    var totalElapsedSec: Long by mutableStateOf(0L)
+    var pausedSec: Long by mutableStateOf(0L)
+
     /** Rolling average speed since ride start, km/h. */
     var avgSpeedKmh: Double by mutableStateOf(0.0)
 
@@ -251,6 +257,11 @@ object RideStore {
         totalM = 0.0
         speedKmh = 0.0
         maxSpeedKmh = 0.0
+        ascentM = 0.0
+        descentM = 0.0
+        autoPaused = false
+        totalElapsedSec = 0L
+        pausedSec = 0L
         avgSpeedKmh = 0.0
         elapsedSec = 0L
         hr = null
