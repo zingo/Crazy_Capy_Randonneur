@@ -580,7 +580,7 @@ class NavigationService : Service() {
     private fun saveRideHistory() {
         if ((RideStore.mode == RideMode.GPS || RideStore.mode == RideMode.FREE) && RideStore.riddenM >= 50.0) {
             appendTracePoints()
-            RideHistory.finalizeRide(this, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh)
+            RideHistory.finalizeRide(this, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh, RideStore.totalElapsedSec)
         } else {
             RideHistory.abort(this)
         }
@@ -620,7 +620,11 @@ class NavigationService : Service() {
         val runnable = object : Runnable {
             override fun run() {
                 if (!running.get()) return
-                RideStore.elapsedSec = activeElapsedMs() / 1000
+                val movingSec = activeElapsedMs() / 1000
+                val totalSec = (SystemClock.elapsedRealtime() - startRealtimeMs) / 1000
+                RideStore.elapsedSec = movingSec
+                RideStore.totalElapsedSec = totalSec
+                RideStore.pausedSec = (totalSec - movingSec).coerceAtLeast(0)
                 RideStore.hr = hrProvider.currentHr()
                 updateAvgSpeed()
                 maybeCheckpointRide()

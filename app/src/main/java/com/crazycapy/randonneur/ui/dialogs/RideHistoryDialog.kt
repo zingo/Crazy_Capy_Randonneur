@@ -64,7 +64,7 @@ internal fun RideHistoryDialog(
                             Column(Modifier.weight(1f)) {
                                 Text(ride.name, style = MaterialTheme.typography.bodyMedium)
                                 Text(
-                                    "${Phrases.formatDistance(ride.distanceM)} · ${formatDuration(ride.durationSec)} · ${"%.1f".format(ride.avgKmh)} km/h avg · ${"%.1f".format(ride.maxKmh)} max · ↑${ride.ascentM.roundToInt()} ↓${ride.descentM.roundToInt()} m",
+                                    "${Phrases.formatDistance(ride.distanceM)} · moving ${formatDuration(ride.durationSec)} · total ${formatDuration(ride.totalSec)} · paused ${formatDuration((ride.totalSec - ride.durationSec).coerceAtLeast(0))} · ${"%.1f".format(ride.avgKmh)} km/h avg · ↑${ride.ascentM.roundToInt()} ↓${ride.descentM.roundToInt()} m",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                                 Row {

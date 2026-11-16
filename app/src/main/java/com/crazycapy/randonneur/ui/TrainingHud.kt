@@ -95,7 +95,10 @@ fun TrainingHud(modifier: Modifier = Modifier) {
     }
 
     val elapsed = RideStore.elapsedSec
-    val timeFmt = formatElapsed(elapsed)
+    var timeMode by remember { mutableStateOf(TimeMode.MOVING) }
+    val timeFmt = formatElapsed(RideStore.elapsedSec)
+    val totalFmt = formatElapsed(RideStore.totalElapsedSec)
+    val pausedFmt = formatElapsed(RideStore.pausedSec)
 
     var currentTime by remember { mutableStateOf(clockNow()) }
     LaunchedEffect(Unit) {
@@ -154,8 +157,11 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                     modifier = Modifier.weight(1f),
                 )
                 Metric(
-                    value = timeFmt,
-                    unit = currentTime,
+                    value = if (timeMode == TimeMode.TOTAL) totalFmt else timeFmt,
+                    unit = (if (timeMode == TimeMode.TOTAL) "total" else "moving") + " · p " + pausedFmt,
+                    onClick = { timeMode = if (timeMode == TimeMode.MOVING) TimeMode.TOTAL else TimeMode.MOVING },
+                    dots = 2,
+                    dotActive = timeMode.ordinal,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -214,6 +220,8 @@ fun TrainingHud(modifier: Modifier = Modifier) {
 }
 
 private enum class CoveredMode { ROUTE, RIDE }
+
+private enum class TimeMode { MOVING, TOTAL }
 
 @Composable
 private fun Metric(

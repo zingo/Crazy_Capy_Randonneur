@@ -34,6 +34,7 @@ object RideHistory {
         val maxKmh: Double = 0.0,
         val ascentM: Double = 0.0,
         val descentM: Double = 0.0,
+        val totalSec: Long = durationSec,
     )
 
     private fun dir(context: Context): File = File(context.filesDir, "rides").apply { mkdirs() }
@@ -86,6 +87,7 @@ object RideHistory {
         fallbackDurationSec: Long,
         fallbackDistanceM: Double,
         fallbackMaxKmh: Double,
+        fallbackTotalSec: Long = 0L,
     ): SavedRide? {
         val meta = metaFile(context).takeIf { it.exists() }
             ?.readLines()?.firstOrNull()?.let(::parseLine)
@@ -117,7 +119,8 @@ object RideHistory {
                 prevEle = e
             }
         }
-        val ride = SavedRide("ride-$started", name, started, dur, dist, avg, max, ascent, descent)
+        val total = (meta?.totalSec ?: fallbackTotalSec).takeIf { it > 0 } ?: dur
+        val ride = SavedRide("ride-$started", name, started, dur, dist, avg, max, ascent, descent, total)
 
         runCatching { atomicWrite(rideFile(context, ride.id), buildGpx(name, started, points)) }.getOrElse { return null }
         runCatching {
@@ -132,7 +135,7 @@ object RideHistory {
     /** Promote an unfinished snapshot (e.g. after a crash) into the history. */
     fun recoverInProgress(context: Context): SavedRide? {
         if (!logFile(context).exists()) { metaFile(context).delete(); return null }
-        return finalizeRide(context, 0L, 0L, 0.0, 0.0)
+        return finalizeRide(context, 0L, 0L, 0.0, 0.0, 0L)
     }
 
     fun loadTrack(context: Context, id: String): Track? = runCatching {
@@ -208,6 +211,7 @@ object RideHistory {
             p.getOrNull(6)?.toDoubleOrNull() ?: 0.0,
             p.getOrNull(7)?.toDoubleOrNull() ?: 0.0,
             p.getOrNull(8)?.toDoubleOrNull() ?: 0.0,
+            p.getOrNull(9)?.toLongOrNull() ?: (p[3].toLongOrNull() ?: 0L),
         )
     }
 
@@ -238,5 +242,6 @@ object RideHistory {
         listOf(
             id, name, startedAtMs.toString(), durationSec.toString(), distanceM.toString(),
             avgKmh.toString(), maxKmh.toString(), ascentM.toString(), descentM.toString(),
+            totalSec.toString(),
         ).joinToString("\t")
 }
