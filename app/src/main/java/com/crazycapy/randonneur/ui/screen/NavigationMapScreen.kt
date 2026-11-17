@@ -415,22 +415,33 @@ internal fun NavigationMapScreen(
         floatingActionButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
                 if (RideStore.active) {
-                    FloatingActionButton(
-                        onClick = { if (RideStore.paused) NavigationService.resume(context) else NavigationService.pause(context) },
-                        modifier = Modifier.size(48.dp),
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    ) {
-                        Icon(if (RideStore.paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                            contentDescription = if (RideStore.paused) "Resume" else "Pause")
-                    }
-                    FloatingActionButton(
-                        onClick = { NavigationService.stop(context) },
-                        modifier = Modifier.size(48.dp),
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                    ) {
-                        Icon(Icons.Filled.Stop, contentDescription = "Stop and save ride")
+                    val pausedNow = RideStore.paused || RideStore.autoPaused
+                    if (!pausedNow) {
+                        FloatingActionButton(
+                            onClick = { NavigationService.pause(context) },
+                            modifier = Modifier.size(48.dp),
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        ) {
+                            Icon(Icons.Filled.Pause, contentDescription = "Pause")
+                        }
+                    } else {
+                        FloatingActionButton(
+                            onClick = { NavigationService.resume(context) },
+                            modifier = Modifier.size(48.dp),
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        ) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = "Resume")
+                        }
+                        FloatingActionButton(
+                            onClick = { NavigationService.stop(context) },
+                            modifier = Modifier.size(48.dp),
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        ) {
+                            Icon(Icons.Filled.Stop, contentDescription = "Finish and save ride")
+                        }
                     }
                 }
                 if (RideStore.active && !followRider) {
@@ -485,11 +496,8 @@ internal fun NavigationMapScreen(
                             if (track != null) OutlinedButton(onClick = { pendingStart = RideMode.GPS }, Modifier.weight(1f)) { Text("Navigate") }
                             OutlinedButton(onClick = { pendingStart = RideMode.FREE }, Modifier.weight(1f)) { Text("Free ride") }
                             OutlinedButton(onClick = { showRideHistory = true }, Modifier.weight(1f)) { Text("Rides") }
-                        } else {
-                            if (RideStore.mode != RideMode.FREE) {
-                                OutlinedButton(onClick = { NavigationService.toggleReverse(context) }, Modifier.weight(1f)) { Text(if (RideStore.reverse) "Original dir" else "Reverse dir") }
-                            }
-                            Button(onClick = { NavigationService.stop(context) }, Modifier.weight(1f)) { Text("Stop") }
+                        } else if (RideStore.mode != RideMode.FREE) {
+                            OutlinedButton(onClick = { NavigationService.toggleReverse(context) }, Modifier.weight(1f)) { Text(if (RideStore.reverse) "Original dir" else "Reverse dir") }
                         }
                     }
                 }
