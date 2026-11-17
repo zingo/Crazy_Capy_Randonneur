@@ -132,7 +132,7 @@ Device test notes:
   instead of left/ETA, and starting free clears any loaded route from the state).
 - The path actually ridden is drawn as a blue line (`refreshRidden`), separate
   from the green route line, so off-route detours remain visible.
-- Ride history: GPS rides are saved on Stop to `files/rides/` (GPX + `index.txt`);
+- Ride history: GPS rides are saved on Finish to `files/rides/` (GPX + `index.txt`);
   Routes → Rides shows distance/time/avg and can load one as a route. Pause
   freezes fixes/stats, Resume continues; paused time is excluded from elapsed
   time and average speed. GPS/free rides auto-pause after 10 s below 2 km/h

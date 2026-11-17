@@ -984,11 +984,13 @@ class NavigationService : Service() {
     }
 
     private fun resumeRide() {
-        if (!running.get() || !RideStore.paused) return
+        if (!running.get()) return
+        if (!RideStore.paused && !RideStore.autoPaused) return
         val now = SystemClock.elapsedRealtime()
         if (pausedStartMs > 0) pausedTotalMs += now - pausedStartMs
         pausedStartMs = 0
         RideStore.paused = false
+        RideStore.autoPaused = false
         lastFixAtMs = null
         RideStore.status = "Riding…"
         updateNotification("Riding…")
@@ -1118,15 +1120,16 @@ class NavigationService : Service() {
             title = text
             body = ""
         }
-        val pauseLabel = if (RideStore.paused) "Resume" else "Pause"
-        val pauseIcon = if (RideStore.paused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause
+        val isPaused = RideStore.paused || RideStore.autoPaused
+        val pauseLabel = if (isPaused) "Resume" else "Pause"
+        val pauseIcon = if (isPaused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_nav_notification)
             .addAction(
                 pauseIcon, pauseLabel,
-                actionPending(if (RideStore.paused) ACTION_RESUME else ACTION_PAUSE, if (RideStore.paused) 4 else 2),
+                actionPending(if (isPaused) ACTION_RESUME else ACTION_PAUSE, if (isPaused) 4 else 2),
             )
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", actionPending(ACTION_STOP, 3))
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Finish", actionPending(ACTION_STOP, 3))
             .setContentTitle(title)
             .setContentText(body.ifEmpty { null })
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
