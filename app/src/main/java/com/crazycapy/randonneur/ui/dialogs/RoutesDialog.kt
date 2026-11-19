@@ -328,7 +328,7 @@ private fun RwGpsImportDialog(
         text = {
             Column {
                 if (routes != null) {
-                    routes!!.forEach { route ->
+                    routes!!.reversed().forEach { route ->
                         Row(
                             Modifier
                                 .fillMaxWidth()
