@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import java.io.File
+import kotlin.math.roundToInt
 import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.ui.helpers.copyToUri
 import com.crazycapy.randonneur.ui.helpers.shareGpx
@@ -337,7 +338,14 @@ private fun RwGpsImportDialog(
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(route.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-                                Text(Phrases.formatDistance(route.distanceM), style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    buildString {
+                                        append(Phrases.formatDistance(route.distanceM))
+                                        if (route.elevationGainM > 0) append(" · ↑").append(route.elevationGainM.roundToInt()).append(" m")
+                                        route.locality?.let { append(" · ").append(it) }
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
                             }
                             Text(if (busy) "…" else "→", color = MaterialTheme.colorScheme.primary)
                         }
