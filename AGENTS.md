@@ -66,7 +66,11 @@ adb -s <device-serial> install -r app/build/outputs/apk/debug/app-debug.apk
 
 After changing code, run `./gradlew :app:assembleDebug :app:lintDebug` and the
 unit tests; run the instrumented suite when behavior touching the service or
-notification changed. Currently 119 unit tests + 4 instrumented ghost-ride tests.
+notification changed.
+
+Before opening a PR, verify behavior on the emulator; use a physical device
+(T20Mini/phone) when emulator limits matter (BLE/radio, real GPS, hardware) or
+when a spot-check is really needed. Put the evidence in the PR description. Currently 119 unit tests + 4 instrumented ghost-ride tests.
 
 Device test notes:
 - The phone's notification is blocked at OS level (`dumpsys notification` shows
