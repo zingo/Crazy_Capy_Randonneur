@@ -129,7 +129,8 @@ Device test notes:
   ridden total (two dots show which). The main map is always north-up.
 - `RideMode.FREE` starts a route-less ride: no NavEngine/green line/guidance;
   stats, blue breadcrumb and history work as for GPS rides (HUD shows max speed
-  instead of left/ETA, and starting free clears any loaded route from the state).
+  and straight-line distance home instead of left/ETA, and starting free clears
+  any loaded route from the state).
 - The path actually ridden is drawn as a blue line (`refreshRidden`), separate
   from the green route line, so off-route detours remain visible.
 - Ride history: GPS rides are saved on Finish to `files/rides/` (GPX + `index.txt`);

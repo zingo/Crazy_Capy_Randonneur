@@ -143,6 +143,10 @@ object RideStore {
     var descentM: Double by mutableStateOf(0.0)
     var autoPaused: Boolean by mutableStateOf(false)
     var totalElapsedSec: Long by mutableStateOf(0L)
+    var freeStartLat: Double? = null
+    var freeStartLon: Double? = null
+    var homeDistanceM: Double by mutableStateOf(0.0)
+    var homeBearingDeg: Double? by mutableStateOf(null)
     var pausedSec: Long by mutableStateOf(0L)
 
     /** Rolling average speed since ride start, km/h. */
@@ -262,6 +266,10 @@ object RideStore {
         autoPaused = false
         totalElapsedSec = 0L
         pausedSec = 0L
+        freeStartLat = null
+        freeStartLon = null
+        homeDistanceM = 0.0
+        homeBearingDeg = null
         avgSpeedKmh = 0.0
         elapsedSec = 0L
         hr = null
