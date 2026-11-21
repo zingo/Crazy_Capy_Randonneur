@@ -41,6 +41,10 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|uiMode">
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

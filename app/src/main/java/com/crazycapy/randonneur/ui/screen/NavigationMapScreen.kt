@@ -419,6 +419,14 @@ internal fun NavigationMapScreen(
             RideStore.active && !RideStore.paused && !RideStore.autoPaused
     }
 
+    LaunchedEffect(RideStore.shortcutRequest) {
+        when (RideStore.shortcutRequest) {
+            "free" -> pendingStart = RideMode.FREE
+            "rides" -> showRideHistory = true
+        }
+        RideStore.shortcutRequest = null
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             when (pendingStart) {

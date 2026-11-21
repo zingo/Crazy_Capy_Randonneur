@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Crazy Capy Randonneur</string>
+    <string name="shortcut_free_ride">Free ride</string>
+    <string name="shortcut_rides">Rides</string>
 </resources>

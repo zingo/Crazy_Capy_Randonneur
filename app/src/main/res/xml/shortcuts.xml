@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="free_ride"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_free_ride"
+        android:shortcutLongLabel="@string/shortcut_free_ride">
+        <intent
+            android:action="com.crazycapy.randonneur.SHORTCUT_FREE"
+            android:targetPackage="com.crazycapy.randonneur"
+            android:targetClass="com.crazycapy.randonneur.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="rides"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_rides"
+        android:shortcutLongLabel="@string/shortcut_rides">
+        <intent
+            android:action="com.crazycapy.randonneur.SHORTCUT_RIDES"
+            android:targetPackage="com.crazycapy.randonneur"
+            android:targetClass="com.crazycapy.randonneur.MainActivity" />
+    </shortcut>
+</shortcuts>

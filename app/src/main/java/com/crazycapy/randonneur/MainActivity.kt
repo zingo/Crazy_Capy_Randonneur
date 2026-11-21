@@ -36,6 +36,10 @@ class MainActivity : ComponentActivity() {
             val recovered = RideHistory.recoverInProgress(appContext)
             if (recovered != null) RideStore.status = "Recovered unfinished ride: ${recovered.name}"
         }
+        when (intent?.action) {
+            "com.crazycapy.randonneur.SHORTCUT_FREE" -> RideStore.shortcutRequest = "free"
+            "com.crazycapy.randonneur.SHORTCUT_RIDES" -> RideStore.shortcutRequest = "rides"
+        }
         handleShareIntent(intent)
         RadarClient.launchConsent = { consentLauncher.launch(RadarClient.requestAccessIntent()) }
 
@@ -57,6 +61,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        when (intent.action) {
+            "com.crazycapy.randonneur.SHORTCUT_FREE" -> RideStore.shortcutRequest = "free"
+            "com.crazycapy.randonneur.SHORTCUT_RIDES" -> RideStore.shortcutRequest = "rides"
+        }
         handleShareIntent(intent)
     }
 
