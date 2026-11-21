@@ -239,12 +239,25 @@ internal fun NavigationMapScreen(
         if (track != null && !RideStore.active) fitRoute(m, track)
     }
 
-    // Redraw the ridden breadcrumb (throttled: every 5 points, or when cleared).
+    // Redraw the ridden breadcrumb on every new point/fix, with a live tip from
+    // the last stored point to the current fix (not persisted, so no storage cost).
     val trace = RideStore.riddenPoints
-    LaunchedEffect(map, trace.isEmpty(), trace.size / 5, RideStore.mapVisible) {
+    val tipLat = RideStore.lat
+    val tipLon = RideStore.lon
+    val drawTip = RideStore.active && !RideStore.paused && !RideStore.autoPaused &&
+        trace.isNotEmpty() && tipLat != null && tipLon != null
+    LaunchedEffect(
+        map, trace.size, tipLat, tipLon,
+        RideStore.active, RideStore.paused, RideStore.autoPaused, RideStore.mapVisible,
+    ) {
         val m = map ?: return@LaunchedEffect
         if (!RideStore.mapVisible) return@LaunchedEffect
-        refreshRidden(m, trace)
+        val points = if (drawTip) {
+            trace + com.crazycapy.randonneur.state.RidePoint(
+                tipLat!!, tipLon!!, System.currentTimeMillis(),
+            )
+        } else trace
+        refreshRidden(m, points)
     }
 
     // Tap a checkpoint marker to open its text popup.
