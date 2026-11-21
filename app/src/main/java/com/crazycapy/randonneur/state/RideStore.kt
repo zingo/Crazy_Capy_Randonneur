@@ -144,6 +144,7 @@ object RideStore {
     var autoPaused: Boolean by mutableStateOf(false)
     var totalElapsedSec: Long by mutableStateOf(0L)
     var gpsIntervalSec: Int by mutableStateOf(3)
+    var lastRideSummary: RideHistory.SavedRide? by mutableStateOf(null)
     var freeStartLat: Double? = null
     var freeStartLon: Double? = null
     var homeDistanceM: Double by mutableStateOf(0.0)

@@ -594,7 +594,7 @@ class NavigationService : Service() {
     private fun saveRideHistory() {
         if ((RideStore.mode == RideMode.GPS || RideStore.mode == RideMode.FREE) && RideStore.riddenM >= 50.0) {
             appendTracePoints()
-            RideHistory.finalizeRide(this, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh, RideStore.totalElapsedSec)
+            RideStore.lastRideSummary = RideHistory.finalizeRide(this, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh, RideStore.totalElapsedSec)
         } else {
             RideHistory.abort(this)
         }
