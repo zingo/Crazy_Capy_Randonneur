@@ -84,6 +84,9 @@ internal fun RideHistoryDialog(
                                             exportTarget = file
                                             saveLauncher.launch(ride.name + ".gpx")
                                         }) { Text("Save") }
+                                        TextButton(onClick = {
+                                            RideHistory.exportTcx(context, ride.id)?.let { tcx -> shareGpx(context, tcx, ride.name + " (TCX)") }
+                                        }) { Text("TCX") }
                                     }
                                     TextButton(onClick = { renameTarget = ride }) { Text("Rename") }
                                     TextButton(onClick = {
