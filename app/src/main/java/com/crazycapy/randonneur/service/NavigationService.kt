@@ -219,6 +219,10 @@ class NavigationService : Service() {
         rideSavedForHistory = false
         lastCheckpointMs = SystemClock.elapsedRealtime()
         pointsCommitted = 0
+        RideStore.freeStartLat = null
+        RideStore.freeStartLon = null
+        RideStore.homeDistanceM = 0.0
+        RideStore.homeBearingDeg = null
         autoStopSinceMs = 0L
         autoMoveSinceMs = 0L
         lastEleM = null
@@ -517,6 +521,14 @@ class NavigationService : Service() {
 
         nav?.update(lat, lon, RideStore.speedKmh)
         RideStore.routeM = nav?.distanceAlongM ?: 0.0
+        if (RideStore.mode == RideMode.FREE) {
+            val startLat = RideStore.freeStartLat.also { if (it == null) RideStore.freeStartLat = lat }
+            val startLon = RideStore.freeStartLon.also { if (it == null) RideStore.freeStartLon = lon }
+            if (startLat != null && startLon != null) {
+                RideStore.homeDistanceM = Geo.distanceMeters(startLat, startLon, lat, lon)
+                RideStore.homeBearingDeg = Geo.bearingDegrees(startLat, startLon, lat, lon)
+            }
+        }
         RideStore.lat = lat
         RideStore.lon = lon
         if (RideStore.mode == RideMode.FREE) {

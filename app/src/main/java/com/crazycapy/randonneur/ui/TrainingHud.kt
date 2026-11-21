@@ -181,6 +181,12 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                         unit = "km/h max",
                         modifier = Modifier.weight(1f),
                     )
+                    val home = Phrases.formatShort(RideStore.homeDistanceM)
+                    Metric(
+                        value = home.substringBefore(" "),
+                        unit = home.substringAfter(" ") + " home",
+                        modifier = Modifier.weight(1f),
+                    )
                 } else {
                     Metric(
                         value = leftValue,
