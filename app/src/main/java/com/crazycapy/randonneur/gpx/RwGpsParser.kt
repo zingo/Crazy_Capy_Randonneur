@@ -22,7 +22,13 @@ import com.google.gson.JsonParser
 object RwGpsParser {
 
     /** A single entry from a user's public route list. */
-    data class RouteSummary(val id: String, val name: String, val distanceM: Double)
+    data class RouteSummary(
+        val id: String,
+        val name: String,
+        val distanceM: Double,
+        val elevationGainM: Double = 0.0,
+        val locality: String? = null,
+    )
 
     fun parse(json: String): Track? = runCatching {
         val root = JsonParser.parseString(json).asJsonObject
@@ -65,7 +71,9 @@ object RwGpsParser {
             val id = o.get("id")?.asLong?.toString() ?: continue
             val name = o.get("name")?.asString?.trim()?.takeIf { it.isNotEmpty() } ?: "Route $id"
             val distance = o.get("distance")?.asDouble ?: 0.0
-            out.add(RouteSummary(id, name, distance))
+            val gain = o.get("elevation_gain")?.asDouble ?: 0.0
+            val locality = o.get("locality")?.asString?.trim()?.takeIf { it.isNotEmpty() }
+            out.add(RouteSummary(id, name, distance, gain, locality))
         }
         out
     }.getOrDefault(emptyList())
