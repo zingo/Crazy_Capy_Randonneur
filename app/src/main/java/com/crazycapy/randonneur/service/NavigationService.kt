@@ -314,7 +314,7 @@ class NavigationService : Service() {
         runCatching {
             lm.requestLocationUpdates(
                 LocationManager.GPS_PROVIDER,
-                GPS_INTERVAL_MS,
+                (RideStore.gpsIntervalSec * 1000L),
                 0f,
                 locationListener,
                 Looper.getMainLooper(),
@@ -337,7 +337,7 @@ class NavigationService : Service() {
         runCatching {
             lm.requestLocationUpdates(
                 LocationManager.GPS_PROVIDER,
-                GPS_INTERVAL_MS,
+                (RideStore.gpsIntervalSec * 1000L),
                 0f,
                 locationListener,
                 Looper.getMainLooper(),
