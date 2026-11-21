@@ -74,6 +74,9 @@ debug-build-only; release builds carry none of it.
   Reads the route's public JSON (POIs become checkpoints), so no account or
   premium needed. Only public routes are listed; private ones can be imported
   as GPX or by making them public.
+- **Offline route maps** – from a saved route's long-press menu, download a
+  MapLibre offline region covering its corridor (1.5 km either side, zoom
+  8–14), with in-app progress and cancel, for network-free riding.
 - **Training HUD** – a compact top-left 3×2 grid with speed, distance covered,
   elapsed time, average speed, distance left (switches to distance-to-next
   checkpoint while riding, e.g. `12.4 km CP 3`) and a tap-to-cycle ETA /

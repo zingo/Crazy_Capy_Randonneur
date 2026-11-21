@@ -51,6 +51,7 @@ import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.ui.helpers.copyToUri
 import com.crazycapy.randonneur.ui.helpers.shareGpx
 import com.crazycapy.randonneur.gpx.RwGpsParser
+import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.state.RwGpsImport
@@ -81,6 +82,7 @@ internal fun RoutesDialog(
     var showRwgps by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
     var renameTargetId by remember { mutableStateOf<String?>(null) }
+    var offlineTarget by remember { mutableStateOf<Track?>(null) }
     var exportTarget by remember { mutableStateOf<File?>(null) }
     val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gpx+xml")) { uri ->
         val f = exportTarget
@@ -174,6 +176,15 @@ internal fun RoutesDialog(
                                         },
                                     )
                                 }
+                                DropdownMenuItem(
+                                    text = { Text("Download offline map") },
+                                    onClick = {
+                                        showMenu = false
+                                        val t = RideStore.track?.takeIf { it.name == route.name }
+                                            ?: RouteStore.loadTrack(context, route.id)
+                                        if (t != null) offlineTarget = t
+                                    },
+                                )
                                 RouteStore.fileFor(context, route.id)?.let { file ->
                                     DropdownMenuItem(
                                         text = { Text("Export GPX") },
@@ -248,6 +259,12 @@ internal fun RoutesDialog(
                 dismissButton = { TextButton(onClick = { renameTargetId = null }) { Text("Cancel") } },
             )
         }
+    }
+    offlineTarget?.let { target ->
+        OfflinePackDialog(
+            track = target,
+            onDismiss = { offlineTarget = null },
+        )
     }
     if (showHistory) {
         RideHistoryDialog(
