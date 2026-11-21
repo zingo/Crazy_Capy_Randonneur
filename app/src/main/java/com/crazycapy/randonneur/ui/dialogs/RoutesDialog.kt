@@ -351,6 +351,12 @@ private fun RwGpsImportDialog(
                         }
                         HorizontalDivider()
                     }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Only public routes are listed. Make others public, or export/import their GPX.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
                     if (busy) {
                         Spacer(Modifier.height(8.dp))
                         Text("Working…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
