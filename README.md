@@ -78,7 +78,7 @@ debug-build-only; release builds carry none of it.
   elapsed time, average speed, distance left (switches to distance-to-next
   checkpoint while riding, e.g. `12.4 km CP 3`) and a tap-to-cycle ETA /
   time-left / total-time / ETA-CPx readout (dots under it show the selected
-  mode), beside a live preview of the route ahead at the next turn. Tap the
+  mode), beside a live preview of the route ahead at the next turn and a small elevation profile of the next ~2 km. Tap the
   covered distance to switch between distance along the route and the actual
   distance ridden; the ridden path is drawn as a blue line on the map.
 - **Free ride** – start without a route: no green line or guidance, but speed,

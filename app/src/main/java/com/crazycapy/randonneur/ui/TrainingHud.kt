@@ -17,6 +17,7 @@
  */
 package com.crazycapy.randonneur.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +45,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -214,6 +216,40 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 TurnPreview(Modifier.size(100.dp))
+                val route = RideStore.track
+                if (route != null && !isFreeRide) {
+                    val startM = RideStore.routeM
+                    val endM = (startM + 2000.0).coerceAtMost(route.lengthMeters)
+                    if (endM - startM > 50) {
+                        val samples = ArrayList<Double>()
+                        var d = startM
+                        while (d <= endM) {
+                            route.pointAtDistance(d).ele?.let { samples.add(it) }
+                            d += 50.0
+                        }
+                        if (samples.size >= 2) {
+                            val lo = samples.min()
+                            val hi = samples.max().let { if (it - lo < 1.0) lo + 1.0 else it }
+                            Canvas(Modifier.size(100.dp, 30.dp)) {
+                                val path = Path()
+                                samples.forEachIndexed { i, e ->
+                                    val x = size.width * i / (samples.size - 1)
+                                    val y = size.height * (1f - ((e - lo) / (hi - lo)).toFloat())
+                                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                                }
+                                val fill = Path().apply {
+                                    addPath(path)
+                                    lineTo(size.width, size.height)
+                                    lineTo(0f, size.height)
+                                    close()
+                                }
+                                drawPath(fill, Color(0x552E5D46))
+                                drawPath(path, Color(0xFF2E5D46), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
+                            }
+                            Text("next 2 km", color = Color(0xFFBABABA), fontSize = 9.sp)
+                        }
+                    }
+                }
                 Text(
                     text = "${(previewM ?: 0.0).coerceAtLeast(0.0).roundToInt()} m",
                     color = if (RideStore.darkMap) Color(0xFFE9E9E9) else Color(0xFF1A1A1A),
