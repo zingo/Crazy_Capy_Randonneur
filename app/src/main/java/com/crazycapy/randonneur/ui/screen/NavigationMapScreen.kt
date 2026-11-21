@@ -86,7 +86,9 @@ import com.crazycapy.randonneur.nav.TurnFinder
 import com.crazycapy.randonneur.radar.RadarClient
 import com.crazycapy.randonneur.service.NavigationService
 import com.crazycapy.randonneur.state.RideMode
+import com.crazycapy.randonneur.state.RideHistory
 import com.crazycapy.randonneur.state.RideStore
+import com.crazycapy.randonneur.ui.helpers.shareGpx
 import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.ui.OffRouteAck
 import com.crazycapy.randonneur.ui.RadarStatusBar
@@ -604,6 +606,41 @@ internal fun NavigationMapScreen(
         })
     }
 
+    RideStore.lastRideSummary?.let { r ->
+        AlertDialog(
+            onDismissRequest = { RideStore.lastRideSummary = null },
+            title = { Text(r.name) },
+            text = {
+                androidx.compose.foundation.layout.Column {
+                    Text(
+                        "${com.crazycapy.randonneur.voice.Phrases.formatDistance(r.distanceM)} · moving ${fmtSec(r.durationSec)} · total ${fmtSec(r.totalSec)}\n" +
+                            "paused ${fmtSec((r.totalSec - r.durationSec).coerceAtLeast(0))} · " +
+                            "${(if (r.totalSec > 0) 100.0 * r.durationSec / r.totalSec else 0.0).toInt()}% moving\n" +
+                            "${"%.1f".format(r.avgKmh)} km/h avg · ${"%.1f".format(r.maxKmh)} max · ↑${r.ascentM.toInt()} ↓${r.descentM.toInt()} m\n" +
+                            "${r.stops} stops · longest ${fmtSec(r.longestStopSec)}",
+                    )
+                }
+            },
+            confirmButton = {
+                RideHistory.fileFor(context, r.id)?.let { f ->
+                    TextButton(onClick = { shareGpx(context, f, r.name) }) { Text("Export") }
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        val t = RideHistory.loadTrack(context, r.id)
+                        if (t != null) {
+                            RouteStore.saveTrack(context, Track(r.name, t.points, t.waypoints))
+                        }
+                        RideStore.lastRideSummary = null
+                    }) { Text("Save as route") }
+                    TextButton(onClick = { RideStore.lastRideSummary = null }) { Text("Done") }
+                }
+            },
+        )
+    }
+
     // Pre-cache ask dialog.
     LaunchedEffect(RideStore.track) {
         val t = RideStore.track
@@ -696,3 +733,6 @@ internal fun MapCompass(onClick: () -> Unit, modifier: Modifier = Modifier) {
         }
     }
 }
+
+
+private fun fmtSec(seconds: Long): String { val h=seconds/3600; val m=(seconds%3600)/60; val sec=seconds%60; return if (h>0) "%d:%02d:%02d".format(h,m,sec) else "%d:%02d".format(m,sec) }

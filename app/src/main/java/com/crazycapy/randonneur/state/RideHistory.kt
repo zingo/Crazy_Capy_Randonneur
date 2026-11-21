@@ -35,6 +35,8 @@ object RideHistory {
         val ascentM: Double = 0.0,
         val descentM: Double = 0.0,
         val totalSec: Long = durationSec,
+        val stops: Int = 0,
+        val longestStopSec: Long = 0,
     )
 
     private fun dir(context: Context): File = File(context.filesDir, "rides").apply { mkdirs() }
@@ -120,7 +122,16 @@ object RideHistory {
             }
         }
         val total = (meta?.totalSec ?: fallbackTotalSec).takeIf { it > 0 } ?: dur
-        val ride = SavedRide("ride-$started", name, started, dur, dist, avg, max, ascent, descent, total)
+        var stops = 0
+        var longestStop = 0L
+        points.zipWithNext().forEach { (a, b) ->
+            val gap = (b.timeMs - a.timeMs) / 1000
+            if (gap >= 10) {
+                stops++
+                if (gap > longestStop) longestStop = gap
+            }
+        }
+        val ride = SavedRide("ride-$started", name, started, dur, dist, avg, max, ascent, descent, total, stops, longestStop)
 
         runCatching { atomicWrite(rideFile(context, ride.id), buildGpx(name, started, points)) }.getOrElse { return null }
         runCatching {
@@ -243,6 +254,8 @@ object RideHistory {
             p.getOrNull(7)?.toDoubleOrNull() ?: 0.0,
             p.getOrNull(8)?.toDoubleOrNull() ?: 0.0,
             p.getOrNull(9)?.toLongOrNull() ?: (p[3].toLongOrNull() ?: 0L),
+            p.getOrNull(10)?.toIntOrNull() ?: 0,
+            p.getOrNull(11)?.toLongOrNull() ?: 0L,
         )
     }
 
@@ -273,6 +286,6 @@ object RideHistory {
         listOf(
             id, name, startedAtMs.toString(), durationSec.toString(), distanceM.toString(),
             avgKmh.toString(), maxKmh.toString(), ascentM.toString(), descentM.toString(),
-            totalSec.toString(),
+            totalSec.toString(), stops.toString(), longestStopSec.toString(),
         ).joinToString("\t")
 }
