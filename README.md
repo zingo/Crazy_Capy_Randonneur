@@ -82,7 +82,7 @@ debug-build-only; release builds carry none of it.
   distance ridden; the ridden path is drawn as a blue line on the map.
 - **Free ride** – start without a route: no green line or guidance, but speed,
   actual distance, average/max, the blue breadcrumb and a GPX are recorded just
-  like a routed ride (the HUD swaps distance-left/ETA for max speed).
+  like a routed ride. The HUD shows max speed and straight-line distance home.
 - **Ride history & pause** – One map control: Pause, then Resume or Finish (saves). Auto-pause when you stop (10 s below 2 km/h,
   resumes when moving again), plus manual Pause/Stop above the map controls.
   Average speed is moving average; ascent/descent are recorded. Pause freezes tracking; Stop saves the actual ridden track (off-route

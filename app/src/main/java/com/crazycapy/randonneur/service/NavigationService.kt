@@ -522,8 +522,10 @@ class NavigationService : Service() {
         nav?.update(lat, lon, RideStore.speedKmh)
         RideStore.routeM = nav?.distanceAlongM ?: 0.0
         if (RideStore.mode == RideMode.FREE) {
-            val startLat = RideStore.freeStartLat.also { if (it == null) RideStore.freeStartLat = lat }
-            val startLon = RideStore.freeStartLon.also { if (it == null) RideStore.freeStartLon = lon }
+            if (RideStore.freeStartLat == null) RideStore.freeStartLat = lat
+            if (RideStore.freeStartLon == null) RideStore.freeStartLon = lon
+            val startLat = RideStore.freeStartLat
+            val startLon = RideStore.freeStartLon
             if (startLat != null && startLon != null) {
                 RideStore.homeDistanceM = Geo.distanceMeters(startLat, startLon, lat, lon)
                 RideStore.homeBearingDeg = Geo.bearingDegrees(startLat, startLon, lat, lon)
