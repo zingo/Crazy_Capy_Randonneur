@@ -15,7 +15,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -33,6 +36,7 @@ internal fun RideDetailDialog(
     onClose: () -> Unit,
 ) {
     val series = remember(ride.id) { RideHistory.loadSeries(context, ride.id) }
+    var showHr by remember { mutableStateOf(true) }
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text(ride.name) },
@@ -47,6 +51,12 @@ internal fun RideDetailDialog(
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 if (series.size >= 2) {
+                    val hrs = series.mapNotNull { it.hr }
+                    if (hrs.isNotEmpty()) {
+                        TextButton(onClick = { showHr = !showHr }) {
+                            Text(if (showHr) "Hide HR" else "Show HR")
+                        }
+                    }
                     Canvas(Modifier.fillMaxWidth().height(130.dp).padding(top = 12.dp)) {
                         val t0 = series.first().tMs
                         val span = (series.last().tMs - t0).coerceAtLeast(1)
@@ -83,9 +93,26 @@ internal fun RideDetailDialog(
                             if (i == 0) speed.moveTo(px, py) else speed.lineTo(px, py)
                         }
                         drawPath(speed, Color(0xFFFF7F0E), style = Stroke(width = 1.5f))
+                        if (showHr && hrs.isNotEmpty()) {
+                            val hMin = hrs.min().toDouble()
+                            val hMax = hrs.max().toDouble().let { if (it - hMin < 1.0) hMin + 1.0 else it }
+                            val hrLine = Path()
+                            var first = true
+                            series.forEach { p ->
+                                val h = p.hr ?: return@forEach
+                                val px = x(p.tMs)
+                                val py = size.height * (1f - ((h - hMin) / (hMax - hMin)).toFloat())
+                                if (first) { hrLine.moveTo(px, py); first = false } else hrLine.lineTo(px, py)
+                            }
+                            drawPath(hrLine, Color(0xFFE53935), style = Stroke(width = 1.5f))
+                        }
                         drawLine(Color(0x22000000), Offset(0f, size.height), Offset(size.width, size.height), 1f)
                     }
-                    Text("elevation (blue fill) · speed (orange)", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "elevation ${(series.mapNotNull { it.eleM }.minOrNull() ?: 0.0).toInt()}–${(series.mapNotNull { it.eleM }.maxOrNull() ?: 0.0).toInt()} m · speed max ${"%.0f".format(series.maxOf { it.speedKmh })} km/h" +
+                            (if (series.any { it.hr != null }) " · HR red" else ""),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 } else {
                     Text("No track samples in this file.", style = MaterialTheme.typography.bodySmall)
                 }
