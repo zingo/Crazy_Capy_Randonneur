@@ -11,7 +11,7 @@ your ears do the navigating — no accounts, no cloud, no ads.
 
 ## Why it preserve battery
 
-- **Screen off while riding** – guidance is voice-first. A foreground service
+- **Screen off while riding** (screen stays awake only while actually moving; paused/stopped lets it sleep) – guidance is voice-first. A foreground service
   and a light wake lock keep GPS, navigation and speech running while the
   display sleeps — the single biggest win on an OLED phone.
 - **GPS cadence setting** – choose 5 s (power-save), 3 s (normal) or 1 s (precise). Also a steady fix interval (no Play Services

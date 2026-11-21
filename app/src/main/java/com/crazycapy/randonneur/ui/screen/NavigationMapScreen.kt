@@ -413,6 +413,12 @@ internal fun NavigationMapScreen(
         removeRadarCone(m)
     }
 
+    val hostActivity = context as? android.app.Activity
+    LaunchedEffect(RideStore.active, RideStore.paused, RideStore.autoPaused) {
+        hostActivity?.window?.decorView?.keepScreenOn =
+            RideStore.active && !RideStore.paused && !RideStore.autoPaused
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             when (pendingStart) {
