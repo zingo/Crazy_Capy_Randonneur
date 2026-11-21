@@ -91,7 +91,7 @@ debug-build-only; release builds carry none of it.
   Garmin/Strava/Coros. Progress is
   appended every 5 minutes (no full rewrite), so an interrupted ride is recovered
   on the next launch. Routes → Rides lists distance, duration, average and max
-  speed, and each ride can be exported/saved as GPX, renamed, or loaded back as
+  speed, and each ride can be exported/saved as GPX or TCX, renamed, or loaded back as
   a route (useful if you found a better way than the original).
 - **Waypoint head-up** – POIs baked into your GPX are projected onto the route
   and announced as you approach. Named checkpoints are drawn on the map; tap one

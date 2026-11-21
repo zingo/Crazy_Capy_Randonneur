@@ -149,7 +149,7 @@ object RideHistory {
         return finalizeRide(context, 0L, 0L, 0.0, 0.0, 0L)
     }
 
-    data class SeriesPoint(val tMs: Long, val eleM: Double?, val hr: Int?, val speedKmh: Double)
+    data class SeriesPoint(val tMs: Long, val lat: Double, val lon: Double, val eleM: Double?, val hr: Int?, val speedKmh: Double)
 
     /** Parse a saved ride's GPX into a time/elevation/HR/speed series for charts. */
     fun loadSeries(context: Context, id: String): List<SeriesPoint> = runCatching {
@@ -174,11 +174,31 @@ object RideHistory {
             if (prevLat != null && prevLon != null && prevT != null && t > prevT!!) {
                 speed = Geo.distanceMeters(prevLat!!, prevLon!!, lat, lon) / ((t - prevT!!) / 1000.0) * 3.6
             }
-            out.add(SeriesPoint(t, ele, hr, speed.coerceIn(0.0, 120.0)))
+            out.add(SeriesPoint(t, lat, lon, ele, hr, speed.coerceIn(0.0, 120.0)))
             prevLat = lat; prevLon = lon; prevT = t
         }
         out
     }.getOrDefault(emptyList())
+
+    fun exportTcx(context: Context, id: String): File? = runCatching {
+        val ride = list(context).firstOrNull { it.id == id } ?: return null
+        val pts = loadSeries(context, id)
+        if (pts.size < 2) return null
+        val iso = { ms: Long -> Instant.ofEpochMilli(ms).toString() }
+        val sb = StringBuilder()
+        sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+        sb.append("<TrainingCenterDatabase xmlns=\"http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2\"><Activities><Activity Sport=\"Biking\"><Id>").append(esc(ride.name)).append("</Id><Lap StartTime=\"").append(iso(ride.startedAtMs)).append("\"><TotalTimeSeconds>").append(ride.totalSec).append("</TotalTimeSeconds><DistanceMeters>").append(ride.distanceM).append("</DistanceMeters><Calories>0</Calories><Intensity>Active</Intensity><TriggerMethod>Manual</TriggerMethod><Track>")
+        pts.forEach { p ->
+            sb.append("<Trackpoint><Time>").append(iso(p.tMs)).append("</Time><Position><LatitudeDegrees>").append(p.lat).append("</LatitudeDegrees><LongitudeDegrees>").append(p.lon).append("</LongitudeDegrees></Position>")
+            p.eleM?.let { sb.append("<AltitudeMeters>").append(it).append("</AltitudeMeters>") }
+            p.hr?.let { sb.append("<HeartRateBpm><Value>").append(it).append("</Value></HeartRateBpm>") }
+            sb.append("</Trackpoint>")
+        }
+        sb.append("</Track></Lap></Activity></Activities></TrainingCenterDatabase>\n")
+        val f = File(dir(context), "$id.tcx")
+        atomicWrite(f, sb.toString())
+        f
+    }.getOrNull()
 
     fun loadTrack(context: Context, id: String): Track? = runCatching {
         val f = rideFile(context, id)
