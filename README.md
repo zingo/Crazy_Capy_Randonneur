@@ -72,7 +72,8 @@ debug-build-only; release builds carry none of it.
   ready-to-use profile link, remembers the last URL you used, and can pick up a
   ridewithgps link you copied to the clipboard).
   Reads the route's public JSON (POIs become checkpoints), so no account or
-  premium needed.
+  premium needed. Only public routes are listed; private ones can be imported
+  as GPX or by making them public.
 - **Training HUD** – a compact top-left 3×2 grid with speed, distance covered,
   elapsed time, average speed, distance left (switches to distance-to-next
   checkpoint while riding, e.g. `12.4 km CP 3`) and a tap-to-cycle ETA /
