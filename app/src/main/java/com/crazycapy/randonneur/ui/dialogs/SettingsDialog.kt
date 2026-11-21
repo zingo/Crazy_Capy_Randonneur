@@ -96,6 +96,17 @@ internal fun SettingsDialog(
                     title = "Navigation voice",
                     subtitle = "Spoken turn guidance",
                 )
+                Column(Modifier.fillMaxWidth()) {
+                    Text("GPS update rate", style = MaterialTheme.typography.bodyMedium)
+                    Text("Power-save 5 s · normal 3 s · precise 1 s", style = MaterialTheme.typography.bodySmall)
+                    Row {
+                        listOf(5 to "5 s", 3 to "3 s", 1 to "1 s").forEach { (sec, label) ->
+                            TextButton(onClick = { RideStore.gpsIntervalSec = sec; RouteStore.saveSettings(context) }) {
+                                Text(if (RideStore.gpsIntervalSec == sec) "$label ✓" else label)
+                            }
+                        }
+                    }
+                }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("Saved routes", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = { onShowRoutes(); onDismiss() }) { Text("Manage") }

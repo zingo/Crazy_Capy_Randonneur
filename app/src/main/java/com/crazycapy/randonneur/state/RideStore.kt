@@ -143,6 +143,7 @@ object RideStore {
     var descentM: Double by mutableStateOf(0.0)
     var autoPaused: Boolean by mutableStateOf(false)
     var totalElapsedSec: Long by mutableStateOf(0L)
+    var gpsIntervalSec: Int by mutableStateOf(3)
     var freeStartLat: Double? = null
     var freeStartLon: Double? = null
     var homeDistanceM: Double by mutableStateOf(0.0)

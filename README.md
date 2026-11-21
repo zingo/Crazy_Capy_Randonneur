@@ -14,7 +14,7 @@ your ears do the navigating — no accounts, no cloud, no ads.
 - **Screen off while riding** – guidance is voice-first. A foreground service
   and a light wake lock keep GPS, navigation and speech running while the
   display sleeps — the single biggest win on an OLED phone.
-- **Gentle GPS cadence** – a steady 3-second fix interval (no Play Services
+- **GPS cadence setting** – choose 5 s (power-save), 3 s (normal) or 1 s (precise). Also a steady fix interval (no Play Services
   fused location, no cloud round-trips) is plenty for turn-by-turn guidance.
 - **Pre-cached turn previews** – the app offers to render every turn preview and
   warm the map tiles along the route *before* you leave (on Wi-Fi, at home).

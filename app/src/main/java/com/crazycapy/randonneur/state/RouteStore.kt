@@ -175,6 +175,7 @@ object RouteStore {
         map["radarIntegration"]?.toBooleanStrictOrNull()?.let { RideStore.radarIntegrationEnabled = it }
         map["showGhostControls"]?.toBooleanStrictOrNull()?.let { RideStore.showGhostControls = it }
         map["rwgpsUrl"]?.takeIf { it.isNotBlank() }?.let { RideStore.rwgpsUrl = it }
+        map["gpsIntervalSec"]?.toIntOrNull()?.takeIf { it in listOf(1, 3, 5) }?.let { RideStore.gpsIntervalSec = it }
     }
 
     fun saveSettings(context: Context) {
@@ -192,6 +193,7 @@ object RouteStore {
             "radarIntegration=${RideStore.radarIntegrationEnabled}",
             "showGhostControls=${RideStore.showGhostControls}",
             "rwgpsUrl=${RideStore.rwgpsUrl}",
+            "gpsIntervalSec=${RideStore.gpsIntervalSec}",
         )
         runCatching { settingsFile(context).writeText(lines.joinToString("\n")) }
     }
