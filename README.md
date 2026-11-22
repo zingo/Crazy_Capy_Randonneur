@@ -16,18 +16,23 @@ your ears do the navigating — no accounts, no cloud, no ads.
   display sleeps — the single biggest win on an OLED phone.
 - **GPS cadence setting** – choose 5 s (power-save), 3 s (normal) or 1 s (precise). Also a steady fix interval (no Play Services
   fused location, no cloud round-trips) is plenty for turn-by-turn guidance.
-- **Pre-cached turn previews** – the app offers to render every turn preview and
-  warm the map tiles along the route *before* you leave (on Wi-Fi, at home).
-  On the ride the HUD pops up instantly from those cached images with zero tile
-  fetches — and no/less live rendering, so your radio stays quieter. In a
-  controlled benchmark, showing a pre-cached preview cost ~1.4–2.5× less energy
-  and ~6–8× less CPU than rendering it live (screen on/off), while warming only
-  the map tiles made no measurable difference. On a ride the saved energy is
-  small next to the display's draw; the bigger wins are much less CPU work and
-  far fewer network/tile fetches (quieter radio, works offline) — see the
-  [cache cost benchmark](docs/power/cache-bench.html). If it gets interrupted it
+- **Prepare route offline** – one action per saved route (also offered when a
+  route loads) downloads a MapLibre offline pack for its corridor (1.5 km
+  either side, zoom 8–14) and then pre-renders every turn preview and corridor
+  tile it can in a single run, with a phase label, progress and cancel (map
+  first, so previews use the cached tiles). There is no artificial turn cap; it
+  skips phases that are already done, and if the preview pass is interrupted it
   reports how many turns were cached ("Pre-cached 34/347 · rest on next load")
-  and resumes on the next load, skipping what's done.
+  and resumes on the next run, skipping what's done. On the ride the HUD pops
+  up instantly from those cached images with zero tile fetches — and no/less
+  live rendering, so your radio
+  stays quieter — and the map works without network. In a controlled benchmark,
+  showing a pre-cached preview cost ~1.4–2.5× less energy and ~6–8× less CPU
+  than rendering it live (screen on/off), while warming only the map tiles made
+  no measurable difference. On a ride the saved energy is small next to the
+  display's draw; the bigger wins are much less CPU work and far fewer
+  network/tile fetches (quieter radio, works offline) — see the
+  [cache cost benchmark](docs/power/cache-bench.html).
 - **Dark OLED map by default** – the dark tile style is the default; light is
   one tap away.
 - **Map scale bar & compass** – a distance scale sits bottom-centre and tracks
@@ -74,9 +79,6 @@ debug-build-only; release builds carry none of it.
   Reads the route's public JSON (POIs become checkpoints), so no account or
   premium needed. Only public routes are listed; private ones can be imported
   as GPX or by making them public.
-- **Offline route maps** – from a saved route's long-press menu, download a
-  MapLibre offline region covering its corridor (1.5 km either side, zoom
-  8–14), with in-app progress and cancel, for network-free riding.
 - **Training HUD** – a compact top-left 3×2 grid with speed, distance covered,
   elapsed time, average speed, distance left (switches to distance-to-next
   checkpoint while riding, e.g. `12.4 km CP 3`) and a tap-to-cycle ETA /
@@ -258,7 +260,7 @@ fix pipeline and asserts arrival with turn announcements.
 - **Settings**: the gear icon (bottom-right) opens ride options: toggle the
   next-turn popup, the per-second notification (battery savers) and audio
   ducking; set the **turn-beep** and **navigation-voice** volumes (0 = off);
-  toggle the **pre-cache** prompt; clear all route caches; manage your saved
+  toggle the **Prepare routes offline** prompt; clear all route caches; manage your saved
   routes; start a **ghost ride**; and reach the app-version/about section plus
   the **Open-source licenses** viewer.
 
@@ -280,7 +282,7 @@ rendering via `adb exec-out screencap` and pixel analysis (see
 | `app/src/main/java/.../service` | Foreground `NavigationService`: GPS, ghost-ride driver, TTS (audio-focus ducking), wake lock, living notification |
 | `app/src/main/java/.../state` | `RideStore` (shared app state), `RouteStore` (on-device route library + settings/last-ride persistence), `RideMode` |
 | `app/src/main/java/.../ble` | BLE heart-rate provider (stub by default) |
-| `app/src/main/java/.../cache` | Pre-cache: turn-image generation, storage, corridor tile warm, anchor projection |
+| `app/src/main/java/.../cache` | Prepare route offline: corridor map pack, turn-image generation, storage, tile warm, anchor projection |
 | `app/src/main/java/.../sim` | Ghost ride simulator |
 | `app/src/main/java/.../ui` | Compose overlays: HUD + next-turn preview, off-route ack, dialogs |
 | `app/src/main/java/.../radar` | Rear-radar client: binding, the rider's grant, the shared target model and its projection |

@@ -80,6 +80,8 @@ import com.crazycapy.randonneur.DEFAULT_LAT
 import com.crazycapy.randonneur.DEFAULT_LON
 import com.crazycapy.randonneur.TAG
 import com.crazycapy.randonneur.cache.RouteCache
+import com.crazycapy.randonneur.cache.RouteOfflinePack
+import com.crazycapy.randonneur.cache.RoutePrepare
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.gpx.Waypoint
 import com.crazycapy.randonneur.nav.TurnFinder
@@ -97,6 +99,7 @@ import com.crazycapy.randonneur.ui.components.GhostControls
 import com.crazycapy.randonneur.ui.components.ResumeBanner
 import com.crazycapy.randonneur.ui.components.showResumeOffer
 import com.crazycapy.randonneur.ui.dialogs.LicensesDialog
+import com.crazycapy.randonneur.ui.dialogs.PrepareRouteDialog
 import com.crazycapy.randonneur.ui.dialogs.RoutesDialog
 import com.crazycapy.randonneur.ui.dialogs.SettingsDialog
 import com.crazycapy.randonneur.ui.dialogs.RideHistoryDialog
@@ -178,7 +181,8 @@ internal fun NavigationMapScreen(
     var showRoutes by remember { mutableStateOf(false) }
     var pendingStart by remember { mutableStateOf<RideMode?>(null) }
     var showRideHistory by remember { mutableStateOf(false) }
-    var askPrecacheFor by remember { mutableStateOf<Track?>(null) }
+    var askPrepareFor by remember { mutableStateOf<Track?>(null) }
+    var prepareTarget by remember { mutableStateOf<Track?>(null) }
     var cpPopup by remember { mutableStateOf<Waypoint?>(null) }
     var followRider by remember { mutableStateOf(true) }
 
@@ -655,29 +659,41 @@ internal fun NavigationMapScreen(
         )
     }
 
-    // Pre-cache ask dialog.
+    // Prepare-route-offline ask dialog.
     LaunchedEffect(RideStore.track) {
-        val t = RideStore.track
-        if (t != null && RideStore.precacheEnabled && !RideStore.active && !RideStore.precacheAskSuppressed && RouteCache.activeRouteId == null && !RouteCache.isCached(context, RouteStore.routeId(t.name), t, RideStore.darkMap)) {
-            val turns = TurnFinder.find(t).size
-            if (turns > 0) askPrecacheFor = t
+        val t = RideStore.track ?: return@LaunchedEffect
+        if (!RideStore.precacheEnabled || RideStore.active || RideStore.precacheAskSuppressed) return@LaunchedEffect
+        if (RoutePrepare.state.running || RouteCache.activeRouteId != null) return@LaunchedEffect
+        val routeId = RouteStore.routeId(t.name)
+        val previewsCached = RouteCache.isCached(context, routeId, t, false) &&
+            RouteCache.isCached(context, routeId, t, true) &&
+            RouteCache.hasOverview(context, routeId)
+        RouteOfflinePack.findComplete(context, t) { mapComplete ->
+            if (RideStore.track?.name == t.name && (!mapComplete || !previewsCached)) askPrepareFor = t
         }
     }
-    askPrecacheFor?.let { track ->
+    askPrepareFor?.let { track ->
         val turns = TurnFinder.find(track).size
         val estMb = (turns * 4 * 50 + 512) / 1024
+        val detail = if (turns > 0) "$turns turns" else "map only"
         AlertDialog(
-            onDismissRequest = { askPrecacheFor = null },
-            title = { Text("Pre-cache route?") },
+            onDismissRequest = { askPrepareFor = null },
+            title = { Text("Prepare route offline?") },
             text = {
                 Column {
-                    Text("Render turn previews and warm tiles for ${track.name} ahead of time — saves battery on the ride.", style = MaterialTheme.typography.bodyMedium)
+                    Text("Download map tiles and render turn previews for ${track.name} ahead of time — works offline and saves battery on the ride.", style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(8.dp))
-                    Text("~${estMb} MB (best on Wi-Fi while charging) · ${turns} turns", style = MaterialTheme.typography.bodySmall)
+                    Text("~${estMb} MB (best on Wi-Fi while charging) · $detail", style = MaterialTheme.typography.bodySmall)
                 }
             },
-            confirmButton = { TextButton(onClick = { askPrecacheFor = null; RouteCache.preCache(context, track) }) { Text("Pre-cache") } },
-            dismissButton = { TextButton(onClick = { askPrecacheFor = null }) { Text("Not now") } },
+            confirmButton = { TextButton(onClick = { askPrepareFor = null; prepareTarget = track }) { Text("Prepare") } },
+            dismissButton = { TextButton(onClick = { askPrepareFor = null }) { Text("Not now") } },
+        )
+    }
+    prepareTarget?.let { track ->
+        PrepareRouteDialog(
+            track = track,
+            onDismiss = { prepareTarget = null },
         )
     }
 }

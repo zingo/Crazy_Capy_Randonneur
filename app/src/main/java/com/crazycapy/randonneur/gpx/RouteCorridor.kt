@@ -43,4 +43,15 @@ object RouteCorridor {
             east = (east + lonPad).coerceAtMost(180.0),
         )
     }
+
+    fun sampleDistances(lengthMeters: Double, stepMeters: Double): List<Double> {
+        if (lengthMeters <= 0.0 || stepMeters <= 0.0) return emptyList()
+        val distances = ArrayList<Double>()
+        var d = 0.0
+        while (d < lengthMeters) {
+            distances.add(d)
+            d += stepMeters
+        }
+        return distances
+    }
 }

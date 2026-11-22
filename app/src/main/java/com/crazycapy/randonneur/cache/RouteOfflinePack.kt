@@ -49,7 +49,7 @@ object RouteOfflinePack {
     private var region: OfflineRegion? = null
     private var generation = 0L
 
-    fun start(context: Context, track: Track) {
+    fun start(context: Context, track: Track, onDone: (() -> Unit)? = null) {
         val appContext = context.applicationContext
         generation++
         val gen = generation
@@ -97,6 +97,7 @@ object RouteOfflinePack {
                         offlineRegion.setObserver(object : OfflineRegion.OfflineRegionObserver {
                             override fun onStatusChanged(status: OfflineRegionStatus) {
                                 if (gen != generation) return
+                                val wasDone = state.done
                                 val required = status.requiredResourceCount
                                 val percent = if (required > 0) {
                                     (status.completedResourceCount.toFloat() / required).coerceIn(0f, 1f)
@@ -119,6 +120,7 @@ object RouteOfflinePack {
                                     )
                                     offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
                                     if (gen == generation) region = null
+                                    if (!wasDone && gen == generation) onDone?.invoke()
                                 }
                             }
 
@@ -135,6 +137,7 @@ object RouteOfflinePack {
                                     running = false,
                                     error = "Tile limit exceeded ($limit)",
                                 )
+                                onDone?.invoke()
                             }
                         })
                         offlineRegion.setDownloadState(OfflineRegion.STATE_ACTIVE)
@@ -144,12 +147,78 @@ object RouteOfflinePack {
                         if (gen != generation) return
                         Log.e(LOG_TAG, "create failed: $message")
                         state = state.copy(running = false, error = message)
+                        onDone?.invoke()
                     }
                 },
             )
         } catch (e: Exception) {
             Log.e(LOG_TAG, "start failed", e)
             state = state.copy(running = false, error = e.message ?: e.javaClass.simpleName)
+            onDone?.invoke()
+        }
+    }
+
+    /** Report whether a completed offline region already exists for [track]. */
+    fun findComplete(context: Context, track: Track, onResult: (Boolean) -> Unit) {
+        val appContext = context.applicationContext
+        val metadata = track.name.toByteArray(Charsets.UTF_8)
+        MapLibre.getInstance(appContext)
+        try {
+            OfflineManager.getInstance(appContext).listOfflineRegions(
+                object : OfflineManager.ListOfflineRegionsCallback {
+                    override fun onList(regions: Array<OfflineRegion>?) {
+                        val matches = regions
+                            ?.filter { it.metadata?.contentEquals(metadata) == true }
+                            .orEmpty()
+                        if (matches.isEmpty()) {
+                            onResult(false)
+                            return
+                        }
+                        val remaining = java.util.concurrent.atomic.AtomicInteger(matches.size)
+                        val complete = java.util.concurrent.atomic.AtomicBoolean(false)
+                        val finish: () -> Unit = {
+                            if (complete.get()) {
+                                onResult(true)
+                            } else {
+                                val pending = java.util.concurrent.atomic.AtomicInteger(matches.size)
+                                for (match in matches) {
+                                    match.delete(object : OfflineRegion.OfflineRegionDeleteCallback {
+                                        override fun onDelete() {
+                                            if (pending.decrementAndGet() == 0) onResult(false)
+                                        }
+
+                                        override fun onError(message: String) {
+                                            Log.w(LOG_TAG, "delete incomplete failed: $message")
+                                            if (pending.decrementAndGet() == 0) onResult(false)
+                                        }
+                                    })
+                                }
+                            }
+                        }
+                        for (match in matches) {
+                            match.getStatus(object : OfflineRegion.OfflineRegionStatusCallback {
+                                override fun onStatus(status: OfflineRegionStatus?) {
+                                    if (status?.isComplete == true) complete.set(true)
+                                    if (remaining.decrementAndGet() == 0) finish()
+                                }
+
+                                override fun onError(error: String?) {
+                                    Log.w(LOG_TAG, "status failed: $error")
+                                    if (remaining.decrementAndGet() == 0) finish()
+                                }
+                            })
+                        }
+                    }
+
+                    override fun onError(message: String) {
+                        Log.w(LOG_TAG, "list failed: $message")
+                        onResult(false)
+                    }
+                },
+            )
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "list failed", e)
+            onResult(false)
         }
     }
 

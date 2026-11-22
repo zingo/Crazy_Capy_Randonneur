@@ -41,7 +41,7 @@ import kotlin.math.roundToInt
 
 /*
  * ┌─────────────────────────────────────────────────────────────────────────┐
- * │  SettingsDialog — ride options, pre-cache, ghost ride, about            │
+ * │  SettingsDialog — ride options, offline prep, ghost ride, about         │
  * │                                                                         │
  * │  Opened from the gear icon (top-right).  Scrollable list of toggles,    │
  * │  sliders and action buttons in a single AlertDialog.                    │
@@ -114,8 +114,8 @@ internal fun SettingsDialog(
                 SettingSwitch(
                     checked = RideStore.precacheEnabled,
                     onCheckedChange = { RideStore.precacheEnabled = it; RouteStore.saveSettings(context) },
-                    title = "Pre-cache routes",
-                    subtitle = "Ask to pre-render turn previews and warm tiles when a route loads",
+                    title = "Prepare routes offline",
+                    subtitle = "Ask to download map tiles and turn previews when a route loads",
                 )
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     val totalBytes = remember { RouteCache.totalBytes(context) }
