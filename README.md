@@ -356,8 +356,9 @@ rendering via `adb exec-out screencap` and pixel analysis (see
   [android-bike-radar-overlay](https://github.com/partymola/android-bike-radar-overlay)
   app. That project licenses these six files **`Apache-2.0`** so a consumer can
   copy them, and they are copied here unmodified, keeping their own header and
-  copyright line. They are the only source files under
-  `com/crazycapy/` and `es/jjrh/` that this project did not write; see
+  copyright line. They are synced to upstream release **v1.12.2** (comment-only
+  changes, cross-app wire `VERSION` 1 unchanged), and are the only source files
+  under `com/crazycapy/` and `es/jjrh/` that this project did not write; see
   [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for everything else the app
   ships.
 
@@ -370,8 +371,9 @@ rendering via `adb exec-out screencap` and pixel analysis (see
   (`SPDX-License-Identifier: Apache-2.0`).
 - **Cross-app radar contract** (`app/src/main/aidl/es/jjrh/bikeradar/ipc/` and
   `app/src/main/java/es/jjrh/bikeradar/ipc/`): six files copied from the overlay
-  app, which licenses them `Apache-2.0` for exactly that purpose. They keep
-  their own header and copyright line, as Apache-2.0 asks. They also have to
+  app, which licenses them `Apache-2.0` for exactly that purpose, synced to
+  upstream v1.12.2. They keep their own header and copyright line, as
+  Apache-2.0 asks. They also have to
   stay in the `es.jjrh.bikeradar.ipc` package: AIDL checks the interface name
   on every call, and on the listener a mismatch throws inside this process
   rather than the other one, so the stream would simply never arrive.

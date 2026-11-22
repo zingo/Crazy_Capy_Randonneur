@@ -35,6 +35,7 @@ import es.jjrh.bikeradar.ipc.IRadarService
 import es.jjrh.bikeradar.ipc.RadarContract
 import es.jjrh.bikeradar.ipc.RadarStateParcel
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 
 /** How long a stream may go quiet before its targets stop being drawn. */
 private const val FRAME_STALE_MS = 10_000L
@@ -45,6 +46,16 @@ private const val WATCHDOG_MS = 5_000L
 private const val CONE_DURATION_MS = 20_000L
 
 private const val BATTERY_INTERVAL_MS = 10_000L
+
+internal val LIGHT_RETRY_DELAYS_MS = longArrayOf(0L, 500L, 1_000L, 2_000L)
+
+internal fun shouldRetryLightMode(
+    succeeded: Boolean,
+    sameService: Boolean,
+    nextAttempt: Int,
+): Boolean = !succeeded && sameService && nextAttempt in LIGHT_RETRY_DELAYS_MS.indices
+
+internal enum class ConsentOutcome { GRANTED, REFRESH, REFUSED }
 
 /**
  * What to tell the rider when the overlay app declines to record a grant, or
@@ -58,6 +69,12 @@ internal fun consentStatus(resultCode: Int): String? = when (resultCode) {
     RadarContract.Consent.RESULT_NOT_STORED -> "Bike Radar could not save that answer"
     RadarContract.Consent.RESULT_CALLER_UNKNOWN -> "Bike Radar could not identify this app"
     else -> null
+}
+
+internal fun consentOutcome(resultCode: Int, readGranted: Boolean): ConsentOutcome = when {
+    resultCode == Activity.RESULT_OK && readGranted -> ConsentOutcome.GRANTED
+    consentStatus(resultCode) != null -> ConsentOutcome.REFUSED
+    else -> ConsentOutcome.REFRESH
 }
 
 object RadarClient {
@@ -89,6 +106,8 @@ object RadarClient {
     // longer than the input-dispatch window allows. One thread also keeps two
     // quick taps from racing at the radio.
     private val lightWrites = Executors.newSingleThreadExecutor()
+
+    private val lightRequest = AtomicLong(0L)
 
     // Off the main thread: the watchdog re-registers, and that call reaches the
     // other app's package manager and grant store.
@@ -228,16 +247,18 @@ object RadarClient {
 
     /** The answer from [requestAccessIntent]. */
     fun onConsentResult(context: Context, resultCode: Int, data: Intent?) {
-        val ok = resultCode == Activity.RESULT_OK
-        if (ok && data?.getBooleanExtra(RadarContract.Consent.EXTRA_READ, false) == true) {
-            // The bind may not have landed, or may have died while the rider was
-            // on the other app's screen; registering into nothing answers
-            // nothing. refreshAvailability registers once it is bound.
-            refreshAvailability(context)
-            return
+        val readGranted = resultCode == Activity.RESULT_OK &&
+            data?.getBooleanExtra(RadarContract.Consent.EXTRA_READ, false) == true
+        when (consentOutcome(resultCode, readGranted)) {
+            ConsentOutcome.GRANTED, ConsentOutcome.REFRESH -> {
+                RideStore.consentError = null
+                refreshAvailability(context)
+            }
+            ConsentOutcome.REFUSED -> {
+                RideStore.radarGranted = false
+                consentStatus(resultCode)?.let { RideStore.consentError = it }
+            }
         }
-        RideStore.radarGranted = false
-        consentStatus(resultCode)?.let { RideStore.consentError = it }
     }
 
     /** Ensure the overlay service is bound (the stream is registered on
@@ -338,10 +359,29 @@ object RadarClient {
     fun setTailLight(on: Boolean) {
         val svc = service ?: return
         val mode = if (on) RadarContract.LIGHT_MODE_SOLID else RadarContract.LIGHT_MODE_OFF
+        val request = lightRequest.incrementAndGet()
         lightWrites.execute {
-            val ok = runCatching { svc.setRadarLightMode(mode) }.getOrDefault(false)
-            if (ok) RideStore.radarLightOn = on
+            for (attempt in LIGHT_RETRY_DELAYS_MS.indices) {
+                if (lightRequest.get() != request) return@execute
+                val delay = LIGHT_RETRY_DELAYS_MS[attempt]
+                if (delay > 0 && !sleepForLightRetry(delay)) return@execute
+                if (lightRequest.get() != request || service !== svc || !bound) return@execute
+                val ok = runCatching { svc.setRadarLightMode(mode) }.getOrDefault(false)
+                if (ok) {
+                    RideStore.radarLightOn = on
+                    return@execute
+                }
+                if (!shouldRetryLightMode(ok, service === svc && bound, attempt + 1)) return@execute
+            }
         }
+    }
+
+    private fun sleepForLightRetry(ms: Long): Boolean = try {
+        Thread.sleep(ms)
+        true
+    } catch (_: InterruptedException) {
+        Thread.currentThread().interrupt()
+        false
     }
 
     /**
