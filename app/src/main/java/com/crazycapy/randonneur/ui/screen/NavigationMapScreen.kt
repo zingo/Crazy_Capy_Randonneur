@@ -81,6 +81,7 @@ import com.crazycapy.randonneur.DEFAULT_LON
 import com.crazycapy.randonneur.TAG
 import com.crazycapy.randonneur.cache.OfflineEstimateCalculator
 import com.crazycapy.randonneur.cache.RouteCache
+import com.crazycapy.randonneur.cache.RouteIdentity
 import com.crazycapy.randonneur.cache.RouteOfflinePack
 import com.crazycapy.randonneur.cache.RoutePrepare
 import com.crazycapy.randonneur.gpx.Track
@@ -668,13 +669,13 @@ internal fun NavigationMapScreen(
         val t = RideStore.track ?: return@LaunchedEffect
         if (!RideStore.precacheEnabled || RideStore.active || RideStore.precacheAskSuppressed) return@LaunchedEffect
         if (RoutePrepare.state.running || RoutePrepare.state.paused || RouteCache.activeRouteId != null) return@LaunchedEffect
-        val routeId = RouteStore.routeId(t.name)
+        val routeId = RouteIdentity.of(t)
         val previewsCached = RouteCache.isCached(context, routeId, t, false) &&
             RouteCache.isCached(context, routeId, t, true) &&
             RouteCache.hasOverview(context, routeId, t)
         val bothThemes = RideStore.defaultPrepareBothThemes()
         RouteOfflinePack.findComplete(context, t, RideStore.offlineDetailStrategy, bothThemes) { lookup ->
-            if (RideStore.track?.name == t.name && (!lookup.complete || !previewsCached)) askPrepareFor = t
+            if (RideStore.track?.let { RouteIdentity.of(it) } == routeId && (!lookup.complete || !previewsCached)) askPrepareFor = t
         }
     }
     askPrepareFor?.let { track ->

@@ -42,6 +42,51 @@ class OfflineLimitsTest {
     }
 
     @Test
+    fun capFitsAfterReclaimButNotBefore() {
+        val cap = 10
+        val mb = OfflineLimits.BYTES_PER_MB
+        val total = 9 * mb
+        val estimate = 8 * mb
+        val reclaim = 7 * mb
+        assertEquals(OfflineCapDecision.EXCEEDS, OfflineLimits.decideCap(total, estimate, cap))
+        assertEquals(OfflineCapDecision.FITS, OfflineLimits.decideCap(total, estimate, reclaim, cap))
+    }
+
+    @Test
+    fun reclaimOnlyCountsReplacedPacks() {
+        val packs = listOf(
+            OfflinePackSizing("route-abc", "oldhash", OfflineDetailStrategy.STANDARD, "dark", 100L),
+            OfflinePackSizing("route-abc", "oldhash", OfflineDetailStrategy.STANDARD, "light", 40L),
+            OfflinePackSizing("route-abc", "oldhash", OfflineDetailStrategy.TURN_FOCUSED, "dark", 200L),
+            OfflinePackSizing("route-other", "otherhash", OfflineDetailStrategy.STANDARD, "dark", 300L),
+        )
+        val reclaim = OfflineLimits.reclaimableBytes(
+            packs,
+            routeId = "route-abc",
+            trackHash = "newhash",
+            strategy = OfflineDetailStrategy.STANDARD,
+            themes = setOf("dark"),
+        )
+        assertEquals(100L, reclaim)
+    }
+
+    @Test
+    fun reclaimIncludesLegacyPackWithSameTrackHash() {
+        val packs = listOf(
+            OfflinePackSizing("route-oldname", "samehash", OfflineDetailStrategy.STANDARD, "dark", 90L),
+            OfflinePackSizing("route-other", "otherhash", OfflineDetailStrategy.STANDARD, "dark", 300L),
+        )
+        val reclaim = OfflineLimits.reclaimableBytes(
+            packs,
+            routeId = "route-abc",
+            trackHash = "samehash",
+            strategy = OfflineDetailStrategy.STANDARD,
+            themes = setOf("dark", "light"),
+        )
+        assertEquals(90L, reclaim)
+    }
+
+    @Test
     fun expiryOffNeverExpires() {
         val old = 1_000L
         assertFalse(OfflineLimits.isExpired(old, 0, Long.MAX_VALUE / 2))

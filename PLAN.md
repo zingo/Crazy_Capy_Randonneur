@@ -221,6 +221,16 @@ CrazyCapyRouting/
   with a clear message and never deletes packs. The manager shows total vs cap,
   age and expired flags with **Delete expired**. Cap/expiry decisions and the
   estimator are pure Kotlin with unit tests.
+- **Stable offline identity and dedupe-aware cap**: packs and turn-preview
+  caches now use the saved route's stable storage id, so renaming a route
+  reuses its pack/previews instead of orphaning them; ad-hoc tracks fall back to
+  a geometry-derived content id. Legacy packs keyed by the old name-derived id
+  are still listed/deletable and are reused and re-tagged by geometry hash on
+  the next prepare. The storage cap subtracts bytes that the prepare will
+  replace (same route/hash family, strategy and theme) before adding the
+  estimate, and the over-cap warning reports the reclaimable amount; the
+  manager still totals actual sizes. Identity/reclaim/migration decisions are
+  pure Kotlin with unit tests.
 - **QA (checkpoint markers)**: a checkpoint whose GPX `<wpt>` has no `<desc>`
   used to produce malformed GeoJSON (a stray quote), so MapLibre rejected the
   whole POI source and the markers silently vanished while the HUD's km-CP kept

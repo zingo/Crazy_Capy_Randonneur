@@ -73,9 +73,9 @@ internal fun RideHistoryDialog(
                                     TextButton(onClick = {
                                         val track = RideHistory.loadTrack(context, ride.id) ?: return@TextButton
                                         val named = Track(ride.name, track.points, track.waypoints)
-                                        RideStore.track = named
+                                        val saved = RouteStore.saveTrack(context, named)
+                                        RideStore.track = named.withStorageId(saved.id)
                                         RideStore.status = "Route loaded: ${named.name}"
-                                        RouteStore.saveTrack(context, named)
                                         onDone()
                                     }) { Text("Ride") }
                                     RideHistory.fileFor(context, ride.id)?.let { file ->

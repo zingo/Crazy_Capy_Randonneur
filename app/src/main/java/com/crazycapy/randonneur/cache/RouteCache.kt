@@ -34,7 +34,6 @@ import com.crazycapy.randonneur.gpx.TrackHash
 import com.crazycapy.randonneur.nav.TurnFinder
 import com.crazycapy.randonneur.voice.Phrases
 import com.crazycapy.randonneur.state.RideStore
-import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.roadBrightenOverrides
 import org.maplibre.android.MapLibre
 import org.maplibre.android.geometry.LatLng
@@ -210,7 +209,7 @@ object RouteCache {
      * preview renders (debug benchmark variant). [onDone] runs when finished.
      */
     fun preCache(context: Context, track: Track, tilesOnly: Boolean = false, onDone: (() -> Unit)? = null) {
-        val routeId = RouteStore.routeId(track.name)
+        val routeId = RouteIdentity.of(track)
         val trackHash = TrackHash.of(track)
         if (activeRouteId != null) cancel()
         cancelRequested.set(false)
@@ -321,7 +320,7 @@ object RouteCache {
     ): Boolean {
         val shot = renderer.render(style, dark, bounds, CACHED_IMG_PX, CACHED_IMG_PX, CACHED_IMG_PX / 7, TURN_RENDER_TIMEOUT_MS)
             ?: return false
-        val routeId = RouteStore.routeId(track.name)
+        val routeId = RouteIdentity.of(track)
         val png = turnFile(context, routeId, dark, turnIndex)
         shot.bitmap.compress(Bitmap.CompressFormat.PNG, 100, png.outputStream())
         val anchors = TurnProjection.gridLatLon(
@@ -365,7 +364,7 @@ object RouteCache {
 
     /** Generate a small overview map of the full route and save it as PNG. */
     private fun generateOverview(context: Context, renderer: ReusedSnapshotter, track: Track, styleUrl: String) {
-        val routeId = RouteStore.routeId(track.name)
+        val routeId = RouteIdentity.of(track)
         val png = overviewFile(context, routeId)
         if (png.exists()) return
         status = "Rendering overview  ${Phrases.formatDistance(track.lengthMeters)}"

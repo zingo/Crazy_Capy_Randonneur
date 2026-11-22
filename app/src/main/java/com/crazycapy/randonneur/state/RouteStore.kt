@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.OfflineThemeMode
+import com.crazycapy.randonneur.cache.RouteIdentity
 import com.crazycapy.randonneur.gpx.GpxParser
 import com.crazycapy.randonneur.gpx.GpxWriter
 import com.crazycapy.randonneur.gpx.Track
@@ -96,13 +97,14 @@ object RouteStore {
 
     /** Store a route (by name, deduped) and return its [SavedRoute]. */
     fun saveTrack(context: Context, track: Track): SavedRoute {
+        val id = track.storageId?.takeIf { it.isNotBlank() } ?: routeId(track.name)
         if (track.lengthMeters < LAST_RIDE_MIN_RESUME_M) {
-            return routes.firstOrNull { it.id == routeId(track.name) }
-                ?: SavedRoute(routeId(track.name), track.name, System.currentTimeMillis(), track.lengthMeters)
+            return routes.firstOrNull { it.id == id }
+                ?: SavedRoute(id, track.name, System.currentTimeMillis(), track.lengthMeters)
         }
-        val existing = routes.firstOrNull { it.id == routeId(track.name) }
+        val existing = routes.firstOrNull { it.id == id }
         val sr = existing ?: SavedRoute(
-            id = routeId(track.name),
+            id = id,
             name = track.name,
             savedAtMs = System.currentTimeMillis(),
             lengthM = track.lengthMeters,
@@ -126,7 +128,7 @@ object RouteStore {
         routes = routes.map { if (it.id == id) it.copy(name = name) else it }
         writeIndex(context)
         val track = loadTrack(context, id) ?: return
-        val renamed = Track(name, track.points, track.waypoints)
+        val renamed = Track(name, track.points, track.waypoints, track.storageId ?: id)
         val gpx = java.io.StringWriter()
         runCatching { GpxWriter.write(renamed, gpx) }
         runCatching { File(dataDir(context), "$id.gpx").writeText(gpx.toString()) }
@@ -144,12 +146,11 @@ object RouteStore {
             val f = File(dataDir(context), "$id.gpx")
             if (!f.exists()) return null
             val name = routes.firstOrNull { it.id == id }?.name ?: id
-            f.inputStream().use { GpxParser().parse(name, it) }
+            f.inputStream().use { GpxParser().parse(name, it) }.withStorageId(id)
         }.getOrNull()
 
     /** Stable storage id derived from the route name (matches the save key). */
-    internal fun routeId(name: String): String =
-        "route-" + (name.trim().hashCode() and 0x7fffffff).toString(16)
+    internal fun routeId(name: String): String = RouteIdentity.legacyNameId(name)
 
     // ---- Configurable toggles ----
 
