@@ -10,7 +10,7 @@ navigator for Android 13+ (API 33). No Play Services, no accounts, no cloud.
 - App package / namespace: `com.crazycapy.randonneur`
 - `minSdk = 33`, `targetSdk = compileSdk = 35`
 - Stack: Kotlin 2.1.21, Jetpack Compose (Material 3), MapLibre + OpenFreeMap,
-  Gradle 8.13 / AGP 8.13. No Play Services.
+  WorkManager, Gradle 8.13 / AGP 8.13. No Play Services.
 - Package layout under `app/src/main/java/com/crazycapy/randonneur/`:
   - `gpx` — GPX/TCX/KML loading, track/waypoint model, GPX writer
   - `nav` — guidance core: `NavEngine`, `TurnAnalyzer`, `PoiTracker`, `Geo`
@@ -18,7 +18,9 @@ navigator for Android 13+ (API 33). No Play Services, no accounts, no cloud.
   - `voice` — spoken phrases (`Phrases`, `TurnSummary`), beeps (`BeepPlanner`)
   - `service` — foreground `NavigationService`: GPS, ghost-ride driver, TTS,
     beeps, wake lock, living notification; `PrepareService`: background offline
-    preparation with pause/resume/cancel
+    preparation with pause/resume/cancel; `PrepareRecoveryWorker`: unique
+    WorkManager resume after process death (its `SystemForegroundService`
+    manifest entry must keep `dataSync`)
   - `state` — `RideStore` (shared app state), `RouteStore` (on-device route
     library + settings/last-ride persistence)
   - `sim` — ghost ride simulator
@@ -71,7 +73,7 @@ notification changed.
 
 Before opening a PR, verify behavior on the emulator; use a physical device
 (T20Mini/phone) when emulator limits matter (BLE/radio, real GPS, hardware) or
-when a spot-check is really needed. Put the evidence in the PR description. Currently 167 unit tests + 4 instrumented ghost-ride tests.
+when a spot-check is really needed. Put the evidence in the PR description. Currently 174 unit tests + 4 instrumented ghost-ride tests.
 
 Device test notes:
 - The phone's notification is blocked at OS level (`dumpsys notification` shows
@@ -161,7 +163,7 @@ Device test notes:
   `navVolume` (0 = off), persisted by `RouteStore`.
 - Settings UI lives in `MainActivity.kt` (dialogs); new settings need a
   `RideStore` field + a `RouteStore` save/load key.
-- Tests: JUnit for JVM unit tests (currently 167), instrumented ghost-ride tests in
+- Tests: JUnit for JVM unit tests (currently 174), instrumented ghost-ride tests in
   `app/src/androidTest`.
 
 ## User shorthand

@@ -185,6 +185,9 @@ object RouteStore {
         map["offlinePrepareBothThemes"]?.toBooleanStrictOrNull()?.let { RideStore.offlinePrepareBothThemes = it }
         map["offlineStorageCapMb"]?.toIntOrNull()?.takeIf { it >= 0 }?.let { RideStore.offlineStorageCapMb = it }
         map["offlineExpiryDays"]?.toIntOrNull()?.takeIf { it >= 0 }?.let { RideStore.offlineExpiryDays = it }
+        map["offlineAutoDeleteExpired"]?.toBooleanStrictOrNull()?.let {
+            RideStore.offlineAutoDeleteExpired = it
+        }
         map["ghostTimeScale"]?.toDoubleOrNull()?.let { RideStore.ghostTimeScale = it }
         map["ghostSpeedKmh"]?.toDoubleOrNull()?.let { RideStore.ghostSpeedKmh = it }
         map["radarSim"]?.toBooleanStrictOrNull()?.let { RideStore.radarSimEnabled = it }
@@ -208,6 +211,7 @@ object RouteStore {
             "offlinePrepareBothThemes=${RideStore.offlinePrepareBothThemes}",
             "offlineStorageCapMb=${RideStore.offlineStorageCapMb}",
             "offlineExpiryDays=${RideStore.offlineExpiryDays}",
+            "offlineAutoDeleteExpired=${RideStore.offlineAutoDeleteExpired}",
             "ghostTimeScale=${RideStore.ghostTimeScale}",
             "ghostSpeedKmh=${RideStore.ghostSpeedKmh}",
             "radarSim=${RideStore.radarSimEnabled}",

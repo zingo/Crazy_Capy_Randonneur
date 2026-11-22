@@ -107,4 +107,42 @@ class OfflineLimitsTest {
         val created = now - 30L * OfflineLimits.MILLIS_PER_DAY
         assertFalse(OfflineLimits.isExpired(created, 30, now))
     }
+
+    @Test
+    fun autoPruneRemovesOnlyExpiredGroupsWhenEnabled() {
+        val now = 100L * OfflineLimits.MILLIS_PER_DAY
+        val groups = listOf(
+            OfflineExpiryGroup(listOf(1L, 2L), now - 31L * OfflineLimits.MILLIS_PER_DAY),
+            OfflineExpiryGroup(listOf(3L), now - 10L * OfflineLimits.MILLIS_PER_DAY),
+        )
+        assertEquals(setOf(1L, 2L), OfflineLimits.expiredGroupIds(groups, true, 30, now))
+    }
+
+    @Test
+    fun autoPruneKeepsEverythingWhenDisabled() {
+        val now = 100L * OfflineLimits.MILLIS_PER_DAY
+        val groups = listOf(
+            OfflineExpiryGroup(listOf(1L), now - 365L * OfflineLimits.MILLIS_PER_DAY),
+        )
+        assertTrue(OfflineLimits.expiredGroupIds(groups, false, 30, now).isEmpty())
+    }
+
+    @Test
+    fun autoPruneKeepsUnexpiredAndUnknownAgeGroups() {
+        val now = 100L * OfflineLimits.MILLIS_PER_DAY
+        val groups = listOf(
+            OfflineExpiryGroup(listOf(1L), now - 5L * OfflineLimits.MILLIS_PER_DAY),
+            OfflineExpiryGroup(listOf(2L), null),
+        )
+        assertTrue(OfflineLimits.expiredGroupIds(groups, true, 30, now).isEmpty())
+    }
+
+    @Test
+    fun autoPruneKeepsEverythingWhenExpiryIsOff() {
+        val now = 100L * OfflineLimits.MILLIS_PER_DAY
+        val groups = listOf(
+            OfflineExpiryGroup(listOf(1L), now - 365L * OfflineLimits.MILLIS_PER_DAY),
+        )
+        assertTrue(OfflineLimits.expiredGroupIds(groups, true, 0, now).isEmpty())
+    }
 }

@@ -184,6 +184,15 @@ internal fun SettingsDialog(
                     suffix = "days",
                     onValueChange = { RideStore.offlineExpiryDays = it; RouteStore.saveSettings(context) },
                 )
+                SettingSwitch(
+                    checked = RideStore.offlineAutoDeleteExpired,
+                    onCheckedChange = {
+                        RideStore.offlineAutoDeleteExpired = it
+                        RouteStore.saveSettings(context)
+                    },
+                    title = "Auto-delete expired offline packs",
+                    subtitle = "Remove expired packs on app start · off keeps them listed",
+                )
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Offline map packs", style = MaterialTheme.typography.bodyMedium)

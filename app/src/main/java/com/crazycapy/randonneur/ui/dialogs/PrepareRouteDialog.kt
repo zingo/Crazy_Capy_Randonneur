@@ -315,7 +315,7 @@ internal fun PrepareRouteDialog(
         },
         dismissButton = {
             if (showProgress && (state.running || state.paused)) {
-                TextButton(onClick = { RoutePrepare.cancel() }) { Text("Cancel") }
+                TextButton(onClick = { RoutePrepare.cancel(context) }) { Text("Cancel") }
             }
         },
     )

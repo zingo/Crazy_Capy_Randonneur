@@ -37,7 +37,9 @@ import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.OfflineLimits
 import com.crazycapy.randonneur.cache.OfflinePackInfo
 import com.crazycapy.randonneur.cache.OfflinePackStatus
+import com.crazycapy.randonneur.cache.OfflinePrune
 import com.crazycapy.randonneur.cache.RouteOfflinePack
+import com.crazycapy.randonneur.cache.groupOfflinePacks
 import com.crazycapy.randonneur.state.RideStore
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -52,7 +54,7 @@ internal fun OfflinePacksDialog(
     var busy by remember { mutableStateOf(false) }
     var refresh by remember { mutableStateOf(0) }
 
-    LaunchedEffect(refresh) {
+    LaunchedEffect(refresh, OfflinePrune.revision) {
         packs = null
         RouteOfflinePack.listPacks(context) { list ->
             packs = list
@@ -60,7 +62,7 @@ internal fun OfflinePacksDialog(
         }
     }
 
-    val groups = packs?.let { groupPacks(it, System.currentTimeMillis(), RideStore.offlineExpiryDays) }
+    val groups = packs?.let { groupOfflinePacks(it, System.currentTimeMillis(), RideStore.offlineExpiryDays) }
     val totalBytes = groups?.sumOf { it.bytes } ?: 0L
     val capBytes = OfflineLimits.capBytes(RideStore.offlineStorageCapMb)
     val expiredGroups = groups?.filter { it.expired }.orEmpty()
@@ -69,6 +71,14 @@ internal fun OfflinePacksDialog(
         title = { Text("Offline map packs") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
+                OfflinePrune.notice?.let { notice ->
+                    Text(
+                        notice,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
                 if (groups == null) {
                     Text("Loading…", style = MaterialTheme.typography.bodySmall)
                 } else if (groups.isEmpty()) {
@@ -165,57 +175,6 @@ internal fun OfflinePacksDialog(
         },
     )
 }
-
-private data class PackGroup(
-    val name: String,
-    val strategy: OfflineDetailStrategy,
-    val style: String,
-    val theme: String,
-    val segments: Int,
-    val bytes: Long,
-    val createdAt: Long?,
-    val ageDays: Long?,
-    val expired: Boolean,
-    val status: OfflinePackStatus,
-    val ids: List<Long>,
-)
-
-private fun groupPacks(
-    packs: List<OfflinePackInfo>,
-    nowMs: Long,
-    expiryDays: Int,
-): List<PackGroup> =
-    packs.groupBy { pack ->
-        val routeId = pack.routeId
-        if (routeId == null) {
-            "legacy:${pack.id}"
-        } else {
-            "$routeId|${pack.trackHash}|${pack.strategy.name}|${pack.style}|${pack.theme}"
-        }
-    }.values.map { group ->
-        val first = group.first()
-        val status = when {
-            group.all { it.status == OfflinePackStatus.COMPLETE } -> OfflinePackStatus.COMPLETE
-            group.any { it.status == OfflinePackStatus.DOWNLOADING } -> OfflinePackStatus.DOWNLOADING
-            else -> OfflinePackStatus.INCOMPLETE
-        }
-        val createdAt = group.maxOfOrNull { it.createdAt ?: 0L }?.takeIf { it > 0L }
-        PackGroup(
-            name = first.routeName,
-            strategy = first.strategy,
-            style = first.style,
-            theme = first.theme,
-            segments = group.size,
-            bytes = group.sumOf { it.bytes ?: it.completedBytes },
-            createdAt = createdAt,
-            ageDays = OfflineLimits.ageDays(createdAt, nowMs),
-            expired = OfflineLimits.isExpired(createdAt, expiryDays, nowMs),
-            status = status,
-            ids = group.map { it.id },
-        )
-    }.sortedWith(
-        compareByDescending<PackGroup> { it.createdAt ?: 0L }.thenBy { it.name },
-    )
 
 private fun strategyText(strategy: OfflineDetailStrategy): String = when (strategy) {
     OfflineDetailStrategy.STANDARD -> "Standard"
