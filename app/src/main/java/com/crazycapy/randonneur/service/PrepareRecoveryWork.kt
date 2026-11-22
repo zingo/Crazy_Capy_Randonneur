@@ -51,7 +51,14 @@ class PrepareRecoveryWorker(
             setForeground(foregroundInfo(PrepareNotifications.build(context, RoutePrepare.state, true)))
             Log.i(LOG_TAG, "resuming prepare for ${pending.routeName}")
             withContext(Dispatchers.Main.immediate) {
-                RoutePrepare.startRecovery(context, track, pending.strategy, pending.bothThemes)
+                RoutePrepare.startRecovery(
+                    context,
+                    track,
+                    pending.strategy,
+                    pending.bothThemes,
+                    pending.tuning,
+                    pending.targetStyle,
+                )
             }
             while (currentCoroutineContext().isActive) {
                 val state = RoutePrepare.state

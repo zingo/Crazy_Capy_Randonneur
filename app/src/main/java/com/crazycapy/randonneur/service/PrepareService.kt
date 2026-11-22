@@ -14,6 +14,7 @@ import android.os.IBinder
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
+import com.crazycapy.randonneur.cache.OfflineTuning
 import com.crazycapy.randonneur.cache.PrepareState
 import com.crazycapy.randonneur.cache.RoutePrepare
 import com.crazycapy.randonneur.gpx.Track
@@ -63,7 +64,14 @@ class PrepareService : Service() {
                 val request = pending
                 pending = null
                 if (request != null) {
-                    RoutePrepare.start(this, request.track, request.strategy, request.bothThemes)
+                    RoutePrepare.start(
+                        this,
+                        request.track,
+                        request.strategy,
+                        request.bothThemes,
+                        request.tuning,
+                        request.targetStyle,
+                    )
                 }
                 ensureForeground()
                 val state = RoutePrepare.state
@@ -161,6 +169,8 @@ class PrepareService : Service() {
         val track: Track,
         val strategy: OfflineDetailStrategy,
         val bothThemes: Boolean,
+        val tuning: OfflineTuning,
+        val targetStyle: String?,
     )
 
     companion object {
@@ -178,9 +188,11 @@ class PrepareService : Service() {
             track: Track,
             strategy: OfflineDetailStrategy,
             bothThemes: Boolean,
+            tuning: OfflineTuning = OfflineTuning.DEFAULT,
+            targetStyle: String? = null,
         ) {
             active = true
-            pending = Request(track, strategy, bothThemes)
+            pending = Request(track, strategy, bothThemes, tuning, targetStyle)
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, PrepareService::class.java).setAction(ACTION_START),

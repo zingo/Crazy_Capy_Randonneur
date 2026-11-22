@@ -674,14 +674,27 @@ internal fun NavigationMapScreen(
             RouteCache.isCached(context, routeId, t, true) &&
             RouteCache.hasOverview(context, routeId, t)
         val bothThemes = RideStore.defaultPrepareBothThemes()
-        RouteOfflinePack.findComplete(context, t, RideStore.offlineDetailStrategy, bothThemes) { lookup ->
+        val tuning = RideStore.offlineTuning()
+        RouteOfflinePack.findComplete(
+            context,
+            t,
+            RideStore.offlineDetailStrategy,
+            bothThemes,
+            tuning,
+        ) { lookup ->
             if (RideStore.track?.let { RouteIdentity.of(it) } == routeId && (!lookup.complete || !previewsCached)) askPrepareFor = t
         }
     }
     askPrepareFor?.let { track ->
         val turns = TurnFinder.find(track).size
         val bothThemes = RideStore.defaultPrepareBothThemes()
-        val estimate = OfflineEstimateCalculator.estimate(track, RideStore.offlineDetailStrategy, if (bothThemes) 2 else 1)
+        val tuning = RideStore.offlineTuning()
+        val estimate = OfflineEstimateCalculator.estimate(
+            track,
+            RideStore.offlineDetailStrategy,
+            if (bothThemes) 2 else 1,
+            tuning,
+        )
         val detail = if (turns > 0) "$turns turns" else "map only"
         AlertDialog(
             onDismissRequest = { askPrepareFor = null },
@@ -691,7 +704,8 @@ internal fun NavigationMapScreen(
                     Text("Download map tiles and render turn previews for ${track.name} ahead of time — works offline and saves battery on the ride.", style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "${formatEstimate(estimate.bytes)} estimate (best on Wi-Fi while charging) · " +
+                        "~${formatEstimate(estimate.bytesLow)}–${formatEstimate(estimate.bytesHigh)} estimate " +
+                            "(best on Wi-Fi while charging) · " +
                             "${estimate.segments} segments · ${estimate.themes} theme${if (estimate.themes == 1) "" else "s"} · $detail",
                         style = MaterialTheme.typography.bodySmall,
                     )

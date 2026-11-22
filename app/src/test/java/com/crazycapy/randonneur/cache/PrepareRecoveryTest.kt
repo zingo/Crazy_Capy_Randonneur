@@ -36,6 +36,27 @@ class PrepareRecoveryTest {
     }
 
     @Test
+    fun tuningAndTargetStyleRoundTrip() {
+        val original = state().copy(
+            tuning = OfflineTuning.fromSettings(12.0, 2.5, 0.5, 16),
+            targetStyle = "dark",
+        )
+        assertEquals(original, PrepareRecoveryState.decode(original.encode()))
+    }
+
+    @Test
+    fun missingTuningFallsBackToDefault() {
+        val original = state()
+        val withoutTuning = original.encode().lineSequence()
+            .filterNot { it.startsWith("tuning=") }
+            .filterNot { it.startsWith("targetStyle=") }
+            .joinToString("\n")
+        val decoded = PrepareRecoveryState.decode(withoutTuning)
+        assertEquals(OfflineTuning.DEFAULT, decoded?.tuning)
+        assertNull(decoded?.targetStyle)
+    }
+
+    @Test
     fun invalidOrIncompleteStateIsRejected() {
         assertNull(PrepareRecoveryState.decode(null))
         assertNull(PrepareRecoveryState.decode(""))

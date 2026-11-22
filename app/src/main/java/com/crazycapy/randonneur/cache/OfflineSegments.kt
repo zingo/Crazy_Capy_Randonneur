@@ -20,6 +20,7 @@ data class OfflineRegionSpec(
     val box: GeoBox,
     val minZoom: Double,
     val maxZoom: Double,
+    val tuning: OfflineTuning = OfflineTuning.DEFAULT,
 )
 
 object OfflineSegments {
@@ -37,10 +38,14 @@ object OfflineSegments {
     private const val MERGE_OVERLAP_RATIO = 0.8
     private const val MERGE_UNION_RATIO = 1.2
 
-    fun regionSpecs(track: Track, strategy: OfflineDetailStrategy): List<OfflineRegionSpec> {
-        val corridors = corridorBoxes(track)
+    fun regionSpecs(
+        track: Track,
+        strategy: OfflineDetailStrategy,
+        tuning: OfflineTuning = OfflineTuning.DEFAULT,
+    ): List<OfflineRegionSpec> {
+        val corridors = corridorBoxes(track, tuning.corridorPadMeters, tuning.segmentMeters)
         val focused = strategy == OfflineDetailStrategy.TURN_FOCUSED
-        val lowMax = if (focused) FOCUSED_LOW_MAX_ZOOM else STANDARD_MAX_ZOOM
+        val lowMax = if (focused) FOCUSED_LOW_MAX_ZOOM else tuning.maxZoom.toDouble()
         val low = corridors.map { box ->
             OfflineRegionSpec(
                 index = 0,
@@ -49,17 +54,19 @@ object OfflineSegments {
                 box = box,
                 minZoom = STANDARD_MIN_ZOOM,
                 maxZoom = lowMax,
+                tuning = tuning,
             )
         }
         val high = if (focused) {
-            turnBoxes(track).map { box ->
+            turnBoxes(track, tuning.turnPadMeters).map { box ->
                 OfflineRegionSpec(
                     index = 0,
                     count = 0,
                     strategy = strategy,
                     box = box,
                     minZoom = FOCUSED_HIGH_MIN_ZOOM,
-                    maxZoom = FOCUSED_HIGH_MAX_ZOOM,
+                    maxZoom = tuning.maxZoom.toDouble(),
+                    tuning = tuning,
                 )
             }
         } else {
@@ -69,24 +76,28 @@ object OfflineSegments {
         return all.mapIndexed { i, spec -> spec.copy(index = i, count = all.size) }
     }
 
-    fun corridorBoxes(track: Track, padMeters: Double = CORRIDOR_PAD_METERS): List<GeoBox> {
+    fun corridorBoxes(
+        track: Track,
+        padMeters: Double = CORRIDOR_PAD_METERS,
+        segmentMeters: Double = CHUNK_METERS,
+    ): List<GeoBox> {
         val length = track.lengthMeters
         if (length <= 0.0) return listOf(RouteCorridor.around(track, padMeters))
         val raw = ArrayList<GeoBox>()
         var start = 0.0
         while (start < length) {
-            val end = min(start + CHUNK_METERS, length)
+            val end = min(start + segmentMeters, length)
             raw.add(RouteCorridor.between(track, start, end, padMeters))
             start = end
         }
         return mergeBoxes(raw)
     }
 
-    fun turnBoxes(track: Track): List<GeoBox> {
+    fun turnBoxes(track: Track, padMeters: Double = TURN_PAD_METERS): List<GeoBox> {
         val turns = TurnFinder.find(track)
         val boxes = turns.map { turn ->
-            val start = (turn.distAlongM - TURN_PAD_METERS).coerceAtLeast(0.0)
-            val end = (turn.distAlongM + TURN_PAD_METERS).coerceAtMost(track.lengthMeters)
+            val start = (turn.distAlongM - padMeters).coerceAtLeast(0.0)
+            val end = (turn.distAlongM + padMeters).coerceAtMost(track.lengthMeters)
             RouteCorridor.between(track, start, end, TURN_CROSS_PAD_METERS)
         }
         return mergeBoxes(boxes)

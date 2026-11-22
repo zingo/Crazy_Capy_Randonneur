@@ -73,7 +73,7 @@ notification changed.
 
 Before opening a PR, verify behavior on the emulator; use a physical device
 (T20Mini/phone) when emulator limits matter (BLE/radio, real GPS, hardware) or
-when a spot-check is really needed. Put the evidence in the PR description. Currently 174 unit tests + 4 instrumented ghost-ride tests.
+when a spot-check is really needed. Put the evidence in the PR description. Currently 187 unit tests + 4 instrumented ghost-ride tests.
 
 Device test notes:
 - The phone's notification is blocked at OS level (`dumpsys notification` shows
@@ -163,7 +163,7 @@ Device test notes:
   `navVolume` (0 = off), persisted by `RouteStore`.
 - Settings UI lives in `MainActivity.kt` (dialogs); new settings need a
   `RideStore` field + a `RouteStore` save/load key.
-- Tests: JUnit for JVM unit tests (currently 174), instrumented ghost-ride tests in
+- Tests: JUnit for JVM unit tests (currently 187), instrumented ghost-ride tests in
   `app/src/androidTest`.
 
 ## User shorthand

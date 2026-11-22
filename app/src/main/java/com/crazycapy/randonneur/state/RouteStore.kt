@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.OfflineThemeMode
+import com.crazycapy.randonneur.cache.OfflineTuning
 import com.crazycapy.randonneur.cache.RouteIdentity
 import com.crazycapy.randonneur.gpx.GpxParser
 import com.crazycapy.randonneur.gpx.GpxWriter
@@ -188,6 +189,18 @@ object RouteStore {
         map["offlineAutoDeleteExpired"]?.toBooleanStrictOrNull()?.let {
             RideStore.offlineAutoDeleteExpired = it
         }
+        map["offlineSegmentKm"]?.toDoubleOrNull()?.let {
+            RideStore.offlineSegmentKm = OfflineTuning.sanitizeSegmentKm(it)
+        }
+        map["offlineCorridorPadKm"]?.toDoubleOrNull()?.let {
+            RideStore.offlineCorridorPadKm = OfflineTuning.sanitizeCorridorPadKm(it)
+        }
+        map["offlineTurnBoxKm"]?.toDoubleOrNull()?.let {
+            RideStore.offlineTurnBoxKm = OfflineTuning.sanitizeTurnPadKm(it)
+        }
+        map["offlineHighMaxZoom"]?.toIntOrNull()?.let {
+            RideStore.offlineHighMaxZoom = OfflineTuning.sanitizeMaxZoom(it)
+        }
         map["ghostTimeScale"]?.toDoubleOrNull()?.let { RideStore.ghostTimeScale = it }
         map["ghostSpeedKmh"]?.toDoubleOrNull()?.let { RideStore.ghostSpeedKmh = it }
         map["radarSim"]?.toBooleanStrictOrNull()?.let { RideStore.radarSimEnabled = it }
@@ -212,6 +225,10 @@ object RouteStore {
             "offlineStorageCapMb=${RideStore.offlineStorageCapMb}",
             "offlineExpiryDays=${RideStore.offlineExpiryDays}",
             "offlineAutoDeleteExpired=${RideStore.offlineAutoDeleteExpired}",
+            "offlineSegmentKm=${RideStore.offlineSegmentKm}",
+            "offlineCorridorPadKm=${RideStore.offlineCorridorPadKm}",
+            "offlineTurnBoxKm=${RideStore.offlineTurnBoxKm}",
+            "offlineHighMaxZoom=${RideStore.offlineHighMaxZoom}",
             "ghostTimeScale=${RideStore.ghostTimeScale}",
             "ghostSpeedKmh=${RideStore.ghostSpeedKmh}",
             "radarSim=${RideStore.radarSimEnabled}",

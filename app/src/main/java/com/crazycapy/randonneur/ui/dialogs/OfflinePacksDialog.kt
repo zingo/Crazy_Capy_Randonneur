@@ -34,13 +34,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
+import com.crazycapy.randonneur.cache.OfflineEstimateCalculator
 import com.crazycapy.randonneur.cache.OfflineLimits
+import com.crazycapy.randonneur.cache.OfflinePackGroup
 import com.crazycapy.randonneur.cache.OfflinePackInfo
 import com.crazycapy.randonneur.cache.OfflinePackStatus
 import com.crazycapy.randonneur.cache.OfflinePrune
+import com.crazycapy.randonneur.cache.OfflineRefresh
 import com.crazycapy.randonneur.cache.RouteOfflinePack
+import com.crazycapy.randonneur.cache.RoutePrepare
 import com.crazycapy.randonneur.cache.groupOfflinePacks
+import com.crazycapy.randonneur.service.PrepareService
 import com.crazycapy.randonneur.state.RideStore
+import com.crazycapy.randonneur.state.RouteStore
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -53,6 +59,7 @@ internal fun OfflinePacksDialog(
     var packs by remember { mutableStateOf<List<OfflinePackInfo>?>(null) }
     var busy by remember { mutableStateOf(false) }
     var refresh by remember { mutableStateOf(0) }
+    var message by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(refresh, OfflinePrune.revision) {
         packs = null
@@ -62,10 +69,56 @@ internal fun OfflinePacksDialog(
         }
     }
 
+    val prepareState = RoutePrepare.state
+    LaunchedEffect(
+        prepareState.running,
+        prepareState.paused,
+        prepareState.done,
+        prepareState.cancelled,
+    ) {
+        if (message?.startsWith("Refreshing") == true && !prepareState.running && !prepareState.paused) {
+            message = null
+            refresh++
+        }
+    }
+
     val groups = packs?.let { groupOfflinePacks(it, System.currentTimeMillis(), RideStore.offlineExpiryDays) }
     val totalBytes = groups?.sumOf { it.bytes } ?: 0L
     val capBytes = OfflineLimits.capBytes(RideStore.offlineStorageCapMb)
     val expiredGroups = groups?.filter { it.expired }.orEmpty()
+    val routeGroupCount = groups?.count { !it.legacy } ?: 0
+    val legacyCount = groups?.count { it.legacy } ?: 0
+    val libraryRouteIds = remember(RouteStore.routes) { RouteStore.routes.map { it.id }.toSet() }
+
+    fun refreshGroup(group: OfflinePackGroup) {
+        val routeId = group.routeId ?: return
+        val track = RouteStore.loadTrack(context, routeId)
+        if (track == null) {
+            message = "Route not found"
+            return
+        }
+        val estimate = OfflineEstimateCalculator.estimate(track, group.strategy, 1, group.tuning)
+        val plan = OfflineRefresh.plan(group, totalBytes, estimate, RideStore.offlineStorageCapMb)
+        if (!plan.allowed) {
+            message = "Not enough offline storage: packs use ${formatBytes(totalBytes)} of " +
+                "${RideStore.offlineStorageCapMb} MB, refreshing this group estimates up to " +
+                "${formatBytes(plan.estimateBytes)}. Delete packs or raise the cap."
+            return
+        }
+        busy = true
+        message = "Refreshing ${group.name}…"
+        RouteOfflinePack.deletePacks(context, plan.ids) {
+            PrepareService.start(
+                context,
+                track,
+                group.strategy,
+                bothThemes = false,
+                tuning = group.tuning,
+                targetStyle = group.style,
+            )
+            refresh++
+        }
+    }
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text("Offline map packs") },
@@ -79,16 +132,29 @@ internal fun OfflinePacksDialog(
                     )
                     Spacer(Modifier.height(8.dp))
                 }
+                message?.let { text ->
+                    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.height(8.dp))
+                }
                 if (groups == null) {
                     Text("Loading…", style = MaterialTheme.typography.bodySmall)
                 } else if (groups.isEmpty()) {
-                    Text(
-                        "No offline map packs yet. Prepare a route offline to download one.",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
+                    if (message?.startsWith("Refreshing") != true) {
+                        Text(
+                            "No offline map packs yet. Prepare a route offline to download one.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
                 } else {
+                    val counts = buildString {
+                        append("$routeGroupCount route group")
+                        if (routeGroupCount != 1) append("s")
+                        if (legacyCount > 0) {
+                            append(" · $legacyCount legacy")
+                        }
+                    }
                     Text(
-                        "${groups.size} group${if (groups.size == 1) "" else "s"} · ${formatBytes(totalBytes)} of " +
+                        "$counts · ${formatBytes(totalBytes)} of " +
                             (capBytes?.let { "${formatBytes(it)} cap" } ?: "unlimited"),
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -118,12 +184,31 @@ internal fun OfflinePacksDialog(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text(pack.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
                                 Text(
-                                    "${strategyText(pack.strategy)} · ${pack.theme} · ${pack.style}",
+                                    if (pack.legacy) "Legacy / unknown" else pack.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                )
+                                Text(
+                                    if (pack.legacy) {
+                                        "metadata: ${pack.name} · ${strategyText(pack.strategy)} · " +
+                                            "${pack.theme} · ${pack.style}"
+                                    } else {
+                                        "${strategyText(pack.strategy)} · ${pack.theme} · ${pack.style}"
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     maxLines = 1,
                                 )
+                                if (!pack.legacy) {
+                                    Text(
+                                        "segment ${formatKm(pack.tuning.segmentMeters)} km · " +
+                                            "pad ${formatKm(pack.tuning.corridorPadMeters)} km · " +
+                                            "turn ${formatKm(pack.tuning.turnPadMeters)} km · " +
+                                            "zoom ≤ ${pack.tuning.maxZoom}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 1,
+                                    )
+                                }
                                 Text(
                                     "${pack.segments} segment${if (pack.segments == 1) "" else "s"} · ${formatBytes(pack.bytes)} · " +
                                         "${formatDate(pack.createdAt)} · ${ageText(pack.ageDays)} · ${statusText(pack.status)}" +
@@ -133,6 +218,20 @@ internal fun OfflinePacksDialog(
                                 )
                             }
                             Spacer(Modifier.width(4.dp))
+                            if (!pack.legacy) {
+                                if (OfflineRefresh.canRefresh(pack, libraryRouteIds)) {
+                                    TextButton(
+                                        enabled = !busy,
+                                        onClick = { refreshGroup(pack) },
+                                    ) { Text("Refresh") }
+                                } else {
+                                    Text(
+                                        "Route not found",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.outline,
+                                    )
+                                }
+                            }
                             IconButton(
                                 enabled = !busy,
                                 onClick = {
@@ -193,6 +292,11 @@ private fun formatBytes(bytes: Long?): String {
     val kb = bytes / 1024.0
     if (kb < 1024) return "${kb.toInt()} kB"
     return "%.1f MB".format(kb / 1024.0)
+}
+
+private fun formatKm(meters: Double): String {
+    val km = meters / 1000.0
+    return if (km % 1.0 == 0.0) km.toInt().toString() else "%.2f".format(km).trimEnd('0').trimEnd('.')
 }
 
 private fun formatDate(createdAt: Long?): String {

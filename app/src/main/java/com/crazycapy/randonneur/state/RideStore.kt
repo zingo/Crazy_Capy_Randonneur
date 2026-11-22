@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.OfflineThemeMode
+import com.crazycapy.randonneur.cache.OfflineTuning
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.radar.RadarVehicle
 import com.crazycapy.randonneur.voice.SpeechMarker
@@ -97,6 +98,25 @@ object RideStore {
 
     /** Delete expired packs automatically on app start (keeps them when off). */
     var offlineAutoDeleteExpired: Boolean by mutableStateOf(false)
+
+    /** Corridor segment length in km (2–50). */
+    var offlineSegmentKm: Double by mutableStateOf(OfflineTuning.DEFAULT_SEGMENT_KM)
+
+    /** Corridor padding either side in km (0.5–10). */
+    var offlineCorridorPadKm: Double by mutableStateOf(OfflineTuning.DEFAULT_CORRIDOR_PAD_KM)
+
+    /** High-detail turn box in km (0.25–5). */
+    var offlineTurnBoxKm: Double by mutableStateOf(OfflineTuning.DEFAULT_TURN_PAD_KM)
+
+    /** Zoom ceiling for high-detail map tiles (13–16). */
+    var offlineHighMaxZoom: Int by mutableStateOf(OfflineTuning.DEFAULT_MAX_ZOOM)
+
+    fun offlineTuning(): OfflineTuning = OfflineTuning.fromSettings(
+        segmentKm = offlineSegmentKm,
+        corridorPadKm = offlineCorridorPadKm,
+        turnPadKm = offlineTurnBoxKm,
+        maxZoom = offlineHighMaxZoom,
+    )
 
     fun defaultPrepareBothThemes(): Boolean = when (offlineThemeMode) {
         OfflineThemeMode.OFF -> false

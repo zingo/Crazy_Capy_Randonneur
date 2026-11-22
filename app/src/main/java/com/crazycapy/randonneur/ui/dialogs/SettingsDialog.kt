@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.OfflineThemeMode
+import com.crazycapy.randonneur.cache.OfflineTuning
 import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.radar.RadarClient
 import com.crazycapy.randonneur.state.RideStore
@@ -147,6 +148,59 @@ internal fun SettingsDialog(
                         }
                     }
                 }
+                Text("Advanced offline tuning", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Applies to the next prepare; existing packs with different tuning are replaced",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                SettingRangeSlider(
+                    title = "Segment length",
+                    subtitle = "Corridor chunk in km · 2–50",
+                    value = RideStore.offlineSegmentKm.toFloat(),
+                    valueText = "${formatTuningKm(RideStore.offlineSegmentKm)} km",
+                    valueRange = OfflineTuning.MIN_SEGMENT_KM.toFloat()..OfflineTuning.MAX_SEGMENT_KM.toFloat(),
+                    steps = (OfflineTuning.MAX_SEGMENT_KM - OfflineTuning.MIN_SEGMENT_KM).toInt() - 1,
+                    onValueChange = {
+                        RideStore.offlineSegmentKm = it.roundToInt().toDouble()
+                        RouteStore.saveSettings(context)
+                    },
+                )
+                SettingRangeSlider(
+                    title = "Corridor padding",
+                    subtitle = "Map margin either side in km · 0.5–10",
+                    value = RideStore.offlineCorridorPadKm.toFloat(),
+                    valueText = "${formatTuningKm(RideStore.offlineCorridorPadKm)} km",
+                    valueRange = OfflineTuning.MIN_CORRIDOR_PAD_KM.toFloat()..OfflineTuning.MAX_CORRIDOR_PAD_KM.toFloat(),
+                    steps = 18,
+                    onValueChange = {
+                        RideStore.offlineCorridorPadKm = (it * 2f).roundToInt() / 2.0
+                        RouteStore.saveSettings(context)
+                    },
+                )
+                SettingRangeSlider(
+                    title = "High-detail turn box",
+                    subtitle = "Along-route turn window in km · 0.25–5",
+                    value = RideStore.offlineTurnBoxKm.toFloat(),
+                    valueText = "${formatTuningKm(RideStore.offlineTurnBoxKm)} km",
+                    valueRange = OfflineTuning.MIN_TURN_PAD_KM.toFloat()..OfflineTuning.MAX_TURN_PAD_KM.toFloat(),
+                    steps = 18,
+                    onValueChange = {
+                        RideStore.offlineTurnBoxKm = (it * 4f).roundToInt() / 4.0
+                        RouteStore.saveSettings(context)
+                    },
+                )
+                SettingRangeSlider(
+                    title = "High-detail max zoom",
+                    subtitle = "Tile zoom ceiling · 13–16",
+                    value = RideStore.offlineHighMaxZoom.toFloat(),
+                    valueText = "zoom ${RideStore.offlineHighMaxZoom}",
+                    valueRange = OfflineTuning.MIN_MAX_ZOOM.toFloat()..OfflineTuning.MAX_MAX_ZOOM.toFloat(),
+                    steps = OfflineTuning.MAX_MAX_ZOOM - OfflineTuning.MIN_MAX_ZOOM - 1,
+                    onValueChange = {
+                        RideStore.offlineHighMaxZoom = it.roundToInt()
+                        RouteStore.saveSettings(context)
+                    },
+                )
                 Column(Modifier.fillMaxWidth()) {
                     Text("Offline map theme", style = MaterialTheme.typography.bodyMedium)
                     Text(
@@ -345,6 +399,36 @@ internal fun SettingSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit,
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
+
+@Composable
+private fun SettingRangeSlider(
+    title: String,
+    subtitle: String,
+    value: Float,
+    valueText: String,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    onValueChange: (Float) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyMedium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall)
+            }
+            Text(valueText, style = MaterialTheme.typography.labelMedium)
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            steps = steps,
+        )
+    }
+}
+
+private fun formatTuningKm(km: Double): String =
+    if (km % 1.0 == 0.0) km.toInt().toString() else "%.2f".format(km).trimEnd('0').trimEnd('.')
 
 @Composable
 internal fun SettingSlider(value: Int, onValueChange: (Int) -> Unit, title: String, subtitle: String) {
