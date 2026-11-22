@@ -79,6 +79,7 @@ import com.crazycapy.randonneur.BuildConfig
 import com.crazycapy.randonneur.DEFAULT_LAT
 import com.crazycapy.randonneur.DEFAULT_LON
 import com.crazycapy.randonneur.TAG
+import com.crazycapy.randonneur.cache.OfflineEstimateCalculator
 import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.cache.RouteOfflinePack
 import com.crazycapy.randonneur.cache.RoutePrepare
@@ -671,13 +672,15 @@ internal fun NavigationMapScreen(
         val previewsCached = RouteCache.isCached(context, routeId, t, false) &&
             RouteCache.isCached(context, routeId, t, true) &&
             RouteCache.hasOverview(context, routeId, t)
-        RouteOfflinePack.findComplete(context, t, RideStore.offlineDetailStrategy) { lookup ->
+        val bothThemes = RideStore.defaultPrepareBothThemes()
+        RouteOfflinePack.findComplete(context, t, RideStore.offlineDetailStrategy, bothThemes) { lookup ->
             if (RideStore.track?.name == t.name && (!lookup.complete || !previewsCached)) askPrepareFor = t
         }
     }
     askPrepareFor?.let { track ->
         val turns = TurnFinder.find(track).size
-        val estMb = (turns * 4 * 50 + 512) / 1024
+        val bothThemes = RideStore.defaultPrepareBothThemes()
+        val estimate = OfflineEstimateCalculator.estimate(track, RideStore.offlineDetailStrategy, if (bothThemes) 2 else 1)
         val detail = if (turns > 0) "$turns turns" else "map only"
         AlertDialog(
             onDismissRequest = { askPrepareFor = null },
@@ -686,7 +689,11 @@ internal fun NavigationMapScreen(
                 Column {
                     Text("Download map tiles and render turn previews for ${track.name} ahead of time — works offline and saves battery on the ride.", style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(8.dp))
-                    Text("~${estMb} MB (best on Wi-Fi while charging) · $detail", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "${formatEstimate(estimate.bytes)} estimate (best on Wi-Fi while charging) · " +
+                            "${estimate.segments} segments · ${estimate.themes} theme${if (estimate.themes == 1) "" else "s"} · $detail",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
             },
             confirmButton = { TextButton(onClick = { askPrepareFor = null; prepareTarget = track }) { Text("Prepare") } },
@@ -769,3 +776,8 @@ internal fun MapCompass(onClick: () -> Unit, modifier: Modifier = Modifier) {
 
 
 private fun fmtSec(seconds: Long): String { val h=seconds/3600; val m=(seconds%3600)/60; val sec=seconds%60; return if (h>0) "%d:%02d:%02d".format(h,m,sec) else "%d:%02d".format(m,sec) }
+
+private fun formatEstimate(bytes: Long): String {
+    if (bytes < 1024 * 1024) return "${bytes / 1024} kB"
+    return "%.1f MB".format(bytes / (1024.0 * 1024.0))
+}

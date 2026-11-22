@@ -199,6 +199,17 @@ CrazyCapyRouting/
   and style, showing segment count and summed bytes. Segmentation and turn-box
   math are pure Kotlin with unit tests; legacy metadata-less packs still list
   and delete.
+- **Both map themes, size estimate and limits**: the prepare dialog can also
+  download the other map theme (last choice remembered; Settings → Offline map
+  theme offers Off/Always/Ask). Each theme creates its own metadata-tagged
+  regions with the same route/hash/strategy/segments, so dedupe and reuse stay
+  per theme; deleting a saved route removes both themes. The dialog shows a
+  documented conservative estimate (tile counts by corridor bounds and zoom
+  range, 128 kB per tile). Settings store a storage cap (MB, 0 = unlimited) and
+  pack expiry (days, 0 = never); a prepare that would exceed the cap is blocked
+  with a clear message and never deletes packs. The manager shows total vs cap,
+  age and expired flags with **Delete expired**. Cap/expiry decisions and the
+  estimator are pure Kotlin with unit tests.
 - **QA (checkpoint markers)**: a checkpoint whose GPX `<wpt>` has no `<desc>`
   used to produce malformed GeoJSON (a stray quote), so MapLibre rejected the
   whole POI source and the markers silently vanished while the HUD's km-CP kept

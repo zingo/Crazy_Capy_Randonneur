@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
+import com.crazycapy.randonneur.cache.OfflineThemeMode
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.radar.RadarVehicle
 import com.crazycapy.randonneur.voice.SpeechMarker
@@ -81,6 +82,24 @@ object RideStore {
 
     /** Default detail for offline route packs; also remembers the last dialog choice. */
     var offlineDetailStrategy: OfflineDetailStrategy by mutableStateOf(OfflineDetailStrategy.STANDARD)
+
+    /** Whether the prepare dialog also downloads the other map theme by default. */
+    var offlineThemeMode: OfflineThemeMode by mutableStateOf(OfflineThemeMode.ASK)
+
+    /** Last "also prepare the other map theme" choice from the prepare dialog. */
+    var offlinePrepareBothThemes: Boolean by mutableStateOf(false)
+
+    /** Map-pack storage budget in MB (0 = unlimited). */
+    var offlineStorageCapMb: Int by mutableStateOf(1024)
+
+    /** Remove/flag packs older than this many days (0 = never). */
+    var offlineExpiryDays: Int by mutableStateOf(0)
+
+    fun defaultPrepareBothThemes(): Boolean = when (offlineThemeMode) {
+        OfflineThemeMode.OFF -> false
+        OfflineThemeMode.ALWAYS -> true
+        OfflineThemeMode.ASK -> offlinePrepareBothThemes
+    }
 
     const val DEFAULT_RWGPS_URL = "https://ridewithgps.com/users/10936047"
 

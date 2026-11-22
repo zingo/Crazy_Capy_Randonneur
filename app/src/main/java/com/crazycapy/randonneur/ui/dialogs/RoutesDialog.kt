@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import java.io.File
 import kotlin.math.roundToInt
 import com.crazycapy.randonneur.cache.RouteCache
+import com.crazycapy.randonneur.cache.RouteOfflinePack
 import com.crazycapy.randonneur.cache.RoutePrepare
 import com.crazycapy.randonneur.ui.helpers.copyToUri
 import com.crazycapy.randonneur.ui.helpers.shareGpx
@@ -212,6 +213,7 @@ internal fun RoutesDialog(
                                     onClick = {
                                         showMenu = false
                                         RouteCache.deleteRoute(context, route.id)
+                                        RouteOfflinePack.deleteRoute(context, route.id) {}
                                         onDelete(route.id)
                                     },
                                 )

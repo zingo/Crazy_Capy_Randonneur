@@ -24,7 +24,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.crazycapy.randonneur.cache.OfflineCapDecision
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
+import com.crazycapy.randonneur.cache.OfflineEstimateCalculator
+import com.crazycapy.randonneur.cache.OfflineLimits
 import com.crazycapy.randonneur.cache.PreparePhase
 import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.cache.RouteOfflinePack
@@ -42,12 +45,26 @@ internal fun PrepareRouteDialog(
     val routeId = remember(track) { RouteStore.routeId(track.name) }
     var started by remember(track) { mutableStateOf(false) }
     var strategy by remember(track) { mutableStateOf(RideStore.offlineDetailStrategy) }
+    var alsoOther by remember(track) { mutableStateOf(RideStore.defaultPrepareBothThemes()) }
+    var capMessage by remember(track) { mutableStateOf<String?>(null) }
+    var checkingCap by remember(track) { mutableStateOf(false) }
+    val estimate = remember(track, strategy, alsoOther) {
+        OfflineEstimateCalculator.estimate(track, strategy, if (alsoOther) 2 else 1)
+    }
     val state = RoutePrepare.state
     val showProgress = started || (state.running && state.routeId == routeId)
 
     val map = RouteOfflinePack.state
     val previewStatus = RouteCache.status
     val previewProgress = RouteCache.progress
+
+    fun beginPrepare() {
+        RideStore.offlineDetailStrategy = strategy
+        RideStore.offlinePrepareBothThemes = alsoOther
+        RouteStore.saveSettings(context)
+        started = true
+        RoutePrepare.start(context, track, strategy, alsoOther)
+    }
 
     AlertDialog(
         onDismissRequest = { if (!state.running) onDismiss() },
@@ -71,6 +88,26 @@ internal fun PrepareRouteDialog(
                         subtitle = "Whole corridor at zoom 8–12 · high zoom 13–14 near turns",
                         onClick = { strategy = OfflineDetailStrategy.TURN_FOCUSED },
                     )
+                    Spacer(Modifier.height(12.dp))
+                    SettingSwitch(
+                        checked = alsoOther,
+                        onCheckedChange = {
+                            alsoOther = it
+                            RideStore.offlinePrepareBothThemes = it
+                        },
+                        title = "Also prepare the other map theme",
+                        subtitle = "Dark and light are downloaded as separate regions",
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Estimated pack size: ${formatBytes(estimate.bytes)} · ${estimate.segments} segments · " +
+                            "${estimate.themes} theme${if (estimate.themes == 1) "" else "s"} (estimate)",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    capMessage?.let { message ->
+                        Spacer(Modifier.height(8.dp))
+                        Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
                 } else {
                     Text("1/2 · Map tiles", style = MaterialTheme.typography.titleSmall)
                     Spacer(Modifier.height(4.dp))
@@ -90,7 +127,8 @@ internal fun PrepareRouteDialog(
                                 Spacer(Modifier.height(8.dp))
                                 if (map.segmentCount > 0) {
                                     Text(
-                                        "Segment ${map.segmentIndex}/${map.segmentCount} · ${strategyLabel(map.strategy)}",
+                                        "Segment ${map.segmentIndex}/${map.segmentCount} · ${strategyLabel(map.strategy)}" +
+                                            if (map.themeCount > 1) " · ${map.theme}" else "",
                                         style = MaterialTheme.typography.bodySmall,
                                     )
                                 }
@@ -100,7 +138,8 @@ internal fun PrepareRouteDialog(
                                 )
                             }
                             map.done -> Text(
-                                "Saved ${formatBytes(map.completedBytes)} · ${map.segmentCount} segment${if (map.segmentCount == 1) "" else "s"}.",
+                                "Saved ${formatBytes(map.completedBytes)} · ${map.segmentCount} segment${if (map.segmentCount == 1) "" else "s"}" +
+                                    if (map.themeCount > 1) " · ${map.themeCount} themes." else ".",
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             map.cancelled -> Text("Download cancelled.", style = MaterialTheme.typography.bodySmall)
@@ -153,12 +192,28 @@ internal fun PrepareRouteDialog(
         confirmButton = {
             when {
                 state.running && showProgress -> TextButton(onClick = { RoutePrepare.cancel() }) { Text("Cancel") }
-                !showProgress -> TextButton(onClick = {
-                    RideStore.offlineDetailStrategy = strategy
-                    RouteStore.saveSettings(context)
-                    started = true
-                    RoutePrepare.start(context, track, strategy)
-                }) { Text("Start") }
+                !showProgress -> TextButton(
+                    enabled = !checkingCap,
+                    onClick = {
+                        capMessage = null
+                        val cap = RideStore.offlineStorageCapMb
+                        if (cap <= 0) {
+                            beginPrepare()
+                        } else {
+                            checkingCap = true
+                            RouteOfflinePack.totalBytes(context) { used ->
+                                checkingCap = false
+                                if (OfflineLimits.decideCap(used, estimate.bytes, cap) == OfflineCapDecision.EXCEEDS) {
+                                    capMessage = "Not enough offline storage: packs already use " +
+                                        "${formatBytes(used)} of $cap MB and this prepare estimates " +
+                                        "${formatBytes(estimate.bytes)}. Delete packs or raise the cap."
+                                } else {
+                                    beginPrepare()
+                                }
+                            }
+                        }
+                    },
+                ) { Text(if (checkingCap) "Checking…" else "Start") }
                 else -> TextButton(onClick = onDismiss) { Text("Close") }
             }
         },
