@@ -754,6 +754,21 @@ object RouteOfflinePack {
         Log.i(LOG_TAG, "cancelled run")
     }
 
+    fun pause() {
+        generation++
+        val current = region
+        region = null
+        val partials = synchronized(runRegions) { runRegions.values.toList() }
+        for (offlineRegion in partials) {
+            runCatching { offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE) }
+        }
+        if (current != null && partials.none { it.id == current.id }) {
+            runCatching { current.setDownloadState(OfflineRegion.STATE_INACTIVE) }
+        }
+        state = state.copy(running = false, percent = null)
+        Log.i(LOG_TAG, "paused run")
+    }
+
     private fun releasePartialRegions(delete: Boolean) {
         val current = region
         region = null

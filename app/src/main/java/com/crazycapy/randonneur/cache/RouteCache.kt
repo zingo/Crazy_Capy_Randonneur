@@ -194,6 +194,12 @@ object RouteCache {
         activeRenderer?.cancelPending()
     }
 
+    /** Stop the in-flight preview pass but keep the images already written. */
+    fun pause() {
+        cancelRequested.set(true)
+        activeRenderer?.cancelPending()
+    }
+
     /**
      * Prepare a route's turn previews (and warm its corridor tiles) in the
      * background. Cheap to call repeatedly: misses or already-cached turns are

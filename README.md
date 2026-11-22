@@ -20,7 +20,13 @@ your ears do the navigating — no accounts, no cloud, no ads.
   route loads) downloads MapLibre offline regions in ~10 km corridor segments
   (1.5 km either side) and then pre-renders every turn preview and corridor tile
   it can in a single run, with a phase label, progress and cancel (map first, so
-  previews use the cached tiles). Choose **Standard** (whole corridor at zoom
+  previews use the cached tiles). Preparation runs in a foreground service, so
+  closing the dialog or switching apps keeps it going; a low-importance
+  notification shows the map/preview phase and progress and offers **Pause /
+  Resume** and **Cancel**. Resuming skips completed segments and cached
+  previews; cancel removes partial map regions. Notification permission is
+  requested when preparation starts, but the work still runs if it is denied.
+  Choose **Standard** (whole corridor at zoom
   8–14) or **Turn-focused** (whole corridor at 8–12 plus high zoom 13–14 in 1 km
   boxes around turns); the last choice is remembered and can be set under
   **Settings → Offline map detail**. There is no artificial turn cap; it skips

@@ -82,7 +82,7 @@ internal fun RoutesDialog(
     onImport: () -> Unit,
 ) {
     val prepareState = RoutePrepare.state
-    val busyId = prepareState.takeIf { it.running }?.routeId ?: RouteCache.activeRouteId
+    val busyId = prepareState.takeIf { it.running || it.paused }?.routeId ?: RouteCache.activeRouteId
     var showRwgps by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
     var renameTargetId by remember { mutableStateOf<String?>(null) }

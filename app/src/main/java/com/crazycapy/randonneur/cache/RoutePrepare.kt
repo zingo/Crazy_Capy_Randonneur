@@ -12,28 +12,15 @@ import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
 
-enum class PreparePhase { MAP, PREVIEWS, DONE }
-
-data class PrepareState(
-    val routeId: String = "",
-    val routeName: String = "",
-    val running: Boolean = false,
-    val phase: PreparePhase = PreparePhase.MAP,
-    val mapSkipped: Boolean = false,
-    val previewsSkipped: Boolean = false,
-    val done: Boolean = false,
-    val cancelled: Boolean = false,
-    val previewsStatus: String? = null,
-    val strategy: OfflineDetailStrategy = OfflineDetailStrategy.STANDARD,
-    val bothThemes: Boolean = false,
-)
-
 object RoutePrepare {
 
     var state: PrepareState by mutableStateOf(PrepareState())
         private set
 
     private var generation = 0L
+    private var activeTrack: Track? = null
+    private var activeStrategy = OfflineDetailStrategy.STANDARD
+    private var activeBothThemes = false
 
     fun start(
         context: Context,
@@ -43,22 +30,38 @@ object RoutePrepare {
     ) {
         val routeId = RouteStore.routeId(track.name)
         if (state.running && state.routeId == routeId && state.strategy == strategy && state.bothThemes == bothThemes) return
-        if (state.running) cancel()
+        if (state.running || state.paused) cancel()
+        launch(context, track, strategy, bothThemes)
+    }
+
+    fun resume(context: Context) {
+        val track = activeTrack ?: return
+        if (state.running || !state.paused) return
+        launch(context, track, activeStrategy, activeBothThemes)
+    }
+
+    private fun launch(
+        context: Context,
+        track: Track,
+        strategy: OfflineDetailStrategy,
+        bothThemes: Boolean,
+    ) {
         val appContext = context.applicationContext
         generation++
         val gen = generation
-        state = PrepareState(
-            routeId = routeId,
+        activeTrack = track
+        activeStrategy = strategy
+        activeBothThemes = bothThemes
+        state = PrepareTransitions.started(
+            routeId = RouteStore.routeId(track.name),
             routeName = track.name,
-            running = true,
-            phase = PreparePhase.MAP,
             strategy = strategy,
             bothThemes = bothThemes,
         )
         RouteOfflinePack.findComplete(appContext, track, strategy, bothThemes) { lookup ->
             if (gen != generation) return@findComplete
             if (lookup.complete) {
-                state = state.copy(mapSkipped = true)
+                state = PrepareTransitions.mapReady(state, skipped = true)
                 startPreviews(appContext, track, gen)
             } else {
                 RouteOfflinePack.start(appContext, track, strategy, bothThemes) {
@@ -70,22 +73,16 @@ object RoutePrepare {
 
     private fun startPreviews(context: Context, track: Track, gen: Long) {
         val routeId = RouteStore.routeId(track.name)
-        state = state.copy(phase = PreparePhase.PREVIEWS)
+        state = PrepareTransitions.previewsStarted(state)
         if (previewsComplete(context, routeId, track)) {
-            state = state.copy(
-                phase = PreparePhase.DONE,
-                previewsSkipped = true,
-                running = false,
-                done = true,
-            )
+            state = PrepareTransitions.completed(state, previewsSkipped = true, previewsStatus = null)
             return
         }
         RouteCache.preCache(context, track) {
             if (gen != generation) return@preCache
-            state = state.copy(
-                phase = PreparePhase.DONE,
-                running = false,
-                done = true,
+            state = PrepareTransitions.completed(
+                state,
+                previewsSkipped = false,
                 previewsStatus = RouteCache.status,
             )
         }
@@ -96,12 +93,23 @@ object RoutePrepare {
             RouteCache.isCached(context, routeId, track, true) &&
             RouteCache.hasOverview(context, routeId, track)
 
+    fun pause() {
+        if (!state.running || state.paused) return
+        generation++
+        if (state.phase == PreparePhase.MAP && !state.mapSkipped) {
+            RouteOfflinePack.pause()
+        }
+        RouteCache.pause()
+        state = PrepareTransitions.paused(state)
+    }
+
     fun cancel() {
         generation++
         if (state.phase == PreparePhase.MAP && !state.mapSkipped && !RouteOfflinePack.state.done) {
             RouteOfflinePack.cancel()
         }
         RouteCache.cancel()
-        state = state.copy(running = false, cancelled = true)
+        activeTrack = null
+        state = PrepareTransitions.cancelled(state)
     }
 }

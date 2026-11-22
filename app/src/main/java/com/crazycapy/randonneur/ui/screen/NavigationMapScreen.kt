@@ -667,7 +667,7 @@ internal fun NavigationMapScreen(
     LaunchedEffect(RideStore.track) {
         val t = RideStore.track ?: return@LaunchedEffect
         if (!RideStore.precacheEnabled || RideStore.active || RideStore.precacheAskSuppressed) return@LaunchedEffect
-        if (RoutePrepare.state.running || RouteCache.activeRouteId != null) return@LaunchedEffect
+        if (RoutePrepare.state.running || RoutePrepare.state.paused || RouteCache.activeRouteId != null) return@LaunchedEffect
         val routeId = RouteStore.routeId(t.name)
         val previewsCached = RouteCache.isCached(context, routeId, t, false) &&
             RouteCache.isCached(context, routeId, t, true) &&
