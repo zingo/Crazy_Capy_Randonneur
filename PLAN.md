@@ -210,6 +210,14 @@ CrazyCapyRouting/
   paused/background progress and closing it only hides it. Phase/percent
   formatting and pause/resume/cancel transitions are pure Kotlin with unit
   tests.
+- **Auto-prune and process-death recovery**: an optional setting (default off)
+  removes expired offline pack groups once at app start using the existing
+  expiry metadata, never touching unexpired or legacy packs, and reports the
+  count in the manager. Prepare state (route id/hash, strategy, both-themes) is
+  persisted so a unique WorkManager recovery job with a network constraint
+  resumes an interrupted prepare after process death (and on next launch),
+  skipping already-complete segments/previews. Serialization and prune
+  decisions are pure Kotlin with unit tests.
 - **Both map themes, size estimate and limits**: the prepare dialog can also
   download the other map theme (last choice remembered; Settings → Offline map
   theme offers Off/Always/Ask). Each theme creates its own metadata-tagged

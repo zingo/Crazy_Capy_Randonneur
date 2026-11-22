@@ -54,7 +54,12 @@ your ears do the navigating — no accounts, no cloud, no ads.
   this route's replaced segments plus the estimate, so re-preparing does not
   block on space it will free, and an over-cap warning reports both the used and
   reclaimable amounts without deleting packs. **Offline pack expiry** (days,
-  0 = never) flags old packs in the manager with a **Delete expired** action. In a controlled benchmark,
+  0 = never) flags old packs in the manager with a **Delete expired** action;
+  **Auto-delete expired offline packs** (default off) prunes expired groups once
+  at app start and reports the count in the manager. Preparation state is
+  persisted: if Android kills the app mid-prepare, a unique WorkManager job
+  resumes the same route, strategy and theme choice when the network returns
+  (and on the next launch), skipping completed segments and cached previews. In a controlled benchmark,
   showing a pre-cached preview cost ~1.4–2.5× less energy and ~6–8× less CPU
   than rendering it live (screen on/off), while warming only the map tiles made
   no measurable difference. On a ride the saved energy is small next to the

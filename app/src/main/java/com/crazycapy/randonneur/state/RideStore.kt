@@ -95,6 +95,9 @@ object RideStore {
     /** Remove/flag packs older than this many days (0 = never). */
     var offlineExpiryDays: Int by mutableStateOf(0)
 
+    /** Delete expired packs automatically on app start (keeps them when off). */
+    var offlineAutoDeleteExpired: Boolean by mutableStateOf(false)
+
     fun defaultPrepareBothThemes(): Boolean = when (offlineThemeMode) {
         OfflineThemeMode.OFF -> false
         OfflineThemeMode.ALWAYS -> true

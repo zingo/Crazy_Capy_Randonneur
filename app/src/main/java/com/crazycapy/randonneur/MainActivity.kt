@@ -16,8 +16,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.core.view.WindowCompat
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
+import com.crazycapy.randonneur.cache.OfflinePrune
+import com.crazycapy.randonneur.cache.PrepareRecovery
 import com.crazycapy.randonneur.gpx.TrackLoader
 import com.crazycapy.randonneur.radar.RadarClient
+import com.crazycapy.randonneur.service.PrepareRecoveryWork
 import com.crazycapy.randonneur.state.RideHistory
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
@@ -31,6 +34,14 @@ class MainActivity : ComponentActivity() {
         val appContext = applicationContext
         RouteStore.init(appContext)
         RouteStore.loadSettings(appContext)
+        OfflinePrune.pruneAtStartup(appContext)
+        if (PrepareRecovery.load(appContext) != null) {
+            if (PrepareRecoveryWork.workerRunning) {
+                PrepareRecoveryWork.ensure(appContext)
+            } else {
+                PrepareRecoveryWork.enqueue(appContext)
+            }
+        }
         loadResumeState(appContext)
         if (!RideStore.active) {
             val recovered = RideHistory.recoverInProgress(appContext)

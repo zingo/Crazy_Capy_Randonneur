@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.gpx.Track
+import com.crazycapy.randonneur.service.PrepareRecoveryWork
 import com.crazycapy.randonneur.state.RideStore
 
 object RoutePrepare {
@@ -29,14 +30,24 @@ object RoutePrepare {
     ) {
         val routeId = RouteIdentity.of(track)
         if (state.running && state.routeId == routeId && state.strategy == strategy && state.bothThemes == bothThemes) return
-        if (state.running || state.paused) cancel()
-        launch(context, track, strategy, bothThemes)
+        if (state.running || state.paused) cancel(context)
+        launch(context, track, strategy, bothThemes, persist = true, enqueueRecovery = true)
     }
 
     fun resume(context: Context) {
         val track = activeTrack ?: return
         if (state.running || !state.paused) return
-        launch(context, track, activeStrategy, activeBothThemes)
+        launch(context, track, activeStrategy, activeBothThemes, persist = true, enqueueRecovery = false)
+    }
+
+    fun startRecovery(
+        context: Context,
+        track: Track,
+        strategy: OfflineDetailStrategy,
+        bothThemes: Boolean,
+    ) {
+        if (state.running || state.paused) return
+        launch(context, track, strategy, bothThemes, persist = false, enqueueRecovery = false)
     }
 
     private fun launch(
@@ -44,8 +55,12 @@ object RoutePrepare {
         track: Track,
         strategy: OfflineDetailStrategy,
         bothThemes: Boolean,
+        persist: Boolean,
+        enqueueRecovery: Boolean,
     ) {
         val appContext = context.applicationContext
+        if (persist) PrepareRecovery.save(appContext, track, strategy, bothThemes)
+        if (enqueueRecovery) PrepareRecoveryWork.enqueue(appContext)
         generation++
         val gen = generation
         activeTrack = track
@@ -75,6 +90,7 @@ object RoutePrepare {
         state = PrepareTransitions.previewsStarted(state)
         if (previewsComplete(context, routeId, track)) {
             state = PrepareTransitions.completed(state, previewsSkipped = true, previewsStatus = null)
+            PrepareRecovery.clear(context)
             return
         }
         RouteCache.preCache(context, track) {
@@ -84,6 +100,7 @@ object RoutePrepare {
                 previewsSkipped = false,
                 previewsStatus = RouteCache.status,
             )
+            PrepareRecovery.clear(context)
         }
     }
 
@@ -102,7 +119,7 @@ object RoutePrepare {
         state = PrepareTransitions.paused(state)
     }
 
-    fun cancel() {
+    fun cancel(context: Context? = null) {
         generation++
         if (state.phase == PreparePhase.MAP && !state.mapSkipped && !RouteOfflinePack.state.done) {
             RouteOfflinePack.cancel()
@@ -110,5 +127,9 @@ object RoutePrepare {
         RouteCache.cancel()
         activeTrack = null
         state = PrepareTransitions.cancelled(state)
+        if (context != null) {
+            PrepareRecovery.clear(context)
+            PrepareRecoveryWork.cancel(context)
+        }
     }
 }

@@ -16,6 +16,11 @@ data class OfflinePackSizing(
     val bytes: Long,
 )
 
+data class OfflineExpiryGroup(
+    val ids: List<Long>,
+    val createdAt: Long?,
+)
+
 object OfflineLimits {
 
     const val MILLIS_PER_DAY = 86_400_000L
@@ -63,6 +68,19 @@ object OfflineLimits {
         if (expiryDays <= 0 || createdAtMs == null || createdAtMs <= 0L) return false
         val limit = expiryDays.toLong().saturatedMultiply(MILLIS_PER_DAY)
         return nowMs - createdAtMs > limit
+    }
+
+    fun expiredGroupIds(
+        groups: List<OfflineExpiryGroup>,
+        autoDelete: Boolean,
+        expiryDays: Int,
+        nowMs: Long,
+    ): Set<Long> {
+        if (!autoDelete) return emptySet()
+        return groups.asSequence()
+            .filter { isExpired(it.createdAt, expiryDays, nowMs) }
+            .flatMap { it.ids.asSequence() }
+            .toSet()
     }
 
     private fun Long.saturatedMultiply(other: Long): Long {
