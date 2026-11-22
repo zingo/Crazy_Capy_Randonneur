@@ -71,6 +71,19 @@ After changing code, run `./gradlew :app:assembleDebug :app:lintDebug` and the
 unit tests; run the instrumented suite when behavior touching the service or
 notification changed.
 
+Wrap emulator work so it cleans up after itself (this also stops Gradle/Kotlin
+daemons, which otherwise hold several GB):
+
+```bash
+tools/with-emulator.sh ./gradlew :app:connectedDebugAndroidTest
+tools/stop-dev.sh   # manual cleanup: emulators + Gradle/Kotlin daemons
+```
+
+Do not leave an emulator or build daemons running after tests; run only one
+emulator at a time. Use `CAPY_EMU_KEEP=1` only while iterating. The Gradle JVM
+is capped at 2 GB and the Kotlin daemon at 1 GB; raise those only if a build
+actually runs out of memory.
+
 Before opening a PR, verify behavior on the emulator; use a physical device
 (T20Mini/phone) when emulator limits matter (BLE/radio, real GPS, hardware) or
 when a spot-check is really needed. Put the evidence in the PR description. Currently 187 unit tests + 4 instrumented ghost-ride tests.

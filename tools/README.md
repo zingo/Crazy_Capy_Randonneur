@@ -511,6 +511,14 @@ tools/ensure-emulator.sh emulator-5556
 Env: `ANDROID_HOME` (default `~/Android/Sdk`), `CAPY_AVD` (default `Capy17`),
 `CAPY_EMU_MEM` (MB), `CAPY_EMU_CORES`, `CAPY_EMU_NICE`.
 
+### Memory hygiene
+
+Use `tools/with-emulator.sh <command>` to start the emulator, run the command,
+and then stop the emulator plus Gradle/Kotlin daemons. `tools/stop-dev.sh` does
+the cleanup manually and prints current memory. Set `CAPY_EMU_KEEP=1` to keep
+the emulator while iterating. Gradle is capped at 2 GB and Kotlin at 1 GB in
+`gradle.properties`; raise only if a build runs out of memory.
+
 ---
 
 ## Agent commands and skills
