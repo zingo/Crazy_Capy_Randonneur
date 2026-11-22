@@ -207,6 +207,10 @@ object RideStore {
     /** Heart rate in bpm, or null when no sensor connected. */
     var hr: Int? by mutableStateOf(null)
 
+    /** Last heart-rate strap chosen in Settings, offered for reconnect. */
+    var hrDeviceAddress: String? by mutableStateOf(null)
+    var hrDeviceName: String? by mutableStateOf(null)
+
     // ---- POI / waypoint guidance ----
 
     /** Name of the next waypoint along the route, if any. */

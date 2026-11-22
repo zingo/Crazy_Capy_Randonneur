@@ -208,6 +208,8 @@ object RouteStore {
         map["showGhostControls"]?.toBooleanStrictOrNull()?.let { RideStore.showGhostControls = it }
         map["rwgpsUrl"]?.takeIf { it.isNotBlank() }?.let { RideStore.rwgpsUrl = it }
         map["gpsIntervalSec"]?.toIntOrNull()?.takeIf { it in listOf(1, 3, 5) }?.let { RideStore.gpsIntervalSec = it }
+        map["hrDeviceAddress"]?.takeIf { it.isNotBlank() }?.let { RideStore.hrDeviceAddress = it }
+        map["hrDeviceName"]?.takeIf { it.isNotBlank() }?.let { RideStore.hrDeviceName = it }
     }
 
     fun saveSettings(context: Context) {
@@ -236,6 +238,8 @@ object RouteStore {
             "showGhostControls=${RideStore.showGhostControls}",
             "rwgpsUrl=${RideStore.rwgpsUrl}",
             "gpsIntervalSec=${RideStore.gpsIntervalSec}",
+            "hrDeviceAddress=${RideStore.hrDeviceAddress.orEmpty()}",
+            "hrDeviceName=${RideStore.hrDeviceName.orEmpty()}",
         )
         runCatching { settingsFile(context).writeText(lines.joinToString("\n")) }
     }

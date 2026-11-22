@@ -4,6 +4,10 @@
  */
 package com.crazycapy.randonneur.ui.dialogs
 
+import android.Manifest
+import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,6 +41,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.crazycapy.randonneur.ble.BleHrProvider
+import com.crazycapy.randonneur.ble.HrPhase
+import com.crazycapy.randonneur.ble.HrSensorState
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.OfflineThemeMode
 import com.crazycapy.randonneur.cache.OfflineTuning
@@ -68,6 +75,39 @@ internal fun SettingsDialog(
     buildType: String,
 ) {
     val context = LocalContext.current
+    val hrState = BleHrProvider.state
+    var pendingHrConnect by remember { mutableStateOf<Pair<String, String?>?>(null) }
+    val hrPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) {
+        val pending = pendingHrConnect
+        pendingHrConnect = null
+        if (BleHrProvider.hasPermissions(context)) {
+            if (pending != null) BleHrProvider.connect(pending.first, pending.second)
+            else BleHrProvider.startScan()
+        }
+    }
+    fun scanHr() {
+        if (BleHrProvider.hasPermissions(context)) BleHrProvider.startScan()
+        else {
+            pendingHrConnect = null
+            hrPermission.launch(
+                arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT),
+            )
+        }
+    }
+    fun connectHr(address: String, name: String?) {
+        RideStore.hrDeviceAddress = address
+        RideStore.hrDeviceName = name
+        RouteStore.saveSettings(context)
+        if (BleHrProvider.hasPermissions(context)) BleHrProvider.connect(address, name)
+        else {
+            pendingHrConnect = address to name
+            hrPermission.launch(
+                arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT),
+            )
+        }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Settings") },
@@ -278,6 +318,49 @@ internal fun SettingsDialog(
                     subtitle = "Read a real rear radar via the overlay app (off saves battery)",
                 )
                 Spacer(Modifier.height(12.dp))
+                Text("Heart rate", style = MaterialTheme.typography.titleSmall)
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                Text(hrStatusText(context, hrState), style = MaterialTheme.typography.bodyMedium)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    if (hrState.phase == HrPhase.CONNECTED) {
+                        TextButton(onClick = { BleHrProvider.disconnect() }) { Text("Disconnect") }
+                    } else {
+                        if (hrState.phase == HrPhase.SCANNING) {
+                            TextButton(onClick = { BleHrProvider.stopScan() }) { Text("Cancel scan") }
+                        } else {
+                            TextButton(onClick = { scanHr() }) { Text("Scan") }
+                        }
+                        val savedAddress = RideStore.hrDeviceAddress
+                        if (!savedAddress.isNullOrBlank() && hrState.phase != HrPhase.SCANNING) {
+                            TextButton(onClick = { connectHr(savedAddress, RideStore.hrDeviceName) }) {
+                                Text("Connect ${RideStore.hrDeviceName ?: "saved sensor"}")
+                            }
+                        }
+                    }
+                }
+                if (hrState.phase == HrPhase.SCANNING) {
+                    if (hrState.devices.isEmpty()) {
+                        Text("No heart-rate straps found yet", style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        Text("Choose a strap", style = MaterialTheme.typography.bodySmall)
+                        hrState.devices.forEach { device ->
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(device.name ?: "Heart-rate strap", style = MaterialTheme.typography.bodyMedium)
+                                    Text(device.address, style = MaterialTheme.typography.bodySmall)
+                                }
+                                TextButton(onClick = { connectHr(device.address, device.name) }) {
+                                    Text("Connect")
+                                }
+                            }
+                        }
+                    }
+                }
+                Text(
+                    "Standard BLE heart-rate straps (service 0x180D). A real sensor needs BLE-capable hardware.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(12.dp))
                 Text("Demo", style = MaterialTheme.typography.titleSmall)
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -429,6 +512,22 @@ private fun SettingRangeSlider(
 
 private fun formatTuningKm(km: Double): String =
     if (km % 1.0 == 0.0) km.toInt().toString() else "%.2f".format(km).trimEnd('0').trimEnd('.')
+
+private fun hrStatusText(context: Context, state: HrSensorState): String {
+    if (!BleHrProvider.hasPermissions(context)) return "Permission needed"
+    return when (state.phase) {
+        HrPhase.IDLE -> state.error?.let { "Error: $it" } ?: "Not connected"
+        HrPhase.SCANNING -> "Scanning…"
+        HrPhase.CONNECTING -> "Connecting…"
+        HrPhase.CONNECTED -> {
+            val name = state.deviceName ?: state.deviceAddress ?: "sensor"
+            val bpm = state.bpm?.let { " · $it bpm" } ?: ""
+            "Connected $name$bpm"
+        }
+        HrPhase.PERMISSION_NEEDED -> "Permission needed"
+        HrPhase.ERROR -> "Error: ${state.error ?: "unknown"}"
+    }
+}
 
 @Composable
 internal fun SettingSlider(value: Int, onValueChange: (Int) -> Unit, title: String, subtitle: String) {
