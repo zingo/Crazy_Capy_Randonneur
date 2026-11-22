@@ -499,15 +499,17 @@ unknown bytes, then a uint64 microsecond timestamp. Commands used: stop
 ## Emulator helper
 
 `tools/ensure-emulator.sh` reuses a running emulator when possible, otherwise
-starts one (`Capy17`, 1536 MB / 1 core, max-nice'd) preferring a quickboot
-snapshot. Resumes a paused guest before use.
+starts one (`Capy17`, 1536 MB / 1 core, KVM hardware acceleration, nice 19)
+preferring a quickboot snapshot. Resumes a paused guest before use. Startup
+fails clearly if `/dev/kvm` is not writable (add the user to `kvm` or an ACL).
 
 ```bash
 tools/ensure-emulator.sh            # use/create emulator-5554
 tools/ensure-emulator.sh emulator-5556
 ```
 
-Env: `ANDROID_HOME` (default `~/Android/Sdk`), `CAPY_AVD` (default `Capy17`).
+Env: `ANDROID_HOME` (default `~/Android/Sdk`), `CAPY_AVD` (default `Capy17`),
+`CAPY_EMU_MEM` (MB), `CAPY_EMU_CORES`, `CAPY_EMU_NICE`.
 
 ---
 

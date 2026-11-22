@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Reuse a running emulator when possible; otherwise start one. Prefers quickboot
 # snapshots so re-booting is fast instead of a full Android cold boot.
-# Kept light for the host: 1536MB / 1 core, max-nice'd. Resume if paused.
+# Kept light for the host: hardware acceleration (KVM) required, configurable
+# memory/cores, max-nice'd. Resume if paused.
 #
 # Usage: tools/ensure-emulator.sh [serial]
 #   serial   Emulator target to look for/use (default: emulator-5554)
@@ -11,6 +12,9 @@ SDK="${ANDROID_HOME:-$HOME/Android/Sdk}"
 ADB="$SDK/platform-tools/adb"
 EMULATOR="$SDK/emulator/emulator"
 AVD="${CAPY_AVD:-Capy17}"
+MEM="${CAPY_EMU_MEM:-1536}"
+CORES="${CAPY_EMU_CORES:-1}"
+NICE="${CAPY_EMU_NICE:-19}"
 TARGET="${1:-emulator-5554}"
 
 # 1) If the target already answers adb and has a working package manager, reuse it.
@@ -37,10 +41,17 @@ if [ "$("$ADB" -s "$TARGET" get-state 2>/dev/null)" = "device" ]; then
     sleep 3
 fi
 
+if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
+    echo "[ensure-emulator] ERROR: /dev/kvm not accessible; hardware acceleration (KVM) is required." >&2
+    echo "[ensure-emulator] Add your user to the kvm group and re-login, or run: sudo chmod 666 /dev/kvm" >&2
+    exit 1
+fi
+
 start_new() {  # $1 = extra flags
-    nohup nice -n 10 setsid "$EMULATOR" -avd "$AVD" \
+    nohup nice -n "$NICE" setsid "$EMULATOR" -avd "$AVD" \
         -no-audio -no-boot-anim \
-        -memory 1536 -cores 1 \
+        -memory "$MEM" -cores "$CORES" \
+        -accel on \
         -gpu swiftshader_indirect \
         $1 \
         >/tmp/opencode/emulator.log 2>&1 &
@@ -48,7 +59,7 @@ start_new() {  # $1 = extra flags
 }
 
 # 3) Start a new one (quickboot snapshot first, cold boot if that fails).
-echo "[ensure-emulator] starting $AVD (nice'd, 1536MB/1core)..."
+echo "[ensure-emulator] starting $AVD (KVM, nice $NICE, ${MEM}MB/${CORES}core)..."
 start_new ""
 echo "[ensure-emulator] waiting for Android to be ready..."
 if timeout 240 bash -c "until '$ADB' -s '$TARGET' shell pm path android >/dev/null 2>&1; do sleep 5; done"; then
