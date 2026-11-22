@@ -53,6 +53,7 @@ import com.crazycapy.randonneur.ui.helpers.copyToUri
 import com.crazycapy.randonneur.ui.helpers.shareGpx
 import com.crazycapy.randonneur.gpx.RwGpsParser
 import com.crazycapy.randonneur.gpx.Track
+import com.crazycapy.randonneur.gpx.TrackHash
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.state.RwGpsImport
@@ -104,7 +105,10 @@ internal fun RoutesDialog(
                         val isBusy = busyId == route.id
                         var showMenu by remember { mutableStateOf(false) }
 
-                        val thumb = remember(busyId, route.id) { RouteCache.loadOverview(context, route.id) }
+                        val thumb = remember(busyId, route.id) {
+                            val hash = RouteStore.loadTrack(context, route.id)?.let { TrackHash.of(it) }
+                            RouteCache.loadOverview(context, route.id, hash)
+                        }
 
                         Row(
                             Modifier

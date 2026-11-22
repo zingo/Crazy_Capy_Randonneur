@@ -178,6 +178,14 @@ CrazyCapyRouting/
 - Offline navigation verified on the emulator with the app's network denied at
   the package level (`cmd connectivity set-package-networking-enabled false`):
   cached turn previews + tiles render with zero network requests.
+- **Offline pack identity & manager**: map packs carry JSON metadata
+  (`routeId`, `routeName`, `trackHash`, style/theme, downloaded bytes,
+  `createdAt`); re-preparing reuses a pack only when route + geometry hash +
+  style match, and stale regions for the same route are removed instead of
+  stacking. Turn/overview previews keep a per-route hash marker, so an edited
+  route regenerates snapshots while partial runs still resume. Settings →
+  **Offline map packs** lists every region (name, theme/style, size, date,
+  status) with delete-one and delete-all.
 - **QA (checkpoint markers)**: a checkpoint whose GPX `<wpt>` has no `<desc>`
   used to produce malformed GeoJSON (a stray quote), so MapLibre rejected the
   whole POI source and the markers silently vanished while the HUD's km-CP kept

@@ -45,13 +45,13 @@ object RoutePrepare {
             running = true,
             phase = PreparePhase.MAP,
         )
-        RouteOfflinePack.findComplete(appContext, track) { complete ->
+        RouteOfflinePack.findComplete(appContext, track) { lookup ->
             if (gen != generation) return@findComplete
-            if (complete) {
+            if (lookup.complete) {
                 state = state.copy(mapSkipped = true)
                 startPreviews(appContext, track, gen)
             } else {
-                RouteOfflinePack.start(appContext, track) {
+                RouteOfflinePack.start(appContext, track, lookup.staleRegionIds) {
                     if (gen == generation) startPreviews(appContext, track, gen)
                 }
             }
@@ -84,7 +84,7 @@ object RoutePrepare {
     private fun previewsComplete(context: Context, routeId: String, track: Track): Boolean =
         RouteCache.isCached(context, routeId, track, false) &&
             RouteCache.isCached(context, routeId, track, true) &&
-            RouteCache.hasOverview(context, routeId)
+            RouteCache.hasOverview(context, routeId, track)
 
     fun cancel() {
         generation++

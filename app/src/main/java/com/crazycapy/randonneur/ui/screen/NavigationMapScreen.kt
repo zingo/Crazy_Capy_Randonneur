@@ -99,6 +99,7 @@ import com.crazycapy.randonneur.ui.components.GhostControls
 import com.crazycapy.randonneur.ui.components.ResumeBanner
 import com.crazycapy.randonneur.ui.components.showResumeOffer
 import com.crazycapy.randonneur.ui.dialogs.LicensesDialog
+import com.crazycapy.randonneur.ui.dialogs.OfflinePacksDialog
 import com.crazycapy.randonneur.ui.dialogs.PrepareRouteDialog
 import com.crazycapy.randonneur.ui.dialogs.RoutesDialog
 import com.crazycapy.randonneur.ui.dialogs.SettingsDialog
@@ -178,6 +179,7 @@ internal fun NavigationMapScreen(
     var idleCenteredOnce by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showLicenses by remember { mutableStateOf(false) }
+    var showOfflinePacks by remember { mutableStateOf(false) }
     var showRoutes by remember { mutableStateOf(false) }
     var pendingStart by remember { mutableStateOf<RideMode?>(null) }
     var showRideHistory by remember { mutableStateOf(false) }
@@ -572,8 +574,9 @@ internal fun NavigationMapScreen(
     }
 
     // Dialogs triggered by state flags.
-    if (showSettings) SettingsDialog(onDismiss = { showSettings = false }, onShowLicenses = { showLicenses = true }, onShowRoutes = { showRoutes = true }, onStartGhost = { pendingStart = if (RideStore.track != null) RideMode.GHOST else RideMode.FREE }, ghostAvailable = true, versionName = BuildConfig.VERSION_NAME, versionCode = BuildConfig.VERSION_CODE, buildType = BuildConfig.BUILD_TYPE)
+    if (showSettings) SettingsDialog(onDismiss = { showSettings = false }, onShowLicenses = { showLicenses = true }, onShowRoutes = { showRoutes = true }, onShowOfflinePacks = { showOfflinePacks = true }, onStartGhost = { pendingStart = if (RideStore.track != null) RideMode.GHOST else RideMode.FREE }, ghostAvailable = true, versionName = BuildConfig.VERSION_NAME, versionCode = BuildConfig.VERSION_CODE, buildType = BuildConfig.BUILD_TYPE)
     if (showLicenses) LicensesDialog(onDismiss = { showLicenses = false })
+    if (showOfflinePacks) OfflinePacksDialog(onDismiss = { showOfflinePacks = false })
     cpPopup?.let { wpt ->
         AlertDialog(
             onDismissRequest = { cpPopup = null },
@@ -667,9 +670,9 @@ internal fun NavigationMapScreen(
         val routeId = RouteStore.routeId(t.name)
         val previewsCached = RouteCache.isCached(context, routeId, t, false) &&
             RouteCache.isCached(context, routeId, t, true) &&
-            RouteCache.hasOverview(context, routeId)
-        RouteOfflinePack.findComplete(context, t) { mapComplete ->
-            if (RideStore.track?.name == t.name && (!mapComplete || !previewsCached)) askPrepareFor = t
+            RouteCache.hasOverview(context, routeId, t)
+        RouteOfflinePack.findComplete(context, t) { lookup ->
+            if (RideStore.track?.name == t.name && (!lookup.complete || !previewsCached)) askPrepareFor = t
         }
     }
     askPrepareFor?.let { track ->

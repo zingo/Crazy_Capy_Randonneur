@@ -13,7 +13,9 @@ import com.crazycapy.randonneur.STYLE_DARK
 import com.crazycapy.randonneur.STYLE_LIGHT
 import com.crazycapy.randonneur.gpx.RouteCorridor
 import com.crazycapy.randonneur.gpx.Track
+import com.crazycapy.randonneur.gpx.TrackHash
 import com.crazycapy.randonneur.state.RideStore
+import com.crazycapy.randonneur.state.RouteStore
 import org.maplibre.android.MapLibre
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
@@ -22,6 +24,7 @@ import org.maplibre.android.offline.OfflineRegion
 import org.maplibre.android.offline.OfflineRegionError
 import org.maplibre.android.offline.OfflineRegionStatus
 import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
+import java.util.concurrent.atomic.AtomicInteger
 
 data class OfflinePackState(
     val routeName: String = "",
@@ -34,6 +37,28 @@ data class OfflinePackState(
     val requiredResources: Long = 0L,
     val percent: Float? = null,
     val regionId: Long? = null,
+)
+
+data class PackLookup(
+    val complete: Boolean,
+    val staleRegionIds: List<Long> = emptyList(),
+)
+
+enum class OfflinePackStatus { COMPLETE, DOWNLOADING, INCOMPLETE }
+
+data class OfflinePackInfo(
+    val id: Long,
+    val routeName: String,
+    val routeId: String?,
+    val trackHash: String?,
+    val style: String,
+    val theme: String,
+    val bytes: Long?,
+    val createdAt: Long?,
+    val status: OfflinePackStatus,
+    val completedBytes: Long,
+    val completedResources: Long,
+    val requiredResources: Long,
 )
 
 object RouteOfflinePack {
@@ -49,7 +74,16 @@ object RouteOfflinePack {
     private var region: OfflineRegion? = null
     private var generation = 0L
 
-    fun start(context: Context, track: Track, onDone: (() -> Unit)? = null) {
+    private fun themeFor(style: String): String = if (style == STYLE_DARK) "dark" else "light"
+
+    private fun currentStyle(): String = if (RideStore.darkMap) STYLE_DARK else STYLE_LIGHT
+
+    fun start(
+        context: Context,
+        track: Track,
+        staleRegionIds: List<Long> = emptyList(),
+        onDone: (() -> Unit)? = null,
+    ) {
         val appContext = context.applicationContext
         generation++
         val gen = generation
@@ -65,7 +99,7 @@ object RouteOfflinePack {
             .include(LatLng(box.south, box.west))
             .include(LatLng(box.north, box.east))
             .build()
-        val styleUrl = if (RideStore.darkMap) STYLE_DARK else STYLE_LIGHT
+        val styleUrl = currentStyle()
         val pixelRatio = appContext.resources.displayMetrics.density
         val definition = OfflineTilePyramidRegionDefinition(
             styleUrl,
@@ -74,14 +108,24 @@ object RouteOfflinePack {
             MAX_ZOOM,
             pixelRatio,
         )
-        val metadata = track.name.toByteArray(Charsets.UTF_8)
+        val routeId = RouteStore.routeId(track.name)
+        val trackHash = TrackHash.of(track)
+        val metadata = OfflinePackMetadata(
+            routeId = routeId,
+            routeName = track.name,
+            trackHash = trackHash,
+            style = styleUrl,
+            theme = themeFor(styleUrl),
+            bytes = null,
+            createdAt = System.currentTimeMillis(),
+        )
 
         MapLibre.getInstance(appContext)
         Log.i(LOG_TAG, "start route=${track.name} style=$styleUrl bounds=$box")
         try {
             OfflineManager.getInstance(appContext).createOfflineRegion(
                 definition,
-                metadata,
+                metadata.toJson(),
                 object : OfflineManager.CreateOfflineRegionCallback {
                     override fun onCreate(offlineRegion: OfflineRegion) {
                         if (gen != generation) {
@@ -118,6 +162,18 @@ object RouteOfflinePack {
                                         LOG_TAG,
                                         "complete region=${offlineRegion.id} bytes=${status.completedResourceSize} resources=${status.completedResourceCount}",
                                     )
+                                    if (!wasDone) {
+                                        val completed = metadata.copy(bytes = status.completedResourceSize)
+                                        offlineRegion.updateMetadata(
+                                            completed.toJson(),
+                                            object : OfflineRegion.OfflineRegionUpdateMetadataCallback {
+                                                override fun onUpdate(metadata: ByteArray) {}
+                                                override fun onError(message: String) {
+                                                    Log.w(LOG_TAG, "metadata update failed: $message")
+                                                }
+                                            },
+                                        )
+                                    }
                                     offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
                                     if (gen == generation) region = null
                                     if (!wasDone && gen == generation) onDone?.invoke()
@@ -140,6 +196,7 @@ object RouteOfflinePack {
                                 onDone?.invoke()
                             }
                         })
+                        deleteRegionsById(appContext, staleRegionIds.filter { it != offlineRegion.id }.toSet())
                         offlineRegion.setDownloadState(OfflineRegion.STATE_ACTIVE)
                     }
 
@@ -158,52 +215,57 @@ object RouteOfflinePack {
         }
     }
 
-    /** Report whether a completed offline region already exists for [track]. */
-    fun findComplete(context: Context, track: Track, onResult: (Boolean) -> Unit) {
+    /** Report whether a completed offline region already matches [track]. */
+    fun findComplete(context: Context, track: Track, onResult: (PackLookup) -> Unit) {
         val appContext = context.applicationContext
-        val metadata = track.name.toByteArray(Charsets.UTF_8)
+        val routeId = RouteStore.routeId(track.name)
+        val trackHash = TrackHash.of(track)
+        val desiredStyle = currentStyle()
+        val desiredTheme = themeFor(desiredStyle)
         MapLibre.getInstance(appContext)
         try {
             OfflineManager.getInstance(appContext).listOfflineRegions(
                 object : OfflineManager.ListOfflineRegionsCallback {
                     override fun onList(regions: Array<OfflineRegion>?) {
-                        val matches = regions
-                            ?.filter { it.metadata?.contentEquals(metadata) == true }
-                            .orEmpty()
-                        if (matches.isEmpty()) {
-                            onResult(false)
+                        val related = regions.orEmpty().filter { region ->
+                            val meta = OfflinePackMetadata.parse(region.metadata)
+                            val legacyName = if (meta == null) {
+                                region.metadata?.toString(Charsets.UTF_8)?.trim()
+                            } else {
+                                null
+                            }
+                            meta?.routeId == routeId || (meta == null && legacyName == track.name)
+                        }
+                        if (related.isEmpty()) {
+                            onResult(PackLookup(false))
                             return
                         }
-                        val remaining = java.util.concurrent.atomic.AtomicInteger(matches.size)
-                        val complete = java.util.concurrent.atomic.AtomicBoolean(false)
+                        val remaining = AtomicInteger(related.size)
+                        val checks = java.util.Collections.synchronizedList(ArrayList<RegionCheck>())
                         val finish: () -> Unit = {
-                            if (complete.get()) {
-                                onResult(true)
+                            val complete = checks.filter { it.exact && it.complete }
+                            if (complete.isNotEmpty()) {
+                                val keep = complete.first().region
+                                deleteRegions(checks.map { it.region }.filter { it.id != keep.id })
+                                onResult(PackLookup(true))
                             } else {
-                                val pending = java.util.concurrent.atomic.AtomicInteger(matches.size)
-                                for (match in matches) {
-                                    match.delete(object : OfflineRegion.OfflineRegionDeleteCallback {
-                                        override fun onDelete() {
-                                            if (pending.decrementAndGet() == 0) onResult(false)
-                                        }
-
-                                        override fun onError(message: String) {
-                                            Log.w(LOG_TAG, "delete incomplete failed: $message")
-                                            if (pending.decrementAndGet() == 0) onResult(false)
-                                        }
-                                    })
-                                }
+                                onResult(PackLookup(false, checks.map { it.region.id }))
                             }
                         }
-                        for (match in matches) {
+                        for (match in related) {
+                            val meta = OfflinePackMetadata.parse(match.metadata)
+                            val style = meta?.style ?: match.definition.styleURL ?: STYLE_LIGHT
+                            val theme = meta?.theme ?: themeFor(style)
+                            val exact = meta?.trackHash == trackHash && style == desiredStyle && theme == desiredTheme
                             match.getStatus(object : OfflineRegion.OfflineRegionStatusCallback {
                                 override fun onStatus(status: OfflineRegionStatus?) {
-                                    if (status?.isComplete == true) complete.set(true)
+                                    checks.add(RegionCheck(match, exact, status?.isComplete == true))
                                     if (remaining.decrementAndGet() == 0) finish()
                                 }
 
                                 override fun onError(error: String?) {
                                     Log.w(LOG_TAG, "status failed: $error")
+                                    checks.add(RegionCheck(match, exact, false))
                                     if (remaining.decrementAndGet() == 0) finish()
                                 }
                             })
@@ -212,14 +274,144 @@ object RouteOfflinePack {
 
                     override fun onError(message: String) {
                         Log.w(LOG_TAG, "list failed: $message")
-                        onResult(false)
+                        onResult(PackLookup(false))
                     }
                 },
             )
         } catch (e: Exception) {
             Log.e(LOG_TAG, "list failed", e)
-            onResult(false)
+            onResult(PackLookup(false))
         }
+    }
+
+    fun listPacks(context: Context, onResult: (List<OfflinePackInfo>) -> Unit) {
+        val appContext = context.applicationContext
+        MapLibre.getInstance(appContext)
+        try {
+            OfflineManager.getInstance(appContext).listOfflineRegions(
+                object : OfflineManager.ListOfflineRegionsCallback {
+                    override fun onList(regions: Array<OfflineRegion>?) {
+                        val all = regions.orEmpty()
+                        if (all.isEmpty()) {
+                            onResult(emptyList())
+                            return
+                        }
+                        val remaining = AtomicInteger(all.size)
+                        val result = java.util.Collections.synchronizedList(ArrayList<OfflinePackInfo>())
+                        val finish: () -> Unit = {
+                            onResult(
+                                result.sortedWith(
+                                    compareByDescending<OfflinePackInfo> { it.createdAt ?: 0L }
+                                        .thenBy { it.routeName },
+                                ),
+                            )
+                        }
+                        for (offlineRegion in all) {
+                            offlineRegion.getStatus(object : OfflineRegion.OfflineRegionStatusCallback {
+                                override fun onStatus(status: OfflineRegionStatus?) {
+                                    result.add(infoFor(offlineRegion, status))
+                                    if (remaining.decrementAndGet() == 0) finish()
+                                }
+
+                                override fun onError(error: String?) {
+                                    Log.w(LOG_TAG, "status failed: $error")
+                                    result.add(infoFor(offlineRegion, null))
+                                    if (remaining.decrementAndGet() == 0) finish()
+                                }
+                            })
+                        }
+                    }
+
+                    override fun onError(message: String) {
+                        Log.w(LOG_TAG, "list failed: $message")
+                        onResult(emptyList())
+                    }
+                },
+            )
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "list failed", e)
+            onResult(emptyList())
+        }
+    }
+
+    fun deletePacks(context: Context, ids: Collection<Long>?, onDone: () -> Unit) {
+        val appContext = context.applicationContext
+        MapLibre.getInstance(appContext)
+        try {
+            OfflineManager.getInstance(appContext).listOfflineRegions(
+                object : OfflineManager.ListOfflineRegionsCallback {
+                    override fun onList(regions: Array<OfflineRegion>?) {
+                        val targets = regions.orEmpty().filter { ids == null || it.id in ids }
+                        deleteRegions(targets, onDone)
+                    }
+
+                    override fun onError(message: String) {
+                        Log.w(LOG_TAG, "delete list failed: $message")
+                        onDone()
+                    }
+                },
+            )
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "delete failed", e)
+            onDone()
+        }
+    }
+
+    private fun deleteRegionsById(context: Context, ids: Set<Long>) {
+        if (ids.isEmpty()) return
+        deletePacks(context, ids) {}
+    }
+
+    private fun deleteRegions(regions: List<OfflineRegion>, onDone: (() -> Unit)? = null) {
+        if (regions.isEmpty()) {
+            onDone?.invoke()
+            return
+        }
+        val remaining = AtomicInteger(regions.size)
+        val finish: () -> Unit = {
+            if (remaining.decrementAndGet() == 0) onDone?.invoke()
+        }
+        for (offlineRegion in regions) {
+            offlineRegion.delete(object : OfflineRegion.OfflineRegionDeleteCallback {
+                override fun onDelete() {
+                    finish()
+                }
+
+                override fun onError(message: String) {
+                    Log.w(LOG_TAG, "delete failed: $message")
+                    finish()
+                }
+            })
+        }
+    }
+
+    private fun infoFor(region: OfflineRegion, status: OfflineRegionStatus?): OfflinePackInfo {
+        val meta = OfflinePackMetadata.parse(region.metadata)
+        val legacyName = if (meta == null) {
+            region.metadata?.toString(Charsets.UTF_8)?.trim()?.takeIf { it.isNotEmpty() && !it.startsWith("{") }
+        } else {
+            null
+        }
+        val style = meta?.style ?: region.definition.styleURL ?: STYLE_LIGHT
+        val packStatus = when {
+            status?.isComplete == true -> OfflinePackStatus.COMPLETE
+            status?.downloadState == OfflineRegion.STATE_ACTIVE -> OfflinePackStatus.DOWNLOADING
+            else -> OfflinePackStatus.INCOMPLETE
+        }
+        return OfflinePackInfo(
+            id = region.id,
+            routeName = meta?.routeName?.takeIf { it.isNotBlank() } ?: legacyName ?: "Offline pack",
+            routeId = meta?.routeId,
+            trackHash = meta?.trackHash,
+            style = style,
+            theme = meta?.theme ?: themeFor(style),
+            bytes = meta?.bytes,
+            createdAt = meta?.createdAt,
+            status = packStatus,
+            completedBytes = status?.completedResourceSize ?: 0L,
+            completedResources = status?.completedResourceCount ?: 0L,
+            requiredResources = status?.requiredResourceCount ?: 0L,
+        )
     }
 
     fun cancel() {
@@ -247,4 +439,10 @@ object RouteOfflinePack {
             })
         }
     }
+
+    private data class RegionCheck(
+        val region: OfflineRegion,
+        val exact: Boolean,
+        val complete: Boolean,
+    )
 }

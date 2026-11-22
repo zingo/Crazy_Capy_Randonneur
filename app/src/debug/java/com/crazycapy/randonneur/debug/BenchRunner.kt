@@ -14,6 +14,7 @@ import com.crazycapy.randonneur.STYLE_LIGHT
 import com.crazycapy.randonneur.cache.ReusedSnapshotter
 import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.gpx.Track
+import com.crazycapy.randonneur.gpx.TrackHash
 import com.crazycapy.randonneur.nav.TurnFinder
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
@@ -42,6 +43,7 @@ object BenchRunner {
                 val dark = RideStore.darkMap
                 val turns = TurnFinder.find(track)
                 val routeId = RouteStore.routeId(track.name)
+                val trackHash = TrackHash.of(track)
                 if (turns.isEmpty()) {
                     write(marker, "$mode 0 0 0 0 no-turns")
                     return@Thread
@@ -54,7 +56,7 @@ object BenchRunner {
                 } else if (mode == "cached") {
                     while (running(done, iterations, durationSec, deadline)) {
                         val idx = idxFor(done, turns.size)
-                        val ct = RouteCache.loadTurn(context, routeId, dark, idx)
+                        val ct = RouteCache.loadTurn(context, routeId, dark, idx, trackHash)
                         if (ct != null) {
                             val dst = Bitmap.createBitmap(CACHED_IMG_PX, CACHED_IMG_PX, Bitmap.Config.ARGB_8888)
                             Canvas(dst).drawBitmap(ct.bitmap, 0f, 0f, null)
