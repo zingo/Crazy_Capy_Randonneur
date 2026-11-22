@@ -26,7 +26,12 @@ your ears do the navigating — no accounts, no cloud, no ads.
   and resumes on the next run, skipping what's done. On the ride the HUD pops
   up instantly from those cached images with zero tile fetches — and no/less
   live rendering, so your radio
-  stays quieter — and the map works without network. In a controlled benchmark,
+  stays quieter — and the map works without network. Packs are keyed by route,
+  geometry hash and map style, so re-preparing an edited route replaces its old
+  pack instead of stacking duplicates, and turn/overview previews are
+  invalidated when the route changes. **Settings → Offline map packs** lists
+  every downloaded region with theme/style, size, date and status, and can
+  delete one or all. In a controlled benchmark,
   showing a pre-cached preview cost ~1.4–2.5× less energy and ~6–8× less CPU
   than rendering it live (screen on/off), while warming only the map tiles made
   no measurable difference. On a ride the saved energy is small next to the
@@ -260,7 +265,8 @@ fix pipeline and asserts arrival with turn announcements.
 - **Settings**: the gear icon (bottom-right) opens ride options: toggle the
   next-turn popup, the per-second notification (battery savers) and audio
   ducking; set the **turn-beep** and **navigation-voice** volumes (0 = off);
-  toggle the **Prepare routes offline** prompt; clear all route caches; manage your saved
+  toggle the **Prepare routes offline** prompt; manage downloaded offline map
+  packs (delete one or all) and clear all route preview caches; manage your saved
   routes; start a **ghost ride**; and reach the app-version/about section plus
   the **Open-source licenses** viewer.
 

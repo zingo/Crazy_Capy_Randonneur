@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.cache.TurnProjection
+import com.crazycapy.randonneur.gpx.TrackHash
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.voice.Phrases
@@ -82,12 +83,13 @@ internal fun TurnPreview(modifier: Modifier = Modifier) {
     val context = LocalContext.current
 
     // Cached path
-    val routeId = remember { RideStore.track?.let { RouteStore.routeId(it.name) } }
+    val routeId = remember(RideStore.track) { RideStore.track?.let { RouteStore.routeId(it.name) } }
+    val trackHash = remember(RideStore.track) { RideStore.track?.let { TrackHash.of(it) } }
     val turnIdx = RideStore.nextTurnIndex
     val cached = remember { mutableStateOf<CachedTurnData?>(null) }
-    LaunchedEffect(routeId, darkMap, turnIdx, pts) {
+    LaunchedEffect(routeId, trackHash, darkMap, turnIdx, pts) {
         if (routeId != null && turnIdx != null) {
-            val ct = RouteCache.loadTurn(context, routeId, darkMap, turnIdx)
+            val ct = RouteCache.loadTurn(context, routeId, darkMap, turnIdx, trackHash)
             if (ct != null) {
                 Log.d("TurnPreview", "cached: $routeId turn $turnIdx")
                 cached.value = CachedTurnData(ct.bitmap, ct.anchors)

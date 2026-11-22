@@ -52,6 +52,7 @@ internal fun SettingsDialog(
     onDismiss: () -> Unit,
     onShowLicenses: () -> Unit,
     onShowRoutes: () -> Unit,
+    onShowOfflinePacks: () -> Unit,
     onStartGhost: () -> Unit,
     ghostAvailable: Boolean,
     versionName: String,
@@ -117,6 +118,16 @@ internal fun SettingsDialog(
                     title = "Prepare routes offline",
                     subtitle = "Ask to download map tiles and turn previews when a route loads",
                 )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Offline map packs", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "List, inspect and delete downloaded route maps",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    TextButton(onClick = { onShowOfflinePacks(); onDismiss() }) { Text("Manage") }
+                }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     val totalBytes = remember { RouteCache.totalBytes(context) }
                     Text(

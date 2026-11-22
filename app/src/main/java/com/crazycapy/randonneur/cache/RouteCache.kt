@@ -30,6 +30,7 @@ import com.crazycapy.randonneur.STYLE_DARK
 import com.crazycapy.randonneur.STYLE_LIGHT
 import com.crazycapy.randonneur.gpx.RouteCorridor
 import com.crazycapy.randonneur.gpx.Track
+import com.crazycapy.randonneur.gpx.TrackHash
 import com.crazycapy.randonneur.nav.TurnFinder
 import com.crazycapy.randonneur.voice.Phrases
 import com.crazycapy.randonneur.state.RideStore
@@ -99,6 +100,23 @@ object RouteCache {
     private fun anchorFile(context: Context, routeId: String, dark: Boolean, turnIndex: Int): File =
         File(routeDir(context, routeId), "turn-${if (dark) "dark" else "light"}-$turnIndex-anchors")
 
+    private fun hashFile(context: Context, routeId: String): File =
+        File(routeDir(context, routeId), "track-hash")
+
+    private fun storedHash(context: Context, routeId: String): String? =
+        hashFile(context, routeId).takeIf { it.exists() }?.readText()?.trim()
+
+    private fun hashMatches(context: Context, routeId: String, trackHash: String): Boolean =
+        storedHash(context, routeId) == trackHash
+
+    private fun invalidateForHash(context: Context, routeId: String, trackHash: String) {
+        if (hashMatches(context, routeId, trackHash)) return
+        routeDir(context, routeId).listFiles()?.forEach { file ->
+            if (file.name == "overview.png" || file.name.startsWith("turn-")) file.delete()
+        }
+        hashFile(context, routeId).writeText(trackHash)
+    }
+
     private fun isTurnCached(context: Context, routeId: String, dark: Boolean, turnIndex: Int): Boolean =
         turnFile(context, routeId, dark, turnIndex).exists() &&
             anchorFile(context, routeId, dark, turnIndex).exists()
@@ -106,7 +124,14 @@ object RouteCache {
     // ---- Lookup (HUD side) ----
 
     /** Load a pre-rendered turn preview, or null if not cached yet. */
-    fun loadTurn(context: Context, routeId: String, dark: Boolean, turnIndex: Int): CachedTurn? = runCatching {
+    fun loadTurn(
+        context: Context,
+        routeId: String,
+        dark: Boolean,
+        turnIndex: Int,
+        trackHash: String? = null,
+    ): CachedTurn? = runCatching {
+        if (trackHash != null && !hashMatches(context, routeId, trackHash)) return null
         val img = turnFile(context, routeId, dark, turnIndex)
         val anc = anchorFile(context, routeId, dark, turnIndex)
         if (!img.exists() || !anc.exists()) return null
@@ -125,6 +150,7 @@ object RouteCache {
     /** True when all detected turns of [track] have cached preview images for [dark]. */
     fun isCached(context: Context, routeId: String, track: Track?, dark: Boolean): Boolean {
         val t = track ?: return false
+        if (!hashMatches(context, routeId, TrackHash.of(t))) return false
         val turns = TurnFinder.find(t).size
         if (turns == 0) return true
         var cached = 0
@@ -134,9 +160,9 @@ object RouteCache {
         return cached == turns
     }
 
-    /** True when the route overview thumbnail has already been rendered. */
-    fun hasOverview(context: Context, routeId: String): Boolean =
-        overviewFile(context, routeId).exists()
+    /** True when the route overview thumbnail has already been rendered for [track]. */
+    fun hasOverview(context: Context, routeId: String, track: Track): Boolean =
+        hashMatches(context, routeId, TrackHash.of(track)) && overviewFile(context, routeId).exists()
 
     // ---- Sizing & cleanup (routes/settings UI) ----
 
@@ -179,6 +205,7 @@ object RouteCache {
      */
     fun preCache(context: Context, track: Track, tilesOnly: Boolean = false, onDone: (() -> Unit)? = null) {
         val routeId = RouteStore.routeId(track.name)
+        val trackHash = TrackHash.of(track)
         if (activeRouteId != null) cancel()
         cancelRequested.set(false)
         activeRouteId = routeId
@@ -190,6 +217,7 @@ object RouteCache {
             val renderer = ReusedSnapshotter(context)
             activeRenderer = renderer
             try {
+                invalidateForHash(context, routeId, trackHash)
                 renderer.create()
                 val turns = TurnFinder.find(track)
                 val darkBase = RideStore.darkMap
@@ -359,7 +387,8 @@ object RouteCache {
     }
 
     /** Load the route overview thumbnail, or null if not generated yet. */
-    fun loadOverview(context: Context, routeId: String): android.graphics.Bitmap? = runCatching {
+    fun loadOverview(context: Context, routeId: String, trackHash: String? = null): android.graphics.Bitmap? = runCatching {
+        if (trackHash != null && !hashMatches(context, routeId, trackHash)) return null
         val f = overviewFile(context, routeId)
         if (!f.exists()) null else android.graphics.BitmapFactory.decodeFile(f.absolutePath)
     }.getOrNull()
