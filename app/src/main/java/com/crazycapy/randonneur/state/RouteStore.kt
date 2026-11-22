@@ -19,6 +19,7 @@ import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.gpx.GpxParser
 import com.crazycapy.randonneur.gpx.GpxWriter
 import com.crazycapy.randonneur.gpx.Track
@@ -169,6 +170,11 @@ object RouteStore {
         map["beeps"]?.toBooleanStrictOrNull()?.let { RideStore.beepVolume = if (it) RideStore.beepVolume else 0 }
         map["darkMap"]?.toBooleanStrictOrNull()?.let { RideStore.darkMap = it }
         map["precacheEnabled"]?.toBooleanStrictOrNull()?.let { RideStore.precacheEnabled = it }
+        map["offlineDetail"]?.let { value ->
+            OfflineDetailStrategy.values().firstOrNull { it.name == value }?.let {
+                RideStore.offlineDetailStrategy = it
+            }
+        }
         map["ghostTimeScale"]?.toDoubleOrNull()?.let { RideStore.ghostTimeScale = it }
         map["ghostSpeedKmh"]?.toDoubleOrNull()?.let { RideStore.ghostSpeedKmh = it }
         map["radarSim"]?.toBooleanStrictOrNull()?.let { RideStore.radarSimEnabled = it }
@@ -187,6 +193,7 @@ object RouteStore {
             "navVolume=${RideStore.navVolume}",
             "darkMap=${RideStore.darkMap}",
             "precacheEnabled=${RideStore.precacheEnabled}",
+            "offlineDetail=${RideStore.offlineDetailStrategy.name}",
             "ghostTimeScale=${RideStore.ghostTimeScale}",
             "ghostSpeedKmh=${RideStore.ghostSpeedKmh}",
             "radarSim=${RideStore.radarSimEnabled}",

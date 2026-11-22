@@ -11,7 +11,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.STYLE_DARK
 import com.crazycapy.randonneur.STYLE_LIGHT
-import com.crazycapy.randonneur.gpx.RouteCorridor
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.gpx.TrackHash
 import com.crazycapy.randonneur.state.RideStore
@@ -24,6 +23,7 @@ import org.maplibre.android.offline.OfflineRegion
 import org.maplibre.android.offline.OfflineRegionError
 import org.maplibre.android.offline.OfflineRegionStatus
 import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 
 data class OfflinePackState(
@@ -37,6 +37,10 @@ data class OfflinePackState(
     val requiredResources: Long = 0L,
     val percent: Float? = null,
     val regionId: Long? = null,
+    val strategy: OfflineDetailStrategy = OfflineDetailStrategy.STANDARD,
+    val segmentIndex: Int = 0,
+    val segmentCount: Int = 0,
+    val completedSegments: Int = 0,
 )
 
 data class PackLookup(
@@ -59,150 +63,95 @@ data class OfflinePackInfo(
     val completedBytes: Long,
     val completedResources: Long,
     val requiredResources: Long,
+    val strategy: OfflineDetailStrategy = OfflineDetailStrategy.STANDARD,
+    val segmentIndex: Int = 0,
+    val segmentCount: Int = 1,
 )
 
 object RouteOfflinePack {
 
     private const val LOG_TAG = "RouteOfflinePack"
-    private const val MIN_ZOOM = 8.0
-    private const val MAX_ZOOM = 14.0
-    private const val PADDING_METERS = 1500.0
 
     var state: OfflinePackState by mutableStateOf(OfflinePackState())
         private set
 
     private var region: OfflineRegion? = null
     private var generation = 0L
+    private val runRegions: MutableMap<Long, OfflineRegion> = Collections.synchronizedMap(LinkedHashMap())
 
     private fun themeFor(style: String): String = if (style == STYLE_DARK) "dark" else "light"
 
     private fun currentStyle(): String = if (RideStore.darkMap) STYLE_DARK else STYLE_LIGHT
 
+    private fun legacyNameOf(region: OfflineRegion): String? =
+        region.metadata?.toString(Charsets.UTF_8)?.trim()?.takeIf { it.isNotEmpty() && !it.startsWith("{") }
+
     fun start(
         context: Context,
         track: Track,
-        staleRegionIds: List<Long> = emptyList(),
+        strategy: OfflineDetailStrategy = OfflineDetailStrategy.STANDARD,
         onDone: (() -> Unit)? = null,
     ) {
         val appContext = context.applicationContext
         generation++
         val gen = generation
-        if (state.running) {
-            releaseRegion(delete = true)
-        } else {
-            region = null
-        }
-        state = OfflinePackState(routeName = track.name, running = true)
+        releasePartialRegions(delete = true)
+        state = OfflinePackState(routeName = track.name, running = true, strategy = strategy)
 
-        val box = RouteCorridor.around(track, PADDING_METERS)
-        val bounds = LatLngBounds.Builder()
-            .include(LatLng(box.south, box.west))
-            .include(LatLng(box.north, box.east))
-            .build()
+        val specs = OfflineSegments.regionSpecs(track, strategy)
         val styleUrl = currentStyle()
-        val pixelRatio = appContext.resources.displayMetrics.density
-        val definition = OfflineTilePyramidRegionDefinition(
-            styleUrl,
-            bounds,
-            MIN_ZOOM,
-            MAX_ZOOM,
-            pixelRatio,
-        )
         val routeId = RouteStore.routeId(track.name)
         val trackHash = TrackHash.of(track)
-        val metadata = OfflinePackMetadata(
-            routeId = routeId,
-            routeName = track.name,
-            trackHash = trackHash,
-            style = styleUrl,
-            theme = themeFor(styleUrl),
-            bytes = null,
-            createdAt = System.currentTimeMillis(),
-        )
 
         MapLibre.getInstance(appContext)
-        Log.i(LOG_TAG, "start route=${track.name} style=$styleUrl bounds=$box")
+        Log.i(LOG_TAG, "start route=${track.name} strategy=${strategy.name} segments=${specs.size} style=$styleUrl")
         try {
-            OfflineManager.getInstance(appContext).createOfflineRegion(
-                definition,
-                metadata.toJson(),
-                object : OfflineManager.CreateOfflineRegionCallback {
-                    override fun onCreate(offlineRegion: OfflineRegion) {
-                        if (gen != generation) {
-                            offlineRegion.delete(object : OfflineRegion.OfflineRegionDeleteCallback {
-                                override fun onDelete() {}
-                                override fun onError(message: String) {}
-                            })
-                            return
+            OfflineManager.getInstance(appContext).listOfflineRegions(
+                object : OfflineManager.ListOfflineRegionsCallback {
+                    override fun onList(regions: Array<OfflineRegion>?) {
+                        if (gen != generation) return
+                        planExisting(
+                            regions.orEmpty().toList(),
+                            track.name,
+                            routeId,
+                            trackHash,
+                            styleUrl,
+                            strategy,
+                            specs,
+                        ) { plan ->
+                            if (gen != generation) return@planExisting
+                            if (plan.staleRegionIds.isNotEmpty()) {
+                                deleteRegionsById(appContext, plan.staleRegionIds)
+                            }
+                            state = state.copy(
+                                segmentCount = specs.size,
+                                completedSegments = plan.reusedCount,
+                                completedBytes = plan.reusedBytes,
+                            )
+                            if (plan.missing.isEmpty()) {
+                                completeRun(plan.reusedBytes, gen, onDone)
+                            } else {
+                                downloadNext(
+                                    appContext,
+                                    track,
+                                    styleUrl,
+                                    routeId,
+                                    trackHash,
+                                    strategy,
+                                    plan.missing,
+                                    0,
+                                    plan.reusedCount,
+                                    plan.reusedBytes,
+                                    gen,
+                                    onDone,
+                                )
+                            }
                         }
-                        region = offlineRegion
-                        state = state.copy(regionId = offlineRegion.id)
-                        Log.i(LOG_TAG, "created region id=${offlineRegion.id} route=${track.name}")
-                        offlineRegion.setObserver(object : OfflineRegion.OfflineRegionObserver {
-                            override fun onStatusChanged(status: OfflineRegionStatus) {
-                                if (gen != generation) return
-                                val wasDone = state.done
-                                val required = status.requiredResourceCount
-                                val percent = if (required > 0) {
-                                    (status.completedResourceCount.toFloat() / required).coerceIn(0f, 1f)
-                                } else {
-                                    null
-                                }
-                                state = state.copy(
-                                    running = !status.isComplete,
-                                    done = status.isComplete,
-                                    error = if (status.isComplete) null else state.error,
-                                    completedBytes = status.completedResourceSize,
-                                    completedResources = status.completedResourceCount,
-                                    requiredResources = required,
-                                    percent = percent,
-                                )
-                                if (status.isComplete) {
-                                    Log.i(
-                                        LOG_TAG,
-                                        "complete region=${offlineRegion.id} bytes=${status.completedResourceSize} resources=${status.completedResourceCount}",
-                                    )
-                                    if (!wasDone) {
-                                        val completed = metadata.copy(bytes = status.completedResourceSize)
-                                        offlineRegion.updateMetadata(
-                                            completed.toJson(),
-                                            object : OfflineRegion.OfflineRegionUpdateMetadataCallback {
-                                                override fun onUpdate(metadata: ByteArray) {}
-                                                override fun onError(message: String) {
-                                                    Log.w(LOG_TAG, "metadata update failed: $message")
-                                                }
-                                            },
-                                        )
-                                    }
-                                    offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
-                                    if (gen == generation) region = null
-                                    if (!wasDone && gen == generation) onDone?.invoke()
-                                }
-                            }
-
-                            override fun onError(error: OfflineRegionError) {
-                                if (gen != generation) return
-                                Log.w(LOG_TAG, "error reason=${error.reason} message=${error.message}")
-                                state = state.copy(error = "${error.reason}: ${error.message}")
-                            }
-
-                            override fun mapboxTileCountLimitExceeded(limit: Long) {
-                                if (gen != generation) return
-                                Log.w(LOG_TAG, "tile count limit exceeded: $limit")
-                                state = state.copy(
-                                    running = false,
-                                    error = "Tile limit exceeded ($limit)",
-                                )
-                                onDone?.invoke()
-                            }
-                        })
-                        deleteRegionsById(appContext, staleRegionIds.filter { it != offlineRegion.id }.toSet())
-                        offlineRegion.setDownloadState(OfflineRegion.STATE_ACTIVE)
                     }
 
                     override fun onError(message: String) {
                         if (gen != generation) return
-                        Log.e(LOG_TAG, "create failed: $message")
+                        Log.e(LOG_TAG, "list failed: $message")
                         state = state.copy(running = false, error = message)
                         onDone?.invoke()
                     }
@@ -215,60 +164,36 @@ object RouteOfflinePack {
         }
     }
 
-    /** Report whether a completed offline region already matches [track]. */
-    fun findComplete(context: Context, track: Track, onResult: (PackLookup) -> Unit) {
+    fun findComplete(
+        context: Context,
+        track: Track,
+        strategy: OfflineDetailStrategy = OfflineDetailStrategy.STANDARD,
+        onResult: (PackLookup) -> Unit,
+    ) {
         val appContext = context.applicationContext
         val routeId = RouteStore.routeId(track.name)
         val trackHash = TrackHash.of(track)
         val desiredStyle = currentStyle()
-        val desiredTheme = themeFor(desiredStyle)
+        val specs = OfflineSegments.regionSpecs(track, strategy)
         MapLibre.getInstance(appContext)
         try {
             OfflineManager.getInstance(appContext).listOfflineRegions(
                 object : OfflineManager.ListOfflineRegionsCallback {
                     override fun onList(regions: Array<OfflineRegion>?) {
-                        val related = regions.orEmpty().filter { region ->
-                            val meta = OfflinePackMetadata.parse(region.metadata)
-                            val legacyName = if (meta == null) {
-                                region.metadata?.toString(Charsets.UTF_8)?.trim()
-                            } else {
-                                null
+                        planExisting(
+                            regions.orEmpty().toList(),
+                            track.name,
+                            routeId,
+                            trackHash,
+                            desiredStyle,
+                            strategy,
+                            specs,
+                        ) { plan ->
+                            val complete = plan.missing.isEmpty()
+                            if (complete && plan.staleRegionIds.isNotEmpty()) {
+                                deleteRegionsById(appContext, plan.staleRegionIds)
                             }
-                            meta?.routeId == routeId || (meta == null && legacyName == track.name)
-                        }
-                        if (related.isEmpty()) {
-                            onResult(PackLookup(false))
-                            return
-                        }
-                        val remaining = AtomicInteger(related.size)
-                        val checks = java.util.Collections.synchronizedList(ArrayList<RegionCheck>())
-                        val finish: () -> Unit = {
-                            val complete = checks.filter { it.exact && it.complete }
-                            if (complete.isNotEmpty()) {
-                                val keep = complete.first().region
-                                deleteRegions(checks.map { it.region }.filter { it.id != keep.id })
-                                onResult(PackLookup(true))
-                            } else {
-                                onResult(PackLookup(false, checks.map { it.region.id }))
-                            }
-                        }
-                        for (match in related) {
-                            val meta = OfflinePackMetadata.parse(match.metadata)
-                            val style = meta?.style ?: match.definition.styleURL ?: STYLE_LIGHT
-                            val theme = meta?.theme ?: themeFor(style)
-                            val exact = meta?.trackHash == trackHash && style == desiredStyle && theme == desiredTheme
-                            match.getStatus(object : OfflineRegion.OfflineRegionStatusCallback {
-                                override fun onStatus(status: OfflineRegionStatus?) {
-                                    checks.add(RegionCheck(match, exact, status?.isComplete == true))
-                                    if (remaining.decrementAndGet() == 0) finish()
-                                }
-
-                                override fun onError(error: String?) {
-                                    Log.w(LOG_TAG, "status failed: $error")
-                                    checks.add(RegionCheck(match, exact, false))
-                                    if (remaining.decrementAndGet() == 0) finish()
-                                }
-                            })
+                            onResult(PackLookup(complete, plan.staleRegionIds.toList()))
                         }
                     }
 
@@ -297,12 +222,13 @@ object RouteOfflinePack {
                             return
                         }
                         val remaining = AtomicInteger(all.size)
-                        val result = java.util.Collections.synchronizedList(ArrayList<OfflinePackInfo>())
+                        val result = Collections.synchronizedList(ArrayList<OfflinePackInfo>())
                         val finish: () -> Unit = {
                             onResult(
                                 result.sortedWith(
                                     compareByDescending<OfflinePackInfo> { it.createdAt ?: 0L }
-                                        .thenBy { it.routeName },
+                                        .thenBy { it.routeName }
+                                        .thenBy { it.segmentIndex },
                                 ),
                             )
                         }
@@ -385,13 +311,275 @@ object RouteOfflinePack {
         }
     }
 
+    private fun planExisting(
+        regions: List<OfflineRegion>,
+        trackName: String,
+        routeId: String,
+        trackHash: String,
+        style: String,
+        strategy: OfflineDetailStrategy,
+        specs: List<OfflineRegionSpec>,
+        onResult: (ExistingPlan) -> Unit,
+    ) {
+        val related = regions.filter { offlineRegion ->
+            val meta = OfflinePackMetadata.parse(offlineRegion.metadata)
+            meta?.routeId == routeId || (meta == null && legacyNameOf(offlineRegion) == trackName)
+        }
+        val candidates = related.filter { offlineRegion ->
+            val meta = OfflinePackMetadata.parse(offlineRegion.metadata)
+            meta == null || (meta.trackHash == trackHash && meta.style == style && meta.strategy == strategy)
+        }
+        if (candidates.isEmpty()) {
+            onResult(ExistingPlan(specs, 0L, emptySet(), 0))
+            return
+        }
+        val remaining = AtomicInteger(candidates.size)
+        val checks = Collections.synchronizedList(ArrayList<RegionCheck>())
+        val finish: () -> Unit = {
+            val used = HashSet<Long>()
+            val missing = ArrayList<OfflineRegionSpec>()
+            var bytes = 0L
+            for (spec in specs) {
+                val match = checks.firstOrNull { check ->
+                    !used.contains(check.region.id) && check.complete && matchesSpec(check.meta, spec, trackHash, style)
+                }
+                if (match != null) {
+                    used.add(match.region.id)
+                    bytes += match.completedBytes
+                } else {
+                    missing.add(spec)
+                }
+            }
+            val stale = checks.map { it.region.id }.filter { it !in used }.toSet()
+            onResult(ExistingPlan(missing, bytes, stale, specs.size - missing.size))
+        }
+        for (offlineRegion in candidates) {
+            val meta = OfflinePackMetadata.parse(offlineRegion.metadata)
+            offlineRegion.getStatus(object : OfflineRegion.OfflineRegionStatusCallback {
+                override fun onStatus(status: OfflineRegionStatus?) {
+                    checks.add(
+                        RegionCheck(
+                            region = offlineRegion,
+                            meta = meta,
+                            complete = status?.isComplete == true,
+                            completedBytes = status?.completedResourceSize ?: 0L,
+                        ),
+                    )
+                    if (remaining.decrementAndGet() == 0) finish()
+                }
+
+                override fun onError(error: String?) {
+                    Log.w(LOG_TAG, "status failed: $error")
+                    checks.add(RegionCheck(offlineRegion, meta, false, 0L))
+                    if (remaining.decrementAndGet() == 0) finish()
+                }
+            })
+        }
+    }
+
+    private fun matchesSpec(meta: OfflinePackMetadata?, spec: OfflineRegionSpec, trackHash: String, style: String): Boolean =
+        meta != null &&
+            meta.schema >= OfflinePackMetadata.SCHEMA &&
+            meta.trackHash == trackHash &&
+            meta.style == style &&
+            meta.strategy == spec.strategy &&
+            meta.segmentIndex == spec.index &&
+            meta.segmentCount == spec.count
+
+    private fun downloadNext(
+        context: Context,
+        track: Track,
+        styleUrl: String,
+        routeId: String,
+        trackHash: String,
+        strategy: OfflineDetailStrategy,
+        missing: List<OfflineRegionSpec>,
+        pos: Int,
+        reusedCount: Int,
+        baseBytes: Long,
+        gen: Long,
+        onDone: (() -> Unit)?,
+    ) {
+        if (gen != generation) return
+        if (pos >= missing.size) {
+            completeRun(baseBytes, gen, onDone)
+            return
+        }
+        val spec = missing[pos]
+        val bounds = LatLngBounds.Builder()
+            .include(LatLng(spec.box.south, spec.box.west))
+            .include(LatLng(spec.box.north, spec.box.east))
+            .build()
+        val pixelRatio = context.resources.displayMetrics.density
+        val definition = OfflineTilePyramidRegionDefinition(
+            styleUrl,
+            bounds,
+            spec.minZoom,
+            spec.maxZoom,
+            pixelRatio,
+        )
+        val metadata = OfflinePackMetadata(
+            routeId = routeId,
+            routeName = track.name,
+            trackHash = trackHash,
+            style = styleUrl,
+            theme = themeFor(styleUrl),
+            bytes = null,
+            createdAt = System.currentTimeMillis(),
+            strategy = strategy,
+            segmentIndex = spec.index,
+            segmentCount = spec.count,
+        )
+        state = state.copy(
+            running = true,
+            done = false,
+            cancelled = false,
+            percent = null,
+            completedBytes = baseBytes,
+            completedResources = 0L,
+            requiredResources = 0L,
+            strategy = strategy,
+            segmentIndex = spec.index + 1,
+            segmentCount = spec.count,
+            completedSegments = reusedCount + pos,
+        )
+        Log.i(
+            LOG_TAG,
+            "create segment ${spec.index + 1}/${spec.count} route=${track.name} zoom=${spec.minZoom}-${spec.maxZoom} bounds=${spec.box}",
+        )
+        try {
+            OfflineManager.getInstance(context).createOfflineRegion(
+                definition,
+                metadata.toJson(),
+                object : OfflineManager.CreateOfflineRegionCallback {
+                    override fun onCreate(offlineRegion: OfflineRegion) {
+                        if (gen != generation) {
+                            offlineRegion.delete(object : OfflineRegion.OfflineRegionDeleteCallback {
+                                override fun onDelete() {}
+                                override fun onError(message: String) {}
+                            })
+                            return
+                        }
+                        region = offlineRegion
+                        runRegions[offlineRegion.id] = offlineRegion
+                        state = state.copy(regionId = offlineRegion.id)
+                        var finished = false
+                        Log.i(
+                            LOG_TAG,
+                            "created region id=${offlineRegion.id} segment=${spec.index + 1}/${spec.count}",
+                        )
+                        offlineRegion.setObserver(object : OfflineRegion.OfflineRegionObserver {
+                            override fun onStatusChanged(status: OfflineRegionStatus) {
+                                if (gen != generation) return
+                                val required = status.requiredResourceCount
+                                val percent = if (required > 0) {
+                                    (status.completedResourceCount.toFloat() / required).coerceIn(0f, 1f)
+                                } else {
+                                    null
+                                }
+                                state = state.copy(
+                                    running = !status.isComplete,
+                                    error = if (status.isComplete) null else state.error,
+                                    completedBytes = baseBytes + status.completedResourceSize,
+                                    completedResources = status.completedResourceCount,
+                                    requiredResources = required,
+                                    percent = percent,
+                                )
+                                if (status.isComplete && !finished) {
+                                    finished = true
+                                    val completed = metadata.copy(bytes = status.completedResourceSize)
+                                    offlineRegion.updateMetadata(
+                                        completed.toJson(),
+                                        object : OfflineRegion.OfflineRegionUpdateMetadataCallback {
+                                            override fun onUpdate(metadata: ByteArray) {}
+                                            override fun onError(message: String) {
+                                                Log.w(LOG_TAG, "metadata update failed: $message")
+                                            }
+                                        },
+                                    )
+                                    offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
+                                    runRegions.remove(offlineRegion.id)
+                                    if (region === offlineRegion) region = null
+                                    val nextBase = baseBytes + status.completedResourceSize
+                                    Log.i(
+                                        LOG_TAG,
+                                        "complete segment=${spec.index + 1}/${spec.count} region=${offlineRegion.id} bytes=${status.completedResourceSize}",
+                                    )
+                                    state = state.copy(
+                                        completedSegments = (reusedCount + pos + 1).coerceAtMost(spec.count),
+                                        completedBytes = nextBase,
+                                        percent = 1f,
+                                    )
+                                    downloadNext(
+                                        context,
+                                        track,
+                                        styleUrl,
+                                        routeId,
+                                        trackHash,
+                                        strategy,
+                                        missing,
+                                        pos + 1,
+                                        reusedCount,
+                                        nextBase,
+                                        gen,
+                                        onDone,
+                                    )
+                                }
+                            }
+
+                            override fun onError(error: OfflineRegionError) {
+                                if (gen != generation) return
+                                Log.w(LOG_TAG, "error reason=${error.reason} message=${error.message}")
+                                state = state.copy(error = "${error.reason}: ${error.message}")
+                            }
+
+                            override fun mapboxTileCountLimitExceeded(limit: Long) {
+                                if (gen != generation) return
+                                Log.w(LOG_TAG, "tile count limit exceeded: $limit")
+                                state = state.copy(
+                                    running = false,
+                                    error = "Tile limit exceeded ($limit)",
+                                )
+                                onDone?.invoke()
+                            }
+                        })
+                        offlineRegion.setDownloadState(OfflineRegion.STATE_ACTIVE)
+                    }
+
+                    override fun onError(message: String) {
+                        if (gen != generation) return
+                        Log.e(LOG_TAG, "create failed: $message")
+                        state = state.copy(running = false, error = message)
+                        onDone?.invoke()
+                    }
+                },
+            )
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "segment start failed", e)
+            state = state.copy(running = false, error = e.message ?: e.javaClass.simpleName)
+            onDone?.invoke()
+        }
+    }
+
+    private fun completeRun(bytes: Long, gen: Long, onDone: (() -> Unit)?) {
+        if (gen != generation) return
+        region = null
+        state = state.copy(
+            running = false,
+            done = true,
+            cancelled = false,
+            error = null,
+            completedBytes = bytes,
+            completedSegments = state.segmentCount,
+            segmentIndex = state.segmentCount,
+            percent = 1f,
+        )
+        onDone?.invoke()
+    }
+
     private fun infoFor(region: OfflineRegion, status: OfflineRegionStatus?): OfflinePackInfo {
         val meta = OfflinePackMetadata.parse(region.metadata)
-        val legacyName = if (meta == null) {
-            region.metadata?.toString(Charsets.UTF_8)?.trim()?.takeIf { it.isNotEmpty() && !it.startsWith("{") }
-        } else {
-            null
-        }
+        val legacyName = if (meta == null) legacyNameOf(region) else null
         val style = meta?.style ?: region.definition.styleURL ?: STYLE_LIGHT
         val packStatus = when {
             status?.isComplete == true -> OfflinePackStatus.COMPLETE
@@ -411,26 +599,45 @@ object RouteOfflinePack {
             completedBytes = status?.completedResourceSize ?: 0L,
             completedResources = status?.completedResourceCount ?: 0L,
             requiredResources = status?.requiredResourceCount ?: 0L,
+            strategy = meta?.strategy ?: OfflineDetailStrategy.STANDARD,
+            segmentIndex = meta?.segmentIndex ?: 0,
+            segmentCount = meta?.segmentCount ?: 1,
         )
     }
 
     fun cancel() {
         generation++
-        releaseRegion(delete = true)
+        releasePartialRegions(delete = true)
         state = state.copy(
             running = false,
             done = false,
             cancelled = true,
             percent = null,
         )
-        Log.i(LOG_TAG, "cancelled region")
+        Log.i(LOG_TAG, "cancelled run")
     }
 
-    private fun releaseRegion(delete: Boolean) {
-        val current = region ?: return
+    private fun releasePartialRegions(delete: Boolean) {
+        val current = region
         region = null
-        runCatching { current.setDownloadState(OfflineRegion.STATE_INACTIVE) }
-        if (delete) {
+        val partials = synchronized(runRegions) {
+            val values = runRegions.values.toList()
+            runRegions.clear()
+            values
+        }
+        for (offlineRegion in partials) {
+            runCatching { offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE) }
+            if (delete) {
+                offlineRegion.delete(object : OfflineRegion.OfflineRegionDeleteCallback {
+                    override fun onDelete() {}
+                    override fun onError(message: String) {
+                        Log.w(LOG_TAG, "delete failed: $message")
+                    }
+                })
+            }
+        }
+        if (delete && current != null && partials.none { it.id == current.id }) {
+            runCatching { current.setDownloadState(OfflineRegion.STATE_INACTIVE) }
             current.delete(object : OfflineRegion.OfflineRegionDeleteCallback {
                 override fun onDelete() {}
                 override fun onError(message: String) {
@@ -442,7 +649,15 @@ object RouteOfflinePack {
 
     private data class RegionCheck(
         val region: OfflineRegion,
-        val exact: Boolean,
+        val meta: OfflinePackMetadata?,
         val complete: Boolean,
+        val completedBytes: Long,
+    )
+
+    private data class ExistingPlan(
+        val missing: List<OfflineRegionSpec>,
+        val reusedBytes: Long,
+        val staleRegionIds: Set<Long>,
+        val reusedCount: Int,
     )
 }

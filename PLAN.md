@@ -186,6 +186,19 @@ CrazyCapyRouting/
   route regenerates snapshots while partial runs still resume. Settings →
   **Offline map packs** lists every region (name, theme/style, size, date,
   status) with delete-one and delete-all.
+- **Corridor segments & two-tier detail**: a route pack is split into ~10 km
+  corridor segments (1.5 km padding) with adjacent boxes merged when they
+  mostly overlap or their union is cheap. Each segment is its own MapLibre
+  offline region with `routeId`, `trackHash`, style/theme, `strategy`,
+  `segmentIndex` and `segmentCount` metadata; completed segments are reused,
+  stale ones replaced, and cancel removes all partial regions for the run.
+  Standard detail uses zoom 8–14 over the whole corridor; turn-focused uses
+  8–12 over the whole route plus zoom 13–14 in 1 km boxes around detected
+  turns. The prepare dialog offers the strategy (remembered in Settings →
+  Offline map detail), and the manager groups a route's segments by strategy
+  and style, showing segment count and summed bytes. Segmentation and turn-box
+  math are pure Kotlin with unit tests; legacy metadata-less packs still list
+  and delete.
 - **QA (checkpoint markers)**: a checkpoint whose GPX `<wpt>` has no `<desc>`
   used to produce malformed GeoJSON (a stray quote), so MapLibre rejected the
   whole POI source and the markers silently vanished while the HUD's km-CP kept

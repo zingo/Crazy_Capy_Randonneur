@@ -19,6 +19,7 @@ package com.crazycapy.randonneur.state
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.radar.RadarVehicle
 import com.crazycapy.randonneur.voice.SpeechMarker
@@ -77,6 +78,9 @@ object RideStore {
 
     /** Ask to pre-cache a route's turn previews (and warm its tiles) after loading it. */
     var precacheEnabled: Boolean by mutableStateOf(true)
+
+    /** Default detail for offline route packs; also remembers the last dialog choice. */
+    var offlineDetailStrategy: OfflineDetailStrategy by mutableStateOf(OfflineDetailStrategy.STANDARD)
 
     const val DEFAULT_RWGPS_URL = "https://ridewithgps.com/users/10936047"
 

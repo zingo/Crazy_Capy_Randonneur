@@ -62,4 +62,24 @@ class RouteCorridorTest {
         assertEquals(listOf(0.0), RouteCorridor.sampleDistances(500.0, 1000.0))
         assertTrue(RouteCorridor.sampleDistances(1000.0, 0.0).isEmpty())
     }
+
+    @Test
+    fun betweenOnlyCoversTheSelectedRange() {
+        val route = track(50.0 to 10.0, 50.1 to 10.0, 50.2 to 10.0)
+        val firstHalf = RouteCorridor.between(route, 0.0, route.lengthMeters / 2.0, 0.0)
+        assertTrue(firstHalf.south <= 50.0)
+        assertTrue(firstHalf.north >= 50.1)
+        assertTrue(firstHalf.north < 50.2)
+    }
+
+    @Test
+    fun expandGrowsBoxAndClampsPoles() {
+        val expanded = RouteCorridor.expand(GeoBox(10.0, 20.0, 11.0, 21.0), 1500.0)
+        assertTrue(expanded.south < 10.0)
+        assertTrue(expanded.north > 11.0)
+        assertTrue(expanded.west < 20.0)
+        assertTrue(expanded.east > 21.0)
+        val polar = RouteCorridor.expand(GeoBox(89.0, 0.0, 89.1, 1.0), 500_000.0)
+        assertEquals(90.0, polar.north, 0.0)
+    }
 }

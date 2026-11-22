@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.OfflinePackInfo
 import com.crazycapy.randonneur.cache.OfflinePackStatus
 import com.crazycapy.randonneur.cache.RouteOfflinePack
@@ -57,40 +58,40 @@ internal fun OfflinePacksDialog(
         }
     }
 
-    val totalBytes = packs?.sumOf { it.bytes ?: 0L } ?: 0L
+    val groups = packs?.let { groupPacks(it) }
+    val totalBytes = groups?.sumOf { it.bytes } ?: 0L
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text("Offline map packs") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                val list = packs
-                if (list == null) {
+                if (groups == null) {
                     Text("Loading…", style = MaterialTheme.typography.bodySmall)
-                } else if (list.isEmpty()) {
+                } else if (groups.isEmpty()) {
                     Text(
                         "No offline map packs yet. Prepare a route offline to download one.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 } else {
                     Text(
-                        "${list.size} pack${if (list.size == 1) "" else "s"} · ${formatBytes(totalBytes)}",
+                        "${groups.size} route${if (groups.size == 1) "" else "s"} · ${formatBytes(totalBytes)}",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(Modifier.height(8.dp))
-                    list.forEach { pack ->
+                    groups.forEach { pack ->
                         Row(
                             Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text(pack.routeName, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                                Text(pack.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
                                 Text(
-                                    "${pack.theme} · ${pack.style}",
+                                    "${strategyText(pack.strategy)} · ${pack.theme} · ${pack.style}",
                                     style = MaterialTheme.typography.bodySmall,
                                     maxLines = 1,
                                 )
                                 Text(
-                                    "${formatBytes(pack.bytes)} · ${formatDate(pack.createdAt)} · ${statusText(pack)}",
+                                    "${pack.segments} segment${if (pack.segments == 1) "" else "s"} · ${formatBytes(pack.bytes)} · ${formatDate(pack.createdAt)} · ${statusText(pack.status)}",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
@@ -99,14 +100,14 @@ internal fun OfflinePacksDialog(
                                 enabled = !busy,
                                 onClick = {
                                     busy = true
-                                    RouteOfflinePack.deletePacks(context, listOf(pack.id)) {
+                                    RouteOfflinePack.deletePacks(context, pack.ids) {
                                         refresh++
                                     }
                                 },
                             ) {
                                 Icon(
                                     Icons.Filled.Delete,
-                                    contentDescription = "Delete ${pack.routeName}",
+                                    contentDescription = "Delete ${pack.name}",
                                     modifier = Modifier.size(20.dp),
                                     tint = MaterialTheme.colorScheme.error,
                                 )
@@ -138,14 +139,56 @@ internal fun OfflinePacksDialog(
     )
 }
 
-private fun statusText(pack: OfflinePackInfo): String = when (pack.status) {
+private data class PackGroup(
+    val name: String,
+    val strategy: OfflineDetailStrategy,
+    val style: String,
+    val theme: String,
+    val segments: Int,
+    val bytes: Long,
+    val createdAt: Long?,
+    val status: OfflinePackStatus,
+    val ids: List<Long>,
+)
+
+private fun groupPacks(packs: List<OfflinePackInfo>): List<PackGroup> =
+    packs.groupBy { pack ->
+        val routeId = pack.routeId
+        if (routeId == null) {
+            "legacy:${pack.id}"
+        } else {
+            "$routeId|${pack.trackHash}|${pack.strategy.name}|${pack.style}"
+        }
+    }.values.map { group ->
+        val first = group.first()
+        val status = when {
+            group.all { it.status == OfflinePackStatus.COMPLETE } -> OfflinePackStatus.COMPLETE
+            group.any { it.status == OfflinePackStatus.DOWNLOADING } -> OfflinePackStatus.DOWNLOADING
+            else -> OfflinePackStatus.INCOMPLETE
+        }
+        PackGroup(
+            name = first.routeName,
+            strategy = first.strategy,
+            style = first.style,
+            theme = first.theme,
+            segments = group.size,
+            bytes = group.sumOf { it.bytes ?: it.completedBytes },
+            createdAt = group.maxOfOrNull { it.createdAt ?: 0L }?.takeIf { it > 0L },
+            status = status,
+            ids = group.map { it.id },
+        )
+    }.sortedWith(
+        compareByDescending<PackGroup> { it.createdAt ?: 0L }.thenBy { it.name },
+    )
+
+private fun strategyText(strategy: OfflineDetailStrategy): String = when (strategy) {
+    OfflineDetailStrategy.STANDARD -> "Standard"
+    OfflineDetailStrategy.TURN_FOCUSED -> "Turn-focused"
+}
+
+private fun statusText(status: OfflinePackStatus): String = when (status) {
     OfflinePackStatus.COMPLETE -> "Complete"
-    OfflinePackStatus.DOWNLOADING -> if (pack.requiredResources > 0) {
-        val percent = (pack.completedResources * 100 / pack.requiredResources).toInt()
-        "Downloading $percent%"
-    } else {
-        "Downloading"
-    }
+    OfflinePackStatus.DOWNLOADING -> "Downloading"
     OfflinePackStatus.INCOMPLETE -> "Incomplete"
 }
 
