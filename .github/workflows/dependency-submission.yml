@@ -3,6 +3,7 @@ name: Dependency submission
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -30,6 +31,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Submit dependency graph
+        continue-on-error: true
         uses: gradle/actions/dependency-submission@v4
         with:
           build-scan-publish: false
