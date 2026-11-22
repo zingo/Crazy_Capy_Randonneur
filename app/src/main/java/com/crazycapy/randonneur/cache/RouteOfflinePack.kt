@@ -66,6 +66,7 @@ data class OfflinePackInfo(
     val completedResources: Long,
     val requiredResources: Long,
     val strategy: OfflineDetailStrategy = OfflineDetailStrategy.STANDARD,
+    val tuning: OfflineTuning = OfflineTuning.DEFAULT,
     val segmentIndex: Int = 0,
     val segmentCount: Int = 1,
 )
@@ -85,7 +86,8 @@ object RouteOfflinePack {
 
     private fun currentStyle(): String = if (RideStore.darkMap) STYLE_DARK else STYLE_LIGHT
 
-    private fun stylesFor(bothThemes: Boolean): List<String> {
+    private fun stylesFor(bothThemes: Boolean, targetStyle: String? = null): List<String> {
+        if (targetStyle != null) return listOf(targetStyle)
         val current = currentStyle()
         if (!bothThemes) return listOf(current)
         val other = if (current == STYLE_DARK) STYLE_LIGHT else STYLE_DARK
@@ -100,14 +102,16 @@ object RouteOfflinePack {
         track: Track,
         strategy: OfflineDetailStrategy = OfflineDetailStrategy.STANDARD,
         bothThemes: Boolean = false,
+        tuning: OfflineTuning = OfflineTuning.DEFAULT,
+        targetStyle: String? = null,
         onDone: (() -> Unit)? = null,
     ) {
         val appContext = context.applicationContext
         generation++
         val gen = generation
         releasePartialRegions(delete = true)
-        val specs = OfflineSegments.regionSpecs(track, strategy)
-        val styles = stylesFor(bothThemes)
+        val specs = OfflineSegments.regionSpecs(track, strategy, tuning)
+        val styles = stylesFor(bothThemes, targetStyle)
         val routeId = RouteIdentity.of(track)
         val trackHash = TrackHash.of(track)
         state = OfflinePackState(
@@ -123,7 +127,8 @@ object RouteOfflinePack {
         MapLibre.getInstance(appContext)
         Log.i(
             LOG_TAG,
-            "start route=${track.name} strategy=${strategy.name} segments=${specs.size} themes=${styles.joinToString(",")}",
+            "start route=${track.name} strategy=${strategy.name} tuning=${tuning.signature} " +
+                "segments=${specs.size} themes=${styles.joinToString(",")}",
         )
         planStyle(appContext, track, routeId, trackHash, strategy, specs, styles, 0, 0L, 0, gen, onDone)
     }
@@ -215,13 +220,15 @@ object RouteOfflinePack {
         track: Track,
         strategy: OfflineDetailStrategy = OfflineDetailStrategy.STANDARD,
         bothThemes: Boolean = false,
+        tuning: OfflineTuning = OfflineTuning.DEFAULT,
+        targetStyle: String? = null,
         onResult: (PackLookup) -> Unit,
     ) {
         val appContext = context.applicationContext
         val routeId = RouteIdentity.of(track)
         val trackHash = TrackHash.of(track)
-        val specs = OfflineSegments.regionSpecs(track, strategy)
-        val styles = stylesFor(bothThemes)
+        val specs = OfflineSegments.regionSpecs(track, strategy, tuning)
+        val styles = stylesFor(bothThemes, targetStyle)
         MapLibre.getInstance(appContext)
         checkStyles(
             appContext,
@@ -519,6 +526,7 @@ object RouteOfflinePack {
             meta.trackHash == trackHash &&
             meta.style == style &&
             meta.strategy == spec.strategy &&
+            meta.tuning.signature == spec.tuning.signature &&
             meta.segmentIndex == spec.index &&
             meta.segmentCount == spec.count
 
@@ -578,6 +586,7 @@ object RouteOfflinePack {
             bytes = null,
             createdAt = System.currentTimeMillis(),
             strategy = strategy,
+            tuning = spec.tuning,
             segmentIndex = spec.index,
             segmentCount = spec.count,
         )
@@ -761,6 +770,7 @@ object RouteOfflinePack {
             completedResources = status?.completedResourceCount ?: 0L,
             requiredResources = status?.requiredResourceCount ?: 0L,
             strategy = meta?.strategy ?: OfflineDetailStrategy.STANDARD,
+            tuning = meta?.tuning ?: OfflineTuning.DEFAULT,
             segmentIndex = meta?.segmentIndex ?: 0,
             segmentCount = meta?.segmentCount ?: 1,
         )

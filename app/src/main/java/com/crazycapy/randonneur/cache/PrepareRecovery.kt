@@ -16,6 +16,8 @@ data class PrepareRecoveryState(
     val routeName: String,
     val strategy: OfflineDetailStrategy,
     val bothThemes: Boolean,
+    val tuning: OfflineTuning = OfflineTuning.DEFAULT,
+    val targetStyle: String? = null,
 ) {
     fun encode(): String = listOf(
         "version=$VERSION",
@@ -24,6 +26,8 @@ data class PrepareRecoveryState(
         "routeName=${routeName.replace('\n', ' ')}",
         "strategy=${strategy.name}",
         "bothThemes=$bothThemes",
+        "tuning=${tuning.signature}",
+        "targetStyle=${targetStyle.orEmpty()}",
     ).joinToString("\n")
 
     fun matches(track: Track): Boolean =
@@ -46,7 +50,17 @@ data class PrepareRecoveryState(
                 it.name == values["strategy"]
             } ?: return null
             val bothThemes = values["bothThemes"]?.toBooleanStrictOrNull() ?: return null
-            return PrepareRecoveryState(routeId, trackHash, routeName, strategy, bothThemes)
+            val tuning = OfflineTuning.parseSignature(values["tuning"]) ?: OfflineTuning.DEFAULT
+            val targetStyle = values["targetStyle"]?.takeIf { it.isNotBlank() }
+            return PrepareRecoveryState(
+                routeId,
+                trackHash,
+                routeName,
+                strategy,
+                bothThemes,
+                tuning,
+                targetStyle,
+            )
         }
     }
 }
@@ -62,6 +76,8 @@ object PrepareRecovery {
         track: Track,
         strategy: OfflineDetailStrategy,
         bothThemes: Boolean,
+        tuning: OfflineTuning = OfflineTuning.DEFAULT,
+        targetStyle: String? = null,
     ): PrepareRecoveryState? {
         val saved = runCatching { RouteStore.saveTrack(context, track) }.getOrNull() ?: return null
         val state = PrepareRecoveryState(
@@ -70,6 +86,8 @@ object PrepareRecovery {
             routeName = track.name,
             strategy = strategy,
             bothThemes = bothThemes,
+            tuning = tuning,
+            targetStyle = targetStyle,
         )
         runCatching {
             val target = file(context)

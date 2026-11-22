@@ -35,6 +35,7 @@ import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.OfflineEstimateCalculator
 import com.crazycapy.randonneur.cache.OfflineLimits
 import com.crazycapy.randonneur.cache.OfflinePackSizing
+import com.crazycapy.randonneur.cache.OfflineTuning
 import com.crazycapy.randonneur.cache.PreparePhase
 import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.cache.RouteIdentity
@@ -58,8 +59,14 @@ internal fun PrepareRouteDialog(
     var alsoOther by remember(track) { mutableStateOf(RideStore.defaultPrepareBothThemes()) }
     var capMessage by remember(track) { mutableStateOf<String?>(null) }
     var checkingCap by remember(track) { mutableStateOf(false) }
-    val estimate = remember(track, strategy, alsoOther) {
-        OfflineEstimateCalculator.estimate(track, strategy, if (alsoOther) 2 else 1)
+    val tuning = OfflineTuning.fromSettings(
+        RideStore.offlineSegmentKm,
+        RideStore.offlineCorridorPadKm,
+        RideStore.offlineTurnBoxKm,
+        RideStore.offlineHighMaxZoom,
+    )
+    val estimate = remember(track, strategy, alsoOther, tuning.signature) {
+        OfflineEstimateCalculator.estimate(track, strategy, if (alsoOther) 2 else 1, tuning)
     }
     val trackHash = remember(track) { TrackHash.of(track) }
     val targetThemes = remember(alsoOther, RideStore.darkMap) {
@@ -110,7 +117,7 @@ internal fun PrepareRouteDialog(
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         started = true
-        PrepareService.start(context, track, strategy, alsoOther)
+        PrepareService.start(context, track, strategy, alsoOther, tuning)
     }
 
     AlertDialog(
@@ -147,8 +154,15 @@ internal fun PrepareRouteDialog(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Estimated pack size: ${formatBytes(estimate.bytes)} · ${estimate.segments} segments · " +
+                        "Estimated pack size: ~${formatBytes(estimate.bytesLow)}–${formatBytes(estimate.bytesHigh)} · " +
+                            "${estimate.segments} segments · " +
                             "${estimate.themes} theme${if (estimate.themes == 1) "" else "s"} (estimate)",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "Tuning: ${formatKm(tuning.segmentMeters)} km segments · " +
+                            "${formatKm(tuning.corridorPadMeters)} km corridor · " +
+                            "${formatKm(tuning.turnPadMeters)} km turn boxes · zoom ≤ ${tuning.maxZoom}",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     if (reclaimable > 0) {
@@ -292,7 +306,7 @@ internal fun PrepareRouteDialog(
                                     strategy,
                                     targetThemes,
                                 )
-                                if (OfflineLimits.decideCap(used, estimate.bytes, reclaim, cap) ==
+                                if (OfflineLimits.decideCap(used, estimate.bytesHigh, reclaim, cap) ==
                                     OfflineCapDecision.EXCEEDS
                                 ) {
                                     val reclaimText = if (reclaim > 0) {
@@ -301,8 +315,8 @@ internal fun PrepareRouteDialog(
                                         ""
                                     }
                                     capMessage = "Not enough offline storage: packs use " +
-                                        "${formatBytes(used)} of $cap MB, this prepare estimates " +
-                                        "${formatBytes(estimate.bytes)}$reclaimText. Delete packs or raise the cap."
+                                        "${formatBytes(used)} of $cap MB, this prepare estimates up to " +
+                                        "${formatBytes(estimate.bytesHigh)}$reclaimText. Delete packs or raise the cap."
                                 } else {
                                     beginPrepare()
                                 }
@@ -354,4 +368,9 @@ private fun formatBytes(bytes: Long): String {
     val kb = bytes / 1024.0
     if (kb < 1024) return "${kb.toInt()} kB"
     return "%.1f MB".format(kb / 1024.0)
+}
+
+private fun formatKm(meters: Double): String {
+    val km = meters / 1000.0
+    return if (km % 1.0 == 0.0) km.toInt().toString() else "%.1f".format(km)
 }

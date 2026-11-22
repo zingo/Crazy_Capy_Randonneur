@@ -239,6 +239,21 @@ CrazyCapyRouting/
   estimate, and the over-cap warning reports the reclaimable amount; the
   manager still totals actual sizes. Identity/reclaim/migration decisions are
   pure Kotlin with unit tests.
+- **Advanced tuning, estimate range and manager refresh**: persisted settings
+  tune segment length (2–50 km, default 10), corridor padding (0.5–10 km,
+  default 1.5), high-detail turn boxes (0.25–5 km, default 1) and the
+  high-detail zoom ceiling (13–16, default 14; standard keeps 8–max). The
+  sanitized tuning flows through segmentation, turn boxes, estimator and region
+  metadata as a signature, so packs from a different tuning become stale and
+  are replaced on the next prepare while unrelated packs stay. The prepare
+  dialog shows a low–high estimate range labelled as an estimate and the active
+  tuning; cap checks use the high end. The manager groups by tuning and theme,
+  shows the tuning summary plus total vs cap, labels metadata-less regions
+  **Legacy / unknown** (delete only), offers **Refresh** for groups whose route
+  is still in the library (deletes that group, then re-prepares its strategy,
+  tuning and style within the cap without duplicates), and shows **Route not
+  found** otherwise. Tuning/signature, grouping and refresh/reclaim decisions
+  are pure Kotlin with unit tests.
 - **QA (checkpoint markers)**: a checkpoint whose GPX `<wpt>` has no `<desc>`
   used to produce malformed GeoJSON (a stray quote), so MapLibre rejected the
   whole POI source and the markers silently vanished while the HUD's km-CP kept

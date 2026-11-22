@@ -55,6 +55,74 @@ class OfflineEstimateTest {
     }
 
     @Test
+    fun higherTuningZoomIsNotSmaller() {
+        val route = track(
+            listOf(
+                TrackPoint(55.0, 10.0),
+                TrackPoint(55.05, 10.05),
+                TrackPoint(55.1, 10.1),
+            ),
+        )
+        val low = OfflineEstimateCalculator.estimate(
+            route,
+            OfflineDetailStrategy.STANDARD,
+            1,
+            OfflineTuning.DEFAULT.copy(maxZoom = 14),
+        )
+        val high = OfflineEstimateCalculator.estimate(
+            route,
+            OfflineDetailStrategy.STANDARD,
+            1,
+            OfflineTuning.DEFAULT.copy(maxZoom = 16),
+        )
+        assertTrue(high.bytes >= low.bytes)
+        assertTrue(high.bytesHigh >= high.bytesLow)
+    }
+
+    @Test
+    fun widerTuningCorridorIsNotSmaller() {
+        val route = track(listOf(TrackPoint(55.0, 10.0), TrackPoint(55.1, 10.1)))
+        val narrow = OfflineEstimateCalculator.estimate(
+            route,
+            OfflineDetailStrategy.STANDARD,
+            1,
+            OfflineTuning.DEFAULT.copy(corridorPadMeters = 500.0),
+        )
+        val wide = OfflineEstimateCalculator.estimate(
+            route,
+            OfflineDetailStrategy.STANDARD,
+            1,
+            OfflineTuning.DEFAULT.copy(corridorPadMeters = 5_000.0),
+        )
+        assertTrue(wide.bytes >= narrow.bytes)
+    }
+
+    @Test
+    fun widerTuningTurnBoxIsNotSmaller() {
+        val route = track(
+            listOf(
+                TrackPoint(53.0, 10.0),
+                TrackPoint(53.0, 10.0035),
+                TrackPoint(53.0008, 10.0035),
+                TrackPoint(53.0012, 10.0035),
+            ),
+        )
+        val small = OfflineEstimateCalculator.estimate(
+            route,
+            OfflineDetailStrategy.TURN_FOCUSED,
+            1,
+            OfflineTuning.DEFAULT.copy(turnPadMeters = 250.0),
+        )
+        val large = OfflineEstimateCalculator.estimate(
+            route,
+            OfflineDetailStrategy.TURN_FOCUSED,
+            1,
+            OfflineTuning.DEFAULT.copy(turnPadMeters = 5_000.0),
+        )
+        assertTrue(large.bytes >= small.bytes)
+    }
+
+    @Test
     fun tinyRouteDoesNotCrash() {
         val tiny = track(listOf(TrackPoint(55.0, 10.0), TrackPoint(55.00001, 10.00001)))
         val estimate = OfflineEstimateCalculator.estimate(tiny, OfflineDetailStrategy.STANDARD, 2)

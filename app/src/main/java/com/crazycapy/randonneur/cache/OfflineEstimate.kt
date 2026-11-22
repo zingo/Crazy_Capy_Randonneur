@@ -17,11 +17,15 @@ data class OfflineEstimate(
     val segments: Int,
     val themes: Int,
     val tiles: Long,
+    val bytesLow: Long = bytes,
+    val bytesHigh: Long = bytes,
 )
 
 object OfflineEstimateCalculator {
 
     const val ASSUMED_TILE_BYTES = 128L * 1024L
+    const val LOW_TILE_BYTES = 96L * 1024L
+    const val HIGH_TILE_BYTES = 160L * 1024L
     private const val MAX_ZOOM = 22
     private const val MERCATOR_LAT_LIMIT = 85.05112878
 
@@ -29,7 +33,9 @@ object OfflineEstimateCalculator {
         track: Track,
         strategy: OfflineDetailStrategy,
         themes: Int,
-    ): OfflineEstimate = estimate(OfflineSegments.regionSpecs(track, strategy), themes)
+        tuning: OfflineTuning = OfflineTuning.DEFAULT,
+    ): OfflineEstimate =
+        estimate(OfflineSegments.regionSpecs(track, strategy, tuning), themes)
 
     fun estimate(specs: List<OfflineRegionSpec>, themes: Int): OfflineEstimate {
         val themeCount = themes.coerceAtLeast(1)
@@ -43,6 +49,8 @@ object OfflineEstimateCalculator {
             segments = specs.size * themeCount,
             themes = themeCount,
             tiles = totalTiles,
+            bytesLow = totalTiles.saturatedMultiply(LOW_TILE_BYTES),
+            bytesHigh = totalTiles.saturatedMultiply(HIGH_TILE_BYTES),
         )
     }
 

@@ -15,6 +15,7 @@ data class OfflinePackMetadata(
     val bytes: Long?,
     val createdAt: Long?,
     val strategy: OfflineDetailStrategy = OfflineDetailStrategy.STANDARD,
+    val tuning: OfflineTuning = OfflineTuning.DEFAULT,
     val segmentIndex: Int = 0,
     val segmentCount: Int = 1,
     val schema: Int = SCHEMA,
@@ -27,6 +28,7 @@ data class OfflinePackMetadata(
         put(KEY_STYLE, style)
         put(KEY_THEME, theme)
         put(KEY_STRATEGY, strategy.name)
+        put(KEY_TUNING, tuning.signature)
         put(KEY_SEGMENT_INDEX, segmentIndex)
         put(KEY_SEGMENT_COUNT, segmentCount)
         if (bytes != null) put(KEY_BYTES, bytes) else put(KEY_BYTES, JSONObject.NULL)
@@ -42,6 +44,7 @@ data class OfflinePackMetadata(
         private const val KEY_STYLE = "style"
         private const val KEY_THEME = "theme"
         private const val KEY_STRATEGY = "strategy"
+        private const val KEY_TUNING = "tuning"
         private const val KEY_SEGMENT_INDEX = "segmentIndex"
         private const val KEY_SEGMENT_COUNT = "segmentCount"
         private const val KEY_BYTES = "bytes"
@@ -70,6 +73,8 @@ data class OfflinePackMetadata(
                     bytes = if (json.isNull(KEY_BYTES)) null else json.optLong(KEY_BYTES),
                     createdAt = if (json.isNull(KEY_CREATED_AT)) null else json.optLong(KEY_CREATED_AT),
                     strategy = strategy,
+                    tuning = OfflineTuning.parseSignature(json.optString(KEY_TUNING))
+                        ?: OfflineTuning.DEFAULT,
                     segmentIndex = json.optInt(KEY_SEGMENT_INDEX, 0),
                     segmentCount = json.optInt(KEY_SEGMENT_COUNT, 1),
                     schema = json.optInt(KEY_SCHEMA, 1),

@@ -26,10 +26,15 @@ your ears do the navigating — no accounts, no cloud, no ads.
   Resume** and **Cancel**. Resuming skips completed segments and cached
   previews; cancel removes partial map regions. Notification permission is
   requested when preparation starts, but the work still runs if it is denied.
-  Choose **Standard** (whole corridor at zoom
-  8–14) or **Turn-focused** (whole corridor at 8–12 plus high zoom 13–14 in 1 km
-  boxes around turns); the last choice is remembered and can be set under
-  **Settings → Offline map detail**. There is no artificial turn cap; it skips
+   Choose **Standard** (whole corridor at zoom
+   8–14) or **Turn-focused** (whole corridor at 8–12 plus high zoom 13–14 in 1 km
+   boxes around turns); the last choice is remembered and can be set under
+   **Settings → Offline map detail**. **Advanced offline tuning** in Settings
+   sets segment length (2–50 km, default 10), corridor padding (0.5–10 km,
+   default 1.5), high-detail turn box (0.25–5 km, default 1) and the high-detail
+   zoom ceiling (13–16, default 14); packs carry a tuning signature, so changing
+   it replaces only that route's packs on the next prepare. There is no
+   artificial turn cap; it skips
   phases that are already done, and if the preview pass is interrupted it
   reports how many turns were cached ("Pre-cached 34/347 · rest on next load")
   and resumes on the next run, skipping what's done. On the ride the HUD pops
@@ -44,13 +49,17 @@ your ears do the navigating — no accounts, no cloud, no ads.
   intact; legacy name-keyed packs are matched by geometry and migrated on the
   next prepare. Turn/overview previews are invalidated when the route changes.
   **Settings → Offline map packs** groups a route's segments into one entry with
-  the segment count, summed size, strategy, theme/style, date and status, and
-  can delete a route's segments or all packs. **Also prepare the other map
+  the segment count, summed size, strategy, theme/style, tuning, date and status,
+  shows the total vs cap, and can delete a route's segments or all packs. A
+  route still in the library also gets **Refresh**, which deletes that group and
+  starts a fresh prepare within the storage cap; a missing route shows **Route
+  not found**, and metadata-less regions are labelled **Legacy / unknown** with
+  their fallback name and can only be deleted. **Also prepare the other map
   theme** (dialog, remembered; **Settings → Offline map theme** sets the default
   Off/Always/Ask) downloads dark and light as separate regions so the map keeps
   rendering offline after switching theme. The prepare dialog also shows an
-  estimated pack size, segment and theme count; a configurable **Offline
-  storage cap** (MB, 0 = unlimited) checks total minus reclaimable bytes from
+  estimated pack-size range (~low–high MB, still an estimate), segment and theme
+  count, and the active tuning; a configurable **Offline storage cap** (MB, 0 = unlimited) checks total minus reclaimable bytes from
   this route's replaced segments plus the estimate, so re-preparing does not
   block on space it will free, and an over-cap warning reports both the used and
   reclaimable amounts without deleting packs. **Offline pack expiry** (days,
