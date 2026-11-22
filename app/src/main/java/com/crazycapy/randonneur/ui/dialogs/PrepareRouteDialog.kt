@@ -20,6 +20,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,11 +34,14 @@ import com.crazycapy.randonneur.cache.OfflineCapDecision
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.OfflineEstimateCalculator
 import com.crazycapy.randonneur.cache.OfflineLimits
+import com.crazycapy.randonneur.cache.OfflinePackSizing
 import com.crazycapy.randonneur.cache.PreparePhase
 import com.crazycapy.randonneur.cache.RouteCache
+import com.crazycapy.randonneur.cache.RouteIdentity
 import com.crazycapy.randonneur.cache.RouteOfflinePack
 import com.crazycapy.randonneur.cache.RoutePrepare
 import com.crazycapy.randonneur.gpx.Track
+import com.crazycapy.randonneur.gpx.TrackHash
 import com.crazycapy.randonneur.service.PrepareService
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
@@ -48,7 +52,7 @@ internal fun PrepareRouteDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val routeId = remember(track) { RouteStore.routeId(track.name) }
+    val routeId = remember(track) { RouteIdentity.of(track) }
     var started by remember(track) { mutableStateOf(false) }
     var strategy by remember(track) { mutableStateOf(RideStore.offlineDetailStrategy) }
     var alsoOther by remember(track) { mutableStateOf(RideStore.defaultPrepareBothThemes()) }
@@ -57,6 +61,34 @@ internal fun PrepareRouteDialog(
     val estimate = remember(track, strategy, alsoOther) {
         OfflineEstimateCalculator.estimate(track, strategy, if (alsoOther) 2 else 1)
     }
+    val trackHash = remember(track) { TrackHash.of(track) }
+    val targetThemes = remember(alsoOther, RideStore.darkMap) {
+        buildSet {
+            add(if (RideStore.darkMap) "dark" else "light")
+            if (alsoOther) add(if (RideStore.darkMap) "light" else "dark")
+        }
+    }
+    var packSizes by remember(track) { mutableStateOf<List<OfflinePackSizing>?>(null) }
+    LaunchedEffect(track) {
+        RouteOfflinePack.listPacks(context) { packs ->
+            packSizes = packs.map {
+                OfflinePackSizing(
+                    routeId = it.routeId,
+                    trackHash = it.trackHash,
+                    strategy = it.strategy,
+                    theme = it.theme,
+                    bytes = it.bytes ?: it.completedBytes,
+                )
+            }
+        }
+    }
+    val reclaimable = OfflineLimits.reclaimableBytes(
+        packSizes.orEmpty(),
+        routeId,
+        trackHash,
+        strategy,
+        targetThemes,
+    )
     val state = RoutePrepare.state
     val showProgress = started || ((state.running || state.paused) && state.routeId == routeId)
 
@@ -119,6 +151,14 @@ internal fun PrepareRouteDialog(
                             "${estimate.themes} theme${if (estimate.themes == 1) "" else "s"} (estimate)",
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    if (reclaimable > 0) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Replaces this route's existing packs · ${formatBytes(reclaimable)} will be reclaimed",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     capMessage?.let { message ->
                         Spacer(Modifier.height(8.dp))
                         Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -126,6 +166,14 @@ internal fun PrepareRouteDialog(
                 } else {
                     if (state.paused) {
                         Text("Paused — preparation resumes where it left off.", style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    if (reclaimable > 0 && !state.done) {
+                        Text(
+                            "Within storage cap · replacing this route's old packs (${formatBytes(reclaimable)} reclaimable)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
                         Spacer(Modifier.height(8.dp))
                     }
                     Text("1/2 · Map tiles", style = MaterialTheme.typography.titleSmall)
@@ -226,12 +274,35 @@ internal fun PrepareRouteDialog(
                             beginPrepare()
                         } else {
                             checkingCap = true
-                            RouteOfflinePack.totalBytes(context) { used ->
+                            RouteOfflinePack.listPacks(context) { packs ->
                                 checkingCap = false
-                                if (OfflineLimits.decideCap(used, estimate.bytes, cap) == OfflineCapDecision.EXCEEDS) {
-                                    capMessage = "Not enough offline storage: packs already use " +
-                                        "${formatBytes(used)} of $cap MB and this prepare estimates " +
-                                        "${formatBytes(estimate.bytes)}. Delete packs or raise the cap."
+                                val used = packs.sumOf { it.bytes ?: it.completedBytes }
+                                val reclaim = OfflineLimits.reclaimableBytes(
+                                    packs.map {
+                                        OfflinePackSizing(
+                                            routeId = it.routeId,
+                                            trackHash = it.trackHash,
+                                            strategy = it.strategy,
+                                            theme = it.theme,
+                                            bytes = it.bytes ?: it.completedBytes,
+                                        )
+                                    },
+                                    routeId,
+                                    trackHash,
+                                    strategy,
+                                    targetThemes,
+                                )
+                                if (OfflineLimits.decideCap(used, estimate.bytes, reclaim, cap) ==
+                                    OfflineCapDecision.EXCEEDS
+                                ) {
+                                    val reclaimText = if (reclaim > 0) {
+                                        " · ${formatBytes(reclaim)} reclaimable from replaced packs"
+                                    } else {
+                                        ""
+                                    }
+                                    capMessage = "Not enough offline storage: packs use " +
+                                        "${formatBytes(used)} of $cap MB, this prepare estimates " +
+                                        "${formatBytes(estimate.bytes)}$reclaimText. Delete packs or raise the cap."
                                 } else {
                                     beginPrepare()
                                 }

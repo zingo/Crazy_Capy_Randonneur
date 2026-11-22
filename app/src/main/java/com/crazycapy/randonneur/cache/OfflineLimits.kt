@@ -8,17 +8,49 @@ enum class OfflineThemeMode { OFF, ALWAYS, ASK }
 
 enum class OfflineCapDecision { FITS, EXCEEDS, UNLIMITED }
 
+data class OfflinePackSizing(
+    val routeId: String?,
+    val trackHash: String?,
+    val strategy: OfflineDetailStrategy,
+    val theme: String,
+    val bytes: Long,
+)
+
 object OfflineLimits {
 
     const val MILLIS_PER_DAY = 86_400_000L
     const val BYTES_PER_MB = 1024L * 1024L
 
-    fun decideCap(currentTotalBytes: Long, estimateBytes: Long, capMb: Int): OfflineCapDecision {
+    fun decideCap(currentTotalBytes: Long, estimateBytes: Long, capMb: Int): OfflineCapDecision =
+        decideCap(currentTotalBytes, estimateBytes, 0L, capMb)
+
+    fun decideCap(
+        currentTotalBytes: Long,
+        estimateBytes: Long,
+        reclaimableBytes: Long,
+        capMb: Int,
+    ): OfflineCapDecision {
         if (capMb <= 0) return OfflineCapDecision.UNLIMITED
         val cap = capMb.toLong().saturatedMultiply(BYTES_PER_MB)
-        val after = currentTotalBytes.saturatedAdd(estimateBytes)
+        val remaining = (currentTotalBytes - reclaimableBytes.coerceAtLeast(0L)).coerceAtLeast(0L)
+        val after = remaining.saturatedAdd(estimateBytes)
         return if (after > cap) OfflineCapDecision.EXCEEDS else OfflineCapDecision.FITS
     }
+
+    fun reclaimableBytes(
+        packs: List<OfflinePackSizing>,
+        routeId: String,
+        trackHash: String,
+        strategy: OfflineDetailStrategy,
+        themes: Set<String>,
+    ): Long = packs.filter { pack ->
+        pack.strategy == strategy &&
+            pack.theme in themes &&
+            (
+                pack.routeId == routeId ||
+                    (pack.trackHash != null && pack.trackHash == trackHash)
+                )
+    }.sumOf { it.bytes.coerceAtLeast(0L) }
 
     fun capBytes(capMb: Int): Long? = if (capMb <= 0) null else capMb.toLong().saturatedMultiply(BYTES_PER_MB)
 

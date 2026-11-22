@@ -104,10 +104,10 @@ class MainActivity : ComponentActivity() {
     private fun loadRoute(uri: Uri) {
         try {
             val track = TrackLoader.loadUri(this, uri)
-            RideStore.track = track
+            val saved = RouteStore.saveTrack(this, track)
+            RideStore.track = track.withStorageId(saved.id)
             RideStore.status = "Route loaded: ${track.name}"
             clearSpeechMarkers()
-            RouteStore.saveTrack(this, track)
         } catch (e: Exception) {
             RideStore.track = null
             RideStore.status = "Couldn't parse route: ${e.message}"

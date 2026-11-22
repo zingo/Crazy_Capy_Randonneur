@@ -23,6 +23,7 @@ class Track(
     val name: String,
     val points: List<TrackPoint>,
     val waypoints: List<Waypoint> = emptyList(),
+    val storageId: String? = null,
 ) {
     init {
         require(points.size >= 2) { "Track needs at least two points" }
@@ -74,7 +75,9 @@ class Track(
      * with no special-casing of the geometry math.
      */
     fun reversed(): Track =
-        Track("$name (reverse)", points.asReversed(), waypoints.asReversed())
+        Track("$name (reverse)", points.asReversed(), waypoints.asReversed(), storageId)
+
+    fun withStorageId(id: String?): Track = Track(name, points, waypoints, id)
 
     /**
      * Closest distance along the route in meters to a raw coordinate.

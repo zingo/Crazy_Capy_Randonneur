@@ -14,7 +14,6 @@ import com.crazycapy.randonneur.STYLE_LIGHT
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.gpx.TrackHash
 import com.crazycapy.randonneur.state.RideStore
-import com.crazycapy.randonneur.state.RouteStore
 import org.maplibre.android.MapLibre
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
@@ -109,7 +108,7 @@ object RouteOfflinePack {
         releasePartialRegions(delete = true)
         val specs = OfflineSegments.regionSpecs(track, strategy)
         val styles = stylesFor(bothThemes)
-        val routeId = RouteStore.routeId(track.name)
+        val routeId = RouteIdentity.of(track)
         val trackHash = TrackHash.of(track)
         state = OfflinePackState(
             routeName = track.name,
@@ -219,7 +218,7 @@ object RouteOfflinePack {
         onResult: (PackLookup) -> Unit,
     ) {
         val appContext = context.applicationContext
-        val routeId = RouteStore.routeId(track.name)
+        val routeId = RouteIdentity.of(track)
         val trackHash = TrackHash.of(track)
         val specs = OfflineSegments.regionSpecs(track, strategy)
         val styles = stylesFor(bothThemes)
@@ -435,7 +434,11 @@ object RouteOfflinePack {
     ) {
         val related = regions.filter { offlineRegion ->
             val meta = OfflinePackMetadata.parse(offlineRegion.metadata)
-            meta?.routeId == routeId || (meta == null && legacyNameOf(offlineRegion) == trackName)
+            if (meta == null) {
+                legacyNameOf(offlineRegion) == trackName
+            } else {
+                RouteIdentity.relatesTo(meta.routeId, meta.trackHash, routeId, trackHash)
+            }
         }
         val candidates = related.filter { offlineRegion ->
             val meta = OfflinePackMetadata.parse(offlineRegion.metadata)
@@ -458,6 +461,7 @@ object RouteOfflinePack {
                 if (match != null) {
                     used.add(match.region.id)
                     bytes += match.completedBytes
+                    migrateMetadata(match, routeId, trackName)
                 } else {
                     missing.add(spec)
                 }
@@ -487,6 +491,26 @@ object RouteOfflinePack {
                 }
             })
         }
+    }
+
+    private fun migrateMetadata(check: RegionCheck, routeId: String, trackName: String) {
+        val meta = check.meta ?: return
+        if (!RouteIdentity.needsMigration(meta.routeId, routeId) && meta.routeName == trackName) return
+        val updated = meta.copy(
+            routeId = routeId,
+            routeName = trackName,
+            bytes = meta.bytes ?: check.completedBytes.takeIf { it > 0L },
+        )
+        check.region.updateMetadata(
+            updated.toJson(),
+            object : OfflineRegion.OfflineRegionUpdateMetadataCallback {
+                override fun onUpdate(metadata: ByteArray) {}
+
+                override fun onError(message: String) {
+                    Log.w(LOG_TAG, "metadata migrate failed: $message")
+                }
+            },
+        )
     }
 
     private fun matchesSpec(meta: OfflinePackMetadata?, spec: OfflineRegionSpec, trackHash: String, style: String): Boolean =

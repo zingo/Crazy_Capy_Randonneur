@@ -35,21 +35,26 @@ your ears do the navigating — no accounts, no cloud, no ads.
   and resumes on the next run, skipping what's done. On the ride the HUD pops
   up instantly from those cached images with zero tile fetches — and no/less
   live rendering, so your radio stays quieter — and the map works without
-  network. Segments are keyed by route, geometry hash, map style, detail
-  strategy and segment number, so re-preparing reuses completed segments,
-  replaces stale or partial ones and removes cancelled partial segments while
-  leaving other routes and strategies intact; turn/overview previews are
-  invalidated when the route changes. **Settings → Offline map packs** groups a
-  route's segments into one entry with the segment count, summed size,
-  strategy, theme/style, date and status, and can delete a route's segments or
-  all packs. **Also prepare the other map theme** (dialog, remembered;
-  **Settings → Offline map theme** sets the default Off/Always/Ask) downloads
-  dark and light as separate regions so the map keeps rendering offline after
-  switching theme. The prepare dialog also shows an estimated pack size, segment
-  and theme count; a configurable **Offline storage cap** (MB, 0 = unlimited)
-  blocks a prepare that would exceed it without deleting anything, and
-  **Offline pack expiry** (days, 0 = never) flags old packs in the manager with
-  a **Delete expired** action. In a controlled benchmark,
+  network. Packs use the saved route's stable library id, so renaming a route
+  reuses its existing pack and previews instead of orphaning them; ad-hoc
+  tracks (open-with/clipboard/share) fall back to a geometry hash. Segments are
+  keyed by route, geometry hash, map style, detail strategy and segment number,
+  so re-preparing reuses completed segments, replaces stale or partial ones and
+  removes cancelled partial segments while leaving other routes and strategies
+  intact; legacy name-keyed packs are matched by geometry and migrated on the
+  next prepare. Turn/overview previews are invalidated when the route changes.
+  **Settings → Offline map packs** groups a route's segments into one entry with
+  the segment count, summed size, strategy, theme/style, date and status, and
+  can delete a route's segments or all packs. **Also prepare the other map
+  theme** (dialog, remembered; **Settings → Offline map theme** sets the default
+  Off/Always/Ask) downloads dark and light as separate regions so the map keeps
+  rendering offline after switching theme. The prepare dialog also shows an
+  estimated pack size, segment and theme count; a configurable **Offline
+  storage cap** (MB, 0 = unlimited) checks total minus reclaimable bytes from
+  this route's replaced segments plus the estimate, so re-preparing does not
+  block on space it will free, and an over-cap warning reports both the used and
+  reclaimable amounts without deleting packs. **Offline pack expiry** (days,
+  0 = never) flags old packs in the manager with a **Delete expired** action. In a controlled benchmark,
   showing a pre-cached preview cost ~1.4–2.5× less energy and ~6–8× less CPU
   than rendering it live (screen on/off), while warming only the map tiles made
   no measurable difference. On a ride the saved energy is small next to the

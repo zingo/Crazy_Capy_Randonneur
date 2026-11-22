@@ -10,7 +10,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.state.RideStore
-import com.crazycapy.randonneur.state.RouteStore
 
 object RoutePrepare {
 
@@ -28,7 +27,7 @@ object RoutePrepare {
         strategy: OfflineDetailStrategy = RideStore.offlineDetailStrategy,
         bothThemes: Boolean = false,
     ) {
-        val routeId = RouteStore.routeId(track.name)
+        val routeId = RouteIdentity.of(track)
         if (state.running && state.routeId == routeId && state.strategy == strategy && state.bothThemes == bothThemes) return
         if (state.running || state.paused) cancel()
         launch(context, track, strategy, bothThemes)
@@ -53,7 +52,7 @@ object RoutePrepare {
         activeStrategy = strategy
         activeBothThemes = bothThemes
         state = PrepareTransitions.started(
-            routeId = RouteStore.routeId(track.name),
+            routeId = RouteIdentity.of(track),
             routeName = track.name,
             strategy = strategy,
             bothThemes = bothThemes,
@@ -72,7 +71,7 @@ object RoutePrepare {
     }
 
     private fun startPreviews(context: Context, track: Track, gen: Long) {
-        val routeId = RouteStore.routeId(track.name)
+        val routeId = RouteIdentity.of(track)
         state = PrepareTransitions.previewsStarted(state)
         if (previewsComplete(context, routeId, track)) {
             state = PrepareTransitions.completed(state, previewsSkipped = true, previewsStatus = null)

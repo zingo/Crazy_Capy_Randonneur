@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import java.io.File
 import kotlin.math.roundToInt
 import com.crazycapy.randonneur.cache.RouteCache
+import com.crazycapy.randonneur.cache.RouteIdentity
 import com.crazycapy.randonneur.cache.RouteOfflinePack
 import com.crazycapy.randonneur.cache.RoutePrepare
 import com.crazycapy.randonneur.ui.helpers.copyToUri
@@ -170,7 +171,7 @@ internal fun RoutesDialog(
                                     text = { Text("Prepare route offline") },
                                     onClick = {
                                         showMenu = false
-                                        val t = RideStore.track?.takeIf { it.name == route.name }
+                                        val t = RideStore.track?.takeIf { RouteIdentity.of(it) == route.id }
                                             ?: RouteStore.loadTrack(context, route.id)
                                         if (t != null) prepareTarget = t
                                     },
@@ -316,9 +317,9 @@ private fun RwGpsImportDialog(
             val track = withContext(Dispatchers.IO) { RwGpsImport.fetchTrack(target) }
             busy = false
             if (track != null) {
-                RideStore.track = track
+                val saved = RouteStore.saveTrack(context, track)
+                RideStore.track = track.withStorageId(saved.id)
                 RideStore.status = "Route loaded: ${track.name}"
-                RouteStore.saveTrack(context, track)
                 onDone()
             } else {
                 error = "Couldn't fetch that route. Check the URL and that you're online."

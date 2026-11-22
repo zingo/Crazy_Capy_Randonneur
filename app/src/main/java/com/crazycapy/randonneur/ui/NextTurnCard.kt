@@ -55,10 +55,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.crazycapy.randonneur.cache.RouteCache
+import com.crazycapy.randonneur.cache.RouteIdentity
 import com.crazycapy.randonneur.cache.TurnProjection
 import com.crazycapy.randonneur.gpx.TrackHash
 import com.crazycapy.randonneur.state.RideStore
-import com.crazycapy.randonneur.state.RouteStore
 import com.crazycapy.randonneur.voice.Phrases
 import com.crazycapy.randonneur.CACHED_IMG_PX
 import com.crazycapy.randonneur.STYLE_DARK
@@ -83,7 +83,7 @@ internal fun TurnPreview(modifier: Modifier = Modifier) {
     val context = LocalContext.current
 
     // Cached path
-    val routeId = remember(RideStore.track) { RideStore.track?.let { RouteStore.routeId(it.name) } }
+    val routeId = remember(RideStore.track) { RideStore.track?.let { RouteIdentity.of(it) } }
     val trackHash = remember(RideStore.track) { RideStore.track?.let { TrackHash.of(it) } }
     val turnIdx = RideStore.nextTurnIndex
     val cached = remember { mutableStateOf<CachedTurnData?>(null) }
