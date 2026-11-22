@@ -36,7 +36,14 @@ your ears do the navigating — no accounts, no cloud, no ads.
   invalidated when the route changes. **Settings → Offline map packs** groups a
   route's segments into one entry with the segment count, summed size,
   strategy, theme/style, date and status, and can delete a route's segments or
-  all packs. In a controlled benchmark,
+  all packs. **Also prepare the other map theme** (dialog, remembered;
+  **Settings → Offline map theme** sets the default Off/Always/Ask) downloads
+  dark and light as separate regions so the map keeps rendering offline after
+  switching theme. The prepare dialog also shows an estimated pack size, segment
+  and theme count; a configurable **Offline storage cap** (MB, 0 = unlimited)
+  blocks a prepare that would exceed it without deleting anything, and
+  **Offline pack expiry** (days, 0 = never) flags old packs in the manager with
+  a **Delete expired** action. In a controlled benchmark,
   showing a pre-cached preview cost ~1.4–2.5× less energy and ~6–8× less CPU
   than rendering it live (screen on/off), while warming only the map tiles made
   no measurable difference. On a ride the saved energy is small next to the
@@ -271,8 +278,9 @@ fix pipeline and asserts arrival with turn announcements.
   next-turn popup, the per-second notification (battery savers) and audio
   ducking; set the **turn-beep** and **navigation-voice** volumes (0 = off);
   toggle the **Prepare routes offline** prompt; manage downloaded offline map
-  packs (delete one or all) and clear all route preview caches; manage your saved
-  routes; start a **ghost ride**; and reach the app-version/about section plus
+  packs (delete one or all, total vs cap, expired flags) and clear all route
+  preview caches; set the offline theme default, storage cap and pack expiry;
+  manage your saved routes; start a **ghost ride**; and reach the app-version/about section plus
   the **Open-source licenses** viewer.
 
 ### 4. Golden screenshot verification (hacker option)

@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
@@ -19,11 +21,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,8 +35,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
+import com.crazycapy.randonneur.cache.OfflineThemeMode
 import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.radar.RadarClient
 import com.crazycapy.randonneur.state.RideStore
@@ -141,6 +147,43 @@ internal fun SettingsDialog(
                         }
                     }
                 }
+                Column(Modifier.fillMaxWidth()) {
+                    Text("Offline map theme", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Default for “also prepare the other theme” in the prepare dialog",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Row {
+                        OfflineThemeMode.values().forEach { option ->
+                            TextButton(onClick = {
+                                RideStore.offlineThemeMode = option
+                                RouteStore.saveSettings(context)
+                            }) {
+                                Text(
+                                    when (option) {
+                                        OfflineThemeMode.OFF -> "Off"
+                                        OfflineThemeMode.ALWAYS -> "Always"
+                                        OfflineThemeMode.ASK -> "Ask"
+                                    } + if (RideStore.offlineThemeMode == option) " ✓" else "",
+                                )
+                            }
+                        }
+                    }
+                }
+                SettingNumberField(
+                    title = "Offline storage cap",
+                    subtitle = "Map-pack budget in MB · 0 = unlimited",
+                    value = RideStore.offlineStorageCapMb,
+                    suffix = "MB",
+                    onValueChange = { RideStore.offlineStorageCapMb = it; RouteStore.saveSettings(context) },
+                )
+                SettingNumberField(
+                    title = "Offline pack expiry",
+                    subtitle = "Flag packs older than this many days · 0 = never",
+                    value = RideStore.offlineExpiryDays,
+                    suffix = "days",
+                    onValueChange = { RideStore.offlineExpiryDays = it; RouteStore.saveSettings(context) },
+                )
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Offline map packs", style = MaterialTheme.typography.bodyMedium)
@@ -245,6 +288,42 @@ internal fun SettingsDialog(
             TextButton(onClick = onDismiss) { Text("Close") }
         },
     )
+}
+
+@Composable
+private fun SettingNumberField(
+    title: String,
+    subtitle: String,
+    value: Int,
+    suffix: String,
+    onValueChange: (Int) -> Unit,
+) {
+    var text by remember { mutableStateOf(value.toString()) }
+    LaunchedEffect(value) {
+        if (text.toIntOrNull() != value) text = value.toString()
+    }
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall)
+        }
+        OutlinedTextField(
+            value = text,
+            onValueChange = { raw ->
+                val digits = raw.filter { it.isDigit() }.take(6)
+                text = digits
+                digits.toIntOrNull()?.let(onValueChange)
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.width(88.dp),
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(suffix, style = MaterialTheme.typography.bodySmall)
+    }
 }
 
 @Composable

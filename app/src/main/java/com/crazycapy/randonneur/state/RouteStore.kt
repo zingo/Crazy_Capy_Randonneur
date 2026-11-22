@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
+import com.crazycapy.randonneur.cache.OfflineThemeMode
 import com.crazycapy.randonneur.gpx.GpxParser
 import com.crazycapy.randonneur.gpx.GpxWriter
 import com.crazycapy.randonneur.gpx.Track
@@ -175,6 +176,14 @@ object RouteStore {
                 RideStore.offlineDetailStrategy = it
             }
         }
+        map["offlineThemes"]?.let { value ->
+            OfflineThemeMode.values().firstOrNull { it.name == value }?.let {
+                RideStore.offlineThemeMode = it
+            }
+        }
+        map["offlinePrepareBothThemes"]?.toBooleanStrictOrNull()?.let { RideStore.offlinePrepareBothThemes = it }
+        map["offlineStorageCapMb"]?.toIntOrNull()?.takeIf { it >= 0 }?.let { RideStore.offlineStorageCapMb = it }
+        map["offlineExpiryDays"]?.toIntOrNull()?.takeIf { it >= 0 }?.let { RideStore.offlineExpiryDays = it }
         map["ghostTimeScale"]?.toDoubleOrNull()?.let { RideStore.ghostTimeScale = it }
         map["ghostSpeedKmh"]?.toDoubleOrNull()?.let { RideStore.ghostSpeedKmh = it }
         map["radarSim"]?.toBooleanStrictOrNull()?.let { RideStore.radarSimEnabled = it }
@@ -194,6 +203,10 @@ object RouteStore {
             "darkMap=${RideStore.darkMap}",
             "precacheEnabled=${RideStore.precacheEnabled}",
             "offlineDetail=${RideStore.offlineDetailStrategy.name}",
+            "offlineThemes=${RideStore.offlineThemeMode.name}",
+            "offlinePrepareBothThemes=${RideStore.offlinePrepareBothThemes}",
+            "offlineStorageCapMb=${RideStore.offlineStorageCapMb}",
+            "offlineExpiryDays=${RideStore.offlineExpiryDays}",
             "ghostTimeScale=${RideStore.ghostTimeScale}",
             "ghostSpeedKmh=${RideStore.ghostSpeedKmh}",
             "radarSim=${RideStore.radarSimEnabled}",

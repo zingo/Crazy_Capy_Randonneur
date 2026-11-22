@@ -25,6 +25,7 @@ data class PrepareState(
     val cancelled: Boolean = false,
     val previewsStatus: String? = null,
     val strategy: OfflineDetailStrategy = OfflineDetailStrategy.STANDARD,
+    val bothThemes: Boolean = false,
 )
 
 object RoutePrepare {
@@ -38,9 +39,10 @@ object RoutePrepare {
         context: Context,
         track: Track,
         strategy: OfflineDetailStrategy = RideStore.offlineDetailStrategy,
+        bothThemes: Boolean = false,
     ) {
         val routeId = RouteStore.routeId(track.name)
-        if (state.running && state.routeId == routeId && state.strategy == strategy) return
+        if (state.running && state.routeId == routeId && state.strategy == strategy && state.bothThemes == bothThemes) return
         if (state.running) cancel()
         val appContext = context.applicationContext
         generation++
@@ -51,14 +53,15 @@ object RoutePrepare {
             running = true,
             phase = PreparePhase.MAP,
             strategy = strategy,
+            bothThemes = bothThemes,
         )
-        RouteOfflinePack.findComplete(appContext, track, strategy) { lookup ->
+        RouteOfflinePack.findComplete(appContext, track, strategy, bothThemes) { lookup ->
             if (gen != generation) return@findComplete
             if (lookup.complete) {
                 state = state.copy(mapSkipped = true)
                 startPreviews(appContext, track, gen)
             } else {
-                RouteOfflinePack.start(appContext, track, strategy) {
+                RouteOfflinePack.start(appContext, track, strategy, bothThemes) {
                     if (gen == generation) startPreviews(appContext, track, gen)
                 }
             }

@@ -38,6 +38,9 @@ data class OfflinePackState(
     val percent: Float? = null,
     val regionId: Long? = null,
     val strategy: OfflineDetailStrategy = OfflineDetailStrategy.STANDARD,
+    val theme: String = "",
+    val themeIndex: Int = 0,
+    val themeCount: Int = 0,
     val segmentIndex: Int = 0,
     val segmentCount: Int = 0,
     val completedSegments: Int = 0,
@@ -83,6 +86,13 @@ object RouteOfflinePack {
 
     private fun currentStyle(): String = if (RideStore.darkMap) STYLE_DARK else STYLE_LIGHT
 
+    private fun stylesFor(bothThemes: Boolean): List<String> {
+        val current = currentStyle()
+        if (!bothThemes) return listOf(current)
+        val other = if (current == STYLE_DARK) STYLE_LIGHT else STYLE_DARK
+        return listOf(current, other)
+    }
+
     private fun legacyNameOf(region: OfflineRegion): String? =
         region.metadata?.toString(Charsets.UTF_8)?.trim()?.takeIf { it.isNotEmpty() && !it.startsWith("{") }
 
@@ -90,23 +100,58 @@ object RouteOfflinePack {
         context: Context,
         track: Track,
         strategy: OfflineDetailStrategy = OfflineDetailStrategy.STANDARD,
+        bothThemes: Boolean = false,
         onDone: (() -> Unit)? = null,
     ) {
         val appContext = context.applicationContext
         generation++
         val gen = generation
         releasePartialRegions(delete = true)
-        state = OfflinePackState(routeName = track.name, running = true, strategy = strategy)
-
         val specs = OfflineSegments.regionSpecs(track, strategy)
-        val styleUrl = currentStyle()
+        val styles = stylesFor(bothThemes)
         val routeId = RouteStore.routeId(track.name)
         val trackHash = TrackHash.of(track)
+        state = OfflinePackState(
+            routeName = track.name,
+            running = true,
+            strategy = strategy,
+            theme = themeFor(styles.first()),
+            themeCount = styles.size,
+            themeIndex = 1,
+            segmentCount = specs.size * styles.size,
+        )
 
         MapLibre.getInstance(appContext)
-        Log.i(LOG_TAG, "start route=${track.name} strategy=${strategy.name} segments=${specs.size} style=$styleUrl")
+        Log.i(
+            LOG_TAG,
+            "start route=${track.name} strategy=${strategy.name} segments=${specs.size} themes=${styles.joinToString(",")}",
+        )
+        planStyle(appContext, track, routeId, trackHash, strategy, specs, styles, 0, 0L, 0, gen, onDone)
+    }
+
+    private fun planStyle(
+        context: Context,
+        track: Track,
+        routeId: String,
+        trackHash: String,
+        strategy: OfflineDetailStrategy,
+        specs: List<OfflineRegionSpec>,
+        styles: List<String>,
+        stylePos: Int,
+        baseBytes: Long,
+        baseCompleted: Int,
+        gen: Long,
+        onDone: (() -> Unit)?,
+    ) {
+        if (gen != generation) return
+        if (stylePos >= styles.size) {
+            completeRun(baseBytes, gen, onDone)
+            return
+        }
+        val styleUrl = styles[stylePos]
+        val theme = themeFor(styleUrl)
         try {
-            OfflineManager.getInstance(appContext).listOfflineRegions(
+            OfflineManager.getInstance(context).listOfflineRegions(
                 object : OfflineManager.ListOfflineRegionsCallback {
                     override fun onList(regions: Array<OfflineRegion>?) {
                         if (gen != generation) return
@@ -121,29 +166,31 @@ object RouteOfflinePack {
                         ) { plan ->
                             if (gen != generation) return@planExisting
                             if (plan.staleRegionIds.isNotEmpty()) {
-                                deleteRegionsById(appContext, plan.staleRegionIds)
+                                deleteRegionsById(context, plan.staleRegionIds)
                             }
                             state = state.copy(
-                                segmentCount = specs.size,
-                                completedSegments = plan.reusedCount,
-                                completedBytes = plan.reusedBytes,
+                                theme = theme,
+                                themeCount = styles.size,
+                                themeIndex = stylePos + 1,
+                                segmentCount = specs.size * styles.size,
+                                completedSegments = baseCompleted + plan.reusedCount,
+                                completedBytes = baseBytes + plan.reusedBytes,
                             )
                             if (plan.missing.isEmpty()) {
-                                completeRun(plan.reusedBytes, gen, onDone)
-                            } else {
-                                downloadNext(
-                                    appContext,
-                                    track,
-                                    styleUrl,
-                                    routeId,
-                                    trackHash,
-                                    strategy,
-                                    plan.missing,
-                                    0,
-                                    plan.reusedCount,
-                                    plan.reusedBytes,
+                                planStyle(
+                                    context, track, routeId, trackHash, strategy, specs, styles,
+                                    stylePos + 1,
+                                    baseBytes + plan.reusedBytes,
+                                    (stylePos + 1) * specs.size,
                                     gen,
                                     onDone,
+                                )
+                            } else {
+                                downloadNext(
+                                    context, track, styleUrl, routeId, trackHash, strategy, specs, styles,
+                                    stylePos, plan.missing, 0,
+                                    baseBytes, plan.reusedBytes, plan.reusedCount, 0L,
+                                    gen, onDone,
                                 )
                             }
                         }
@@ -168,44 +215,81 @@ object RouteOfflinePack {
         context: Context,
         track: Track,
         strategy: OfflineDetailStrategy = OfflineDetailStrategy.STANDARD,
+        bothThemes: Boolean = false,
         onResult: (PackLookup) -> Unit,
     ) {
         val appContext = context.applicationContext
         val routeId = RouteStore.routeId(track.name)
         val trackHash = TrackHash.of(track)
-        val desiredStyle = currentStyle()
         val specs = OfflineSegments.regionSpecs(track, strategy)
+        val styles = stylesFor(bothThemes)
         MapLibre.getInstance(appContext)
+        checkStyles(
+            appContext,
+            track.name,
+            routeId,
+            trackHash,
+            strategy,
+            specs,
+            styles,
+            0,
+            HashSet(),
+            onResult,
+        )
+    }
+
+    private fun checkStyles(
+        context: Context,
+        trackName: String,
+        routeId: String,
+        trackHash: String,
+        strategy: OfflineDetailStrategy,
+        specs: List<OfflineRegionSpec>,
+        styles: List<String>,
+        stylePos: Int,
+        stale: MutableSet<Long>,
+        onResult: (PackLookup) -> Unit,
+    ) {
+        if (stylePos >= styles.size) {
+            if (stale.isNotEmpty()) deleteRegionsById(context, stale)
+            onResult(PackLookup(true, stale.toList()))
+            return
+        }
+        val desiredStyle = styles[stylePos]
         try {
-            OfflineManager.getInstance(appContext).listOfflineRegions(
+            OfflineManager.getInstance(context).listOfflineRegions(
                 object : OfflineManager.ListOfflineRegionsCallback {
                     override fun onList(regions: Array<OfflineRegion>?) {
                         planExisting(
                             regions.orEmpty().toList(),
-                            track.name,
+                            trackName,
                             routeId,
                             trackHash,
                             desiredStyle,
                             strategy,
                             specs,
                         ) { plan ->
-                            val complete = plan.missing.isEmpty()
-                            if (complete && plan.staleRegionIds.isNotEmpty()) {
-                                deleteRegionsById(appContext, plan.staleRegionIds)
+                            stale.addAll(plan.staleRegionIds)
+                            if (plan.missing.isNotEmpty()) {
+                                onResult(PackLookup(false, stale.toList()))
+                            } else {
+                                checkStyles(
+                                    context, trackName, routeId, trackHash, strategy, specs, styles,
+                                    stylePos + 1, stale, onResult,
+                                )
                             }
-                            onResult(PackLookup(complete, plan.staleRegionIds.toList()))
                         }
                     }
 
                     override fun onError(message: String) {
                         Log.w(LOG_TAG, "list failed: $message")
-                        onResult(PackLookup(false))
+                        onResult(PackLookup(false, stale.toList()))
                     }
                 },
             )
         } catch (e: Exception) {
             Log.e(LOG_TAG, "list failed", e)
-            onResult(PackLookup(false))
+            onResult(PackLookup(false, stale.toList()))
         }
     }
 
@@ -260,8 +344,36 @@ object RouteOfflinePack {
         }
     }
 
-    fun deletePacks(context: Context, ids: Collection<Long>?, onDone: () -> Unit) {
+    fun totalBytes(context: Context, onResult: (Long) -> Unit) {
+        listPacks(context) { packs -> onResult(packs.sumOf { it.bytes ?: it.completedBytes }) }
+    }
+
+    fun deleteRoute(context: Context, routeId: String, onDone: () -> Unit) {
         val appContext = context.applicationContext
+        MapLibre.getInstance(appContext)
+        try {
+            OfflineManager.getInstance(appContext).listOfflineRegions(
+                object : OfflineManager.ListOfflineRegionsCallback {
+                    override fun onList(regions: Array<OfflineRegion>?) {
+                        val targets = regions.orEmpty().filter {
+                            OfflinePackMetadata.parse(it.metadata)?.routeId == routeId
+                        }
+                        deleteRegions(targets, onDone)
+                    }
+
+                    override fun onError(message: String) {
+                        Log.w(LOG_TAG, "delete route list failed: $message")
+                        onDone()
+                    }
+                },
+            )
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "delete route failed", e)
+            onDone()
+        }
+    }
+
+    fun deletePacks(context: Context, ids: Collection<Long>?, onDone: () -> Unit) {        val appContext = context.applicationContext
         MapLibre.getInstance(appContext)
         try {
             OfflineManager.getInstance(appContext).listOfflineRegions(
@@ -393,19 +505,34 @@ object RouteOfflinePack {
         routeId: String,
         trackHash: String,
         strategy: OfflineDetailStrategy,
+        specs: List<OfflineRegionSpec>,
+        styles: List<String>,
+        stylePos: Int,
         missing: List<OfflineRegionSpec>,
         pos: Int,
-        reusedCount: Int,
         baseBytes: Long,
+        styleReusedBytes: Long,
+        styleReusedCount: Int,
+        styleDownloadedBytes: Long,
         gen: Long,
         onDone: (() -> Unit)?,
     ) {
         if (gen != generation) return
         if (pos >= missing.size) {
-            completeRun(baseBytes, gen, onDone)
+            planStyle(
+                context, track, routeId, trackHash, strategy, specs, styles,
+                stylePos + 1,
+                baseBytes + styleReusedBytes + styleDownloadedBytes,
+                (stylePos + 1) * specs.size,
+                gen,
+                onDone,
+            )
             return
         }
         val spec = missing[pos]
+        val totalSegments = specs.size * styles.size
+        val segmentOffset = stylePos * specs.size
+        val styleBaseBytes = baseBytes + styleReusedBytes
         val bounds = LatLngBounds.Builder()
             .include(LatLng(spec.box.south, spec.box.west))
             .include(LatLng(spec.box.north, spec.box.east))
@@ -435,17 +562,20 @@ object RouteOfflinePack {
             done = false,
             cancelled = false,
             percent = null,
-            completedBytes = baseBytes,
+            completedBytes = styleBaseBytes + styleDownloadedBytes,
             completedResources = 0L,
             requiredResources = 0L,
             strategy = strategy,
-            segmentIndex = spec.index + 1,
-            segmentCount = spec.count,
-            completedSegments = reusedCount + pos,
+            theme = themeFor(styleUrl),
+            themeCount = styles.size,
+            themeIndex = stylePos + 1,
+            segmentIndex = segmentOffset + spec.index + 1,
+            segmentCount = totalSegments,
+            completedSegments = segmentOffset + styleReusedCount + pos,
         )
         Log.i(
             LOG_TAG,
-            "create segment ${spec.index + 1}/${spec.count} route=${track.name} zoom=${spec.minZoom}-${spec.maxZoom} bounds=${spec.box}",
+            "create segment ${spec.index + 1}/${spec.count} theme=${themeFor(styleUrl)} route=${track.name} zoom=${spec.minZoom}-${spec.maxZoom} bounds=${spec.box}",
         )
         try {
             OfflineManager.getInstance(context).createOfflineRegion(
@@ -480,7 +610,7 @@ object RouteOfflinePack {
                                 state = state.copy(
                                     running = !status.isComplete,
                                     error = if (status.isComplete) null else state.error,
-                                    completedBytes = baseBytes + status.completedResourceSize,
+                                    completedBytes = styleBaseBytes + styleDownloadedBytes + status.completedResourceSize,
                                     completedResources = status.completedResourceCount,
                                     requiredResources = required,
                                     percent = percent,
@@ -500,14 +630,15 @@ object RouteOfflinePack {
                                     offlineRegion.setDownloadState(OfflineRegion.STATE_INACTIVE)
                                     runRegions.remove(offlineRegion.id)
                                     if (region === offlineRegion) region = null
-                                    val nextBase = baseBytes + status.completedResourceSize
+                                    val nextDownloaded = styleDownloadedBytes + status.completedResourceSize
                                     Log.i(
                                         LOG_TAG,
                                         "complete segment=${spec.index + 1}/${spec.count} region=${offlineRegion.id} bytes=${status.completedResourceSize}",
                                     )
                                     state = state.copy(
-                                        completedSegments = (reusedCount + pos + 1).coerceAtMost(spec.count),
-                                        completedBytes = nextBase,
+                                        completedSegments = (segmentOffset + styleReusedCount + pos + 1)
+                                            .coerceAtMost(totalSegments),
+                                        completedBytes = styleBaseBytes + nextDownloaded,
                                         percent = 1f,
                                     )
                                     downloadNext(
@@ -517,10 +648,15 @@ object RouteOfflinePack {
                                         routeId,
                                         trackHash,
                                         strategy,
+                                        specs,
+                                        styles,
+                                        stylePos,
                                         missing,
                                         pos + 1,
-                                        reusedCount,
-                                        nextBase,
+                                        baseBytes,
+                                        styleReusedBytes,
+                                        styleReusedCount,
+                                        nextDownloaded,
                                         gen,
                                         onDone,
                                     )
@@ -572,6 +708,7 @@ object RouteOfflinePack {
             completedBytes = bytes,
             completedSegments = state.segmentCount,
             segmentIndex = state.segmentCount,
+            themeIndex = state.themeCount,
             percent = 1f,
         )
         onDone?.invoke()

@@ -34,9 +34,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
+import com.crazycapy.randonneur.cache.OfflineLimits
 import com.crazycapy.randonneur.cache.OfflinePackInfo
 import com.crazycapy.randonneur.cache.OfflinePackStatus
 import com.crazycapy.randonneur.cache.RouteOfflinePack
+import com.crazycapy.randonneur.state.RideStore
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -58,8 +60,10 @@ internal fun OfflinePacksDialog(
         }
     }
 
-    val groups = packs?.let { groupPacks(it) }
+    val groups = packs?.let { groupPacks(it, System.currentTimeMillis(), RideStore.offlineExpiryDays) }
     val totalBytes = groups?.sumOf { it.bytes } ?: 0L
+    val capBytes = OfflineLimits.capBytes(RideStore.offlineStorageCapMb)
+    val expiredGroups = groups?.filter { it.expired }.orEmpty()
     AlertDialog(
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text("Offline map packs") },
@@ -74,9 +78,29 @@ internal fun OfflinePacksDialog(
                     )
                 } else {
                     Text(
-                        "${groups.size} route${if (groups.size == 1) "" else "s"} · ${formatBytes(totalBytes)}",
+                        "${groups.size} group${if (groups.size == 1) "" else "s"} · ${formatBytes(totalBytes)} of " +
+                            (capBytes?.let { "${formatBytes(it)} cap" } ?: "unlimited"),
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    if (expiredGroups.isNotEmpty()) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "${expiredGroups.size} expired",
+                                Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            TextButton(
+                                enabled = !busy,
+                                onClick = {
+                                    busy = true
+                                    RouteOfflinePack.deletePacks(context, expiredGroups.flatMap { it.ids }) {
+                                        refresh++
+                                    }
+                                },
+                            ) { Text("Delete expired") }
+                        }
+                    }
                     Spacer(Modifier.height(8.dp))
                     groups.forEach { pack ->
                         Row(
@@ -91,8 +115,11 @@ internal fun OfflinePacksDialog(
                                     maxLines = 1,
                                 )
                                 Text(
-                                    "${pack.segments} segment${if (pack.segments == 1) "" else "s"} · ${formatBytes(pack.bytes)} · ${formatDate(pack.createdAt)} · ${statusText(pack.status)}",
+                                    "${pack.segments} segment${if (pack.segments == 1) "" else "s"} · ${formatBytes(pack.bytes)} · " +
+                                        "${formatDate(pack.createdAt)} · ${ageText(pack.ageDays)} · ${statusText(pack.status)}" +
+                                        if (pack.expired) " · EXPIRED" else "",
                                     style = MaterialTheme.typography.bodySmall,
+                                    color = if (pack.expired) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                                 )
                             }
                             Spacer(Modifier.width(4.dp))
@@ -147,17 +174,23 @@ private data class PackGroup(
     val segments: Int,
     val bytes: Long,
     val createdAt: Long?,
+    val ageDays: Long?,
+    val expired: Boolean,
     val status: OfflinePackStatus,
     val ids: List<Long>,
 )
 
-private fun groupPacks(packs: List<OfflinePackInfo>): List<PackGroup> =
+private fun groupPacks(
+    packs: List<OfflinePackInfo>,
+    nowMs: Long,
+    expiryDays: Int,
+): List<PackGroup> =
     packs.groupBy { pack ->
         val routeId = pack.routeId
         if (routeId == null) {
             "legacy:${pack.id}"
         } else {
-            "$routeId|${pack.trackHash}|${pack.strategy.name}|${pack.style}"
+            "$routeId|${pack.trackHash}|${pack.strategy.name}|${pack.style}|${pack.theme}"
         }
     }.values.map { group ->
         val first = group.first()
@@ -166,6 +199,7 @@ private fun groupPacks(packs: List<OfflinePackInfo>): List<PackGroup> =
             group.any { it.status == OfflinePackStatus.DOWNLOADING } -> OfflinePackStatus.DOWNLOADING
             else -> OfflinePackStatus.INCOMPLETE
         }
+        val createdAt = group.maxOfOrNull { it.createdAt ?: 0L }?.takeIf { it > 0L }
         PackGroup(
             name = first.routeName,
             strategy = first.strategy,
@@ -173,7 +207,9 @@ private fun groupPacks(packs: List<OfflinePackInfo>): List<PackGroup> =
             theme = first.theme,
             segments = group.size,
             bytes = group.sumOf { it.bytes ?: it.completedBytes },
-            createdAt = group.maxOfOrNull { it.createdAt ?: 0L }?.takeIf { it > 0L },
+            createdAt = createdAt,
+            ageDays = OfflineLimits.ageDays(createdAt, nowMs),
+            expired = OfflineLimits.isExpired(createdAt, expiryDays, nowMs),
             status = status,
             ids = group.map { it.id },
         )
@@ -203,4 +239,10 @@ private fun formatBytes(bytes: Long?): String {
 private fun formatDate(createdAt: Long?): String {
     if (createdAt == null) return "—"
     return SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(createdAt))
+}
+
+private fun ageText(ageDays: Long?): String = when {
+    ageDays == null -> "age unknown"
+    ageDays == 0L -> "today"
+    else -> "$ageDays day${if (ageDays == 1L) "" else "s"} old"
 }
