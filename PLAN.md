@@ -199,6 +199,17 @@ CrazyCapyRouting/
   and style, showing segment count and summed bytes. Segmentation and turn-box
   math are pure Kotlin with unit tests; legacy metadata-less packs still list
   and delete.
+- **Background prepare, pause and resume**: preparation is hosted by a
+  `dataSync` foreground service, so closing the prepare dialog or leaving the
+  app does not cancel it. A low-importance "Offline preparation" notification
+  shows the current phase and progress and offers Pause/Resume and Cancel;
+  pause stops the active MapLibre segment and preview renderer without deleting
+  completed work, and Resume reuses finished segments, deletes/re-fetches the
+  interrupted one, and skips cached previews. Cancel keeps the existing
+  semantics (stop and delete partial map regions). The dialog reflects
+  paused/background progress and closing it only hides it. Phase/percent
+  formatting and pause/resume/cancel transitions are pure Kotlin with unit
+  tests.
 - **Both map themes, size estimate and limits**: the prepare dialog can also
   download the other map theme (last choice remembered; Settings → Offline map
   theme offers Off/Always/Ask). Each theme creates its own metadata-tagged

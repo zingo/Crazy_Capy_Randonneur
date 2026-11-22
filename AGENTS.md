@@ -17,7 +17,8 @@ navigator for Android 13+ (API 33). No Play Services, no accounts, no cloud.
     (pure Kotlin, unit-tested; no Android deps)
   - `voice` — spoken phrases (`Phrases`, `TurnSummary`), beeps (`BeepPlanner`)
   - `service` — foreground `NavigationService`: GPS, ghost-ride driver, TTS,
-    beeps, wake lock, living notification
+    beeps, wake lock, living notification; `PrepareService`: background offline
+    preparation with pause/resume/cancel
   - `state` — `RideStore` (shared app state), `RouteStore` (on-device route
     library + settings/last-ride persistence)
   - `sim` — ghost ride simulator
@@ -70,7 +71,7 @@ notification changed.
 
 Before opening a PR, verify behavior on the emulator; use a physical device
 (T20Mini/phone) when emulator limits matter (BLE/radio, real GPS, hardware) or
-when a spot-check is really needed. Put the evidence in the PR description. Currently 129 unit tests + 4 instrumented ghost-ride tests.
+when a spot-check is really needed. Put the evidence in the PR description. Currently 159 unit tests + 4 instrumented ghost-ride tests.
 
 Device test notes:
 - The phone's notification is blocked at OS level (`dumpsys notification` shows
@@ -160,7 +161,7 @@ Device test notes:
   `navVolume` (0 = off), persisted by `RouteStore`.
 - Settings UI lives in `MainActivity.kt` (dialogs); new settings need a
   `RideStore` field + a `RouteStore` save/load key.
-- Tests: JUnit for JVM unit tests (currently 129), instrumented ghost-ride tests in
+- Tests: JUnit for JVM unit tests (currently 159), instrumented ghost-ride tests in
   `app/src/androidTest`.
 
 ## User shorthand

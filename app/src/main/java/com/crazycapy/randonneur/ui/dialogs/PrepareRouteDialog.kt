@@ -4,6 +4,10 @@
  */
 package com.crazycapy.randonneur.ui.dialogs
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.crazycapy.randonneur.cache.OfflineCapDecision
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.OfflineEstimateCalculator
@@ -33,6 +38,7 @@ import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.cache.RouteOfflinePack
 import com.crazycapy.randonneur.cache.RoutePrepare
 import com.crazycapy.randonneur.gpx.Track
+import com.crazycapy.randonneur.service.PrepareService
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
 
@@ -52,7 +58,11 @@ internal fun PrepareRouteDialog(
         OfflineEstimateCalculator.estimate(track, strategy, if (alsoOther) 2 else 1)
     }
     val state = RoutePrepare.state
-    val showProgress = started || (state.running && state.routeId == routeId)
+    val showProgress = started || ((state.running || state.paused) && state.routeId == routeId)
+
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {}
 
     val map = RouteOfflinePack.state
     val previewStatus = RouteCache.status
@@ -62,12 +72,17 @@ internal fun PrepareRouteDialog(
         RideStore.offlineDetailStrategy = strategy
         RideStore.offlinePrepareBothThemes = alsoOther
         RouteStore.saveSettings(context)
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         started = true
-        RoutePrepare.start(context, track, strategy, alsoOther)
+        PrepareService.start(context, track, strategy, alsoOther)
     }
 
     AlertDialog(
-        onDismissRequest = { if (!state.running) onDismiss() },
+        onDismissRequest = onDismiss,
         title = { Text("Prepare route offline") },
         text = {
             Column {
@@ -109,12 +124,17 @@ internal fun PrepareRouteDialog(
                         Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                     }
                 } else {
+                    if (state.paused) {
+                        Text("Paused — preparation resumes where it left off.", style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.height(8.dp))
+                    }
                     Text("1/2 · Map tiles", style = MaterialTheme.typography.titleSmall)
                     Spacer(Modifier.height(4.dp))
                     if (state.mapSkipped) {
                         Text("Already downloaded ✓", style = MaterialTheme.typography.bodySmall)
                     } else {
                         when {
+                            state.paused -> Text("Paused.", style = MaterialTheme.typography.bodySmall)
                             map.running -> {
                                 if (map.percent != null) {
                                     LinearProgressIndicator(
@@ -157,6 +177,7 @@ internal fun PrepareRouteDialog(
                     when {
                         state.previewsSkipped -> Text("Already cached ✓", style = MaterialTheme.typography.bodySmall)
                         state.phase == PreparePhase.MAP -> Text("Waiting for map tiles…", style = MaterialTheme.typography.bodySmall)
+                        state.paused -> Text("Paused.", style = MaterialTheme.typography.bodySmall)
                         else -> {
                             if (state.running && previewProgress != null) {
                                 LinearProgressIndicator(
@@ -191,7 +212,11 @@ internal fun PrepareRouteDialog(
         },
         confirmButton = {
             when {
-                state.running && showProgress -> TextButton(onClick = { RoutePrepare.cancel() }) { Text("Cancel") }
+                showProgress && (state.running || state.paused) -> TextButton(
+                    onClick = {
+                        if (state.paused) RoutePrepare.resume(context) else RoutePrepare.pause()
+                    },
+                ) { Text(if (state.paused) "Resume" else "Pause") }
                 !showProgress -> TextButton(
                     enabled = !checkingCap,
                     onClick = {
@@ -215,6 +240,11 @@ internal fun PrepareRouteDialog(
                     },
                 ) { Text(if (checkingCap) "Checking…" else "Start") }
                 else -> TextButton(onClick = onDismiss) { Text("Close") }
+            }
+        },
+        dismissButton = {
+            if (showProgress && (state.running || state.paused)) {
+                TextButton(onClick = { RoutePrepare.cancel() }) { Text("Cancel") }
             }
         },
     )
