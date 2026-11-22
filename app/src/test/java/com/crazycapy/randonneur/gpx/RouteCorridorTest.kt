@@ -45,4 +45,21 @@ class RouteCorridorTest {
         val north = RouteCorridor.around(track(60.0 to 0.0, 60.0 to 1.0), 1500.0)
         assertTrue(north.east - north.west > equator.east - equator.west)
     }
+
+    @Test
+    fun sampleDistancesCoverTheWholeRouteInOneRun() {
+        val distances = RouteCorridor.sampleDistances(250_000.0, 1000.0)
+        assertEquals(250, distances.size)
+        assertEquals(0.0, distances.first(), 0.0)
+        assertEquals(249_000.0, distances.last(), 0.0)
+        assertTrue(distances.size > 90)
+    }
+
+    @Test
+    fun sampleDistancesHandleEmptyAndShortRoutes() {
+        assertTrue(RouteCorridor.sampleDistances(0.0, 1000.0).isEmpty())
+        assertTrue(RouteCorridor.sampleDistances(500.0, 1000.0).isEmpty().not())
+        assertEquals(listOf(0.0), RouteCorridor.sampleDistances(500.0, 1000.0))
+        assertTrue(RouteCorridor.sampleDistances(1000.0, 0.0).isEmpty())
+    }
 }

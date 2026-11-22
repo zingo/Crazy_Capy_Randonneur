@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.CACHED_IMG_PX
 import com.crazycapy.randonneur.STYLE_DARK
 import com.crazycapy.randonneur.STYLE_LIGHT
+import com.crazycapy.randonneur.gpx.RouteCorridor
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.nav.TurnFinder
 import com.crazycapy.randonneur.voice.Phrases
@@ -78,6 +79,9 @@ object RouteCache {
 
     private var cancelRequested = AtomicBoolean(false)
 
+    @Volatile
+    private var activeRenderer: ReusedSnapshotter? = null
+
     /** Bumped on every pre-cache start; guards a stale job's finally from
      *  clearing the shared status/progress/activeRouteId of a newer job. */
     private val jobGeneration = java.util.concurrent.atomic.AtomicLong(0)
@@ -94,6 +98,10 @@ object RouteCache {
 
     private fun anchorFile(context: Context, routeId: String, dark: Boolean, turnIndex: Int): File =
         File(routeDir(context, routeId), "turn-${if (dark) "dark" else "light"}-$turnIndex-anchors")
+
+    private fun isTurnCached(context: Context, routeId: String, dark: Boolean, turnIndex: Int): Boolean =
+        turnFile(context, routeId, dark, turnIndex).exists() &&
+            anchorFile(context, routeId, dark, turnIndex).exists()
 
     // ---- Lookup (HUD side) ----
 
@@ -121,10 +129,14 @@ object RouteCache {
         if (turns == 0) return true
         var cached = 0
         for (i in 0 until turns) {
-            if (turnFile(context, routeId, dark, i).exists()) cached++
+            if (isTurnCached(context, routeId, dark, i)) cached++
         }
         return cached == turns
     }
+
+    /** True when the route overview thumbnail has already been rendered. */
+    fun hasOverview(context: Context, routeId: String): Boolean =
+        overviewFile(context, routeId).exists()
 
     // ---- Sizing & cleanup (routes/settings UI) ----
 
@@ -153,6 +165,7 @@ object RouteCache {
     /** Cancel an in-flight pre-cache job (e.g. a ride just started). */
     fun cancel() {
         cancelRequested.set(true)
+        activeRenderer?.cancelPending()
     }
 
     /**
@@ -175,6 +188,7 @@ object RouteCache {
         thread.start()
         Handler(thread.looper).post {
             val renderer = ReusedSnapshotter(context)
+            activeRenderer = renderer
             try {
                 renderer.create()
                 val turns = TurnFinder.find(track)
@@ -192,7 +206,7 @@ object RouteCache {
                     val missed = ArrayList<Int>()
                     for ((i, turn) in turns.withIndex()) {
                         if (cancelRequested.get() || RideStore.active) break
-                        if (!turnFile(context, routeId, dark, i).exists()) {
+                        if (!isTurnCached(context, routeId, dark, i)) {
                             status = "Pre-caching ${track.name} · turn ${i + 1}/${turns.size} (${colorName(dark)})"
                             if (!renderAndStore(context, renderer, track, turn.distAlongM, dark, style, i, boundsForTurn(track, turn.distAlongM))) {
                                 missed.add(i)
@@ -215,10 +229,10 @@ object RouteCache {
                         "Pre-cached tiles ${track.name} ✓"
                     } else {
                         val missing = turns.indices.count { i ->
-                            !turnFile(context, routeId, false, i).exists() ||
-                                !turnFile(context, routeId, true, i).exists()
+                            !isTurnCached(context, routeId, false, i) ||
+                                !isTurnCached(context, routeId, true, i)
                         }
-                        if (missing == 0) {
+                        if (missing == 0 && overviewFile(context, routeId).exists()) {
                             "Pre-cached ${track.name} ✓"
                         } else {
                             val cached = turns.size - missing
@@ -233,6 +247,7 @@ object RouteCache {
                 }
             } finally {
                 renderer.dispose()
+                if (activeRenderer === renderer) activeRenderer = null
                 if (jobGeneration.get() == gen) {
                     progress = null
                     activeRouteId = null
@@ -291,9 +306,9 @@ object RouteCache {
     /** Cheap coast-to-coast snapshots along the route that only populate the shared tile cache. */
     private fun warmCorridor(renderer: ReusedSnapshotter, track: Track, style: String) {
         if (RideStore.active || cancelRequested.get()) return
-        var d = 0.0
-        var fired = 0
-        while (d < track.lengthMeters && fired < MAX_CORRIDOR && !cancelRequested.get() && !RideStore.active) {
+        val distances = RouteCorridor.sampleDistances(track.lengthMeters, CORRIDOR_STEP_M)
+        for ((fired, d) in distances.withIndex()) {
+            if (cancelRequested.get() || RideStore.active) break
             if (fired % 2 == 0) {
                 status = "Warming tiles ${Phrases.formatDistance(d)} of ${Phrases.formatDistance(track.lengthMeters)}"
             }
@@ -305,8 +320,6 @@ object RouteCache {
                 dd += 20.0
             }
             renderer.render(style, dark = false, builder.build(), CACHED_IMG_PX, CACHED_IMG_PX, 0, CORRIDOR_TIMEOUT_MS)
-            d += CORRIDOR_STEP_M
-            fired++
         }
     }
 
@@ -354,7 +367,6 @@ object RouteCache {
     private const val OVERVIEW_W = 240
     private const val OVERVIEW_H = 160
     private const val CORRIDOR_STEP_M = 1000.0
-    private const val MAX_CORRIDOR = 90
     private const val TURN_RENDER_TIMEOUT_MS = 90_000L
     private const val CORRIDOR_TIMEOUT_MS = 45_000L
 }
@@ -371,6 +383,7 @@ internal class ReusedSnapshotter(context: Context) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val gen = java.util.concurrent.atomic.AtomicInteger(0)
     private val targetDark = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val cancelCurrent = java.util.concurrent.atomic.AtomicBoolean(false)
     private var snap: MapSnapshotter? = null
     private var currentStyle: String? = null
     private var currentWidth = -1
@@ -456,14 +469,29 @@ internal class ReusedSnapshotter(context: Context) {
                 if (gen.get() == g) latch.countDown()
             }
         }
-        val ok = runCatching { latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS) }
-            .getOrDefault(false)
+        val deadlineNanos = System.nanoTime() + timeoutMs * 1_000_000L
+        var ok = false
+        while (System.nanoTime() < deadlineNanos) {
+            if (runCatching { latch.await(100, java.util.concurrent.TimeUnit.MILLISECONDS) }.getOrDefault(false)) {
+                ok = true
+                break
+            }
+            if (cancelCurrent.get()) break
+        }
         if (!ok) {
-            Log.w("RouteCache", "snapshot timed out after ${timeoutMs / 1000}s (${if (dark) "dark" else "light"})")
+            if (!cancelCurrent.get()) {
+                Log.w("RouteCache", "snapshot timed out after ${timeoutMs / 1000}s (${if (dark) "dark" else "light"})")
+            }
             mainHandler.post { runCatching { snap?.cancel() } }
             return null
         }
         return result
+    }
+
+    /** Abort a render that is currently waiting, without disposing the renderer. */
+    fun cancelPending() {
+        cancelCurrent.set(true)
+        mainHandler.post { runCatching { snap?.cancel() } }
     }
 
     /** Cancel the pending render and release the native side. */

@@ -70,7 +70,7 @@ notification changed.
 
 Before opening a PR, verify behavior on the emulator; use a physical device
 (T20Mini/phone) when emulator limits matter (BLE/radio, real GPS, hardware) or
-when a spot-check is really needed. Put the evidence in the PR description. Currently 119 unit tests + 4 instrumented ghost-ride tests.
+when a spot-check is really needed. Put the evidence in the PR description. Currently 124 unit tests + 4 instrumented ghost-ride tests.
 
 Device test notes:
 - The phone's notification is blocked at OS level (`dumpsys notification` shows
@@ -81,13 +81,13 @@ Device test notes:
   `adb -s emulator-5554 shell cmd connectivity set-package-networking-enabled
   false com.crazycapy.randonneur` (verify with `get-package-networking-enabled` →
   `:deny`). The emulator app data is root-readable, so clone the phone's routes +
-  pre-cache with `run-as`/`tar` to test offline navigation there.
+  prepare cache with `run-as`/`tar` to test offline navigation there.
 - The emulator's software GL renders `MapSnapshotter` unreliably (90 s snapshot
-  timeouts between successes), so full pre-cache runs belong on the phone; use the
+  timeouts between successes), so full prepare runs belong on the phone; use the
   emulator for offline rides and pure-logic verification.
-- Pre-cache is honest about partial runs: the dialog reports e.g. "Pre-cached
-  34/347 · rest on next load" when some turns were missed, and later loads resume
-  where they left off (skips existing files, retries the rest).
+- Prepare route offline is honest about partial runs: the dialog reports e.g.
+  "Pre-cached 34/347 · rest on next load" when some turns were missed, and later
+  runs resume where they left off (skips existing files, retries the rest).
 - Power measurement: an AVHzY/YK-Lab "Shizuku" USB power meter (Korona YK003C,
   `/dev/ttyACM0`) can log ~1 kHz V/A/W for comparing builds/settings/other apps;
   use `tools/avhzy-monitor.py` (`record` / `compare` / `windows` / `report` /
@@ -160,7 +160,7 @@ Device test notes:
   `navVolume` (0 = off), persisted by `RouteStore`.
 - Settings UI lives in `MainActivity.kt` (dialogs); new settings need a
   `RideStore` field + a `RouteStore` save/load key.
-- Tests: JUnit for JVM unit tests (currently 119), instrumented ghost-ride tests in
+- Tests: JUnit for JVM unit tests (currently 124), instrumented ghost-ride tests in
   `app/src/androidTest`.
 
 ## User shorthand

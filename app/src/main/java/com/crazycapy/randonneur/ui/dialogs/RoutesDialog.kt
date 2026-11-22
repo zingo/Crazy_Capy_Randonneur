@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import java.io.File
 import kotlin.math.roundToInt
 import com.crazycapy.randonneur.cache.RouteCache
+import com.crazycapy.randonneur.cache.RoutePrepare
 import com.crazycapy.randonneur.ui.helpers.copyToUri
 import com.crazycapy.randonneur.ui.helpers.shareGpx
 import com.crazycapy.randonneur.gpx.RwGpsParser
@@ -78,11 +79,12 @@ internal fun RoutesDialog(
     onDelete: (String) -> Unit,
     onImport: () -> Unit,
 ) {
-    val busyId = RouteCache.activeRouteId
+    val prepareState = RoutePrepare.state
+    val busyId = prepareState.takeIf { it.running }?.routeId ?: RouteCache.activeRouteId
     var showRwgps by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
     var renameTargetId by remember { mutableStateOf<String?>(null) }
-    var offlineTarget by remember { mutableStateOf<Track?>(null) }
+    var prepareTarget by remember { mutableStateOf<Track?>(null) }
     var exportTarget by remember { mutableStateOf<File?>(null) }
     val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gpx+xml")) { uri ->
         val f = exportTarget
@@ -132,7 +134,7 @@ internal fun RoutesDialog(
                             Spacer(Modifier.width(8.dp))
 
                             if (isBusy) {
-                                Text("caching…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                Text("preparing…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                             } else if (bytes > 0) {
                                 Text(
                                     "${bytes / 1024} kB",
@@ -145,9 +147,9 @@ internal fun RoutesDialog(
                                 OutlinedButton(
                                     onClick = {
                                         val t = RouteStore.loadTrack(context, route.id)
-                                        if (t != null) RouteCache.preCache(context, t)
+                                        if (t != null) prepareTarget = t
                                     },
-                                ) { Text("Cache") }
+                                ) { Text("Prepare") }
                             }
 
                             // Three-dot menu trigger
@@ -160,11 +162,12 @@ internal fun RoutesDialog(
                                 onDismissRequest = { showMenu = false },
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text(if (bytes > 0) "Re-cache" else "Cache") },
+                                    text = { Text("Prepare route offline") },
                                     onClick = {
                                         showMenu = false
-                                        val t = RouteStore.loadTrack(context, route.id)
-                                        if (t != null) RouteCache.preCache(context, t)
+                                        val t = RideStore.track?.takeIf { it.name == route.name }
+                                            ?: RouteStore.loadTrack(context, route.id)
+                                        if (t != null) prepareTarget = t
                                     },
                                 )
                                 if (bytes > 0) {
@@ -176,15 +179,6 @@ internal fun RoutesDialog(
                                         },
                                     )
                                 }
-                                DropdownMenuItem(
-                                    text = { Text("Download offline map") },
-                                    onClick = {
-                                        showMenu = false
-                                        val t = RideStore.track?.takeIf { it.name == route.name }
-                                            ?: RouteStore.loadTrack(context, route.id)
-                                        if (t != null) offlineTarget = t
-                                    },
-                                )
                                 RouteStore.fileFor(context, route.id)?.let { file ->
                                     DropdownMenuItem(
                                         text = { Text("Export GPX") },
@@ -260,10 +254,10 @@ internal fun RoutesDialog(
             )
         }
     }
-    offlineTarget?.let { target ->
-        OfflinePackDialog(
+    prepareTarget?.let { target ->
+        PrepareRouteDialog(
             track = target,
-            onDismiss = { offlineTarget = null },
+            onDismiss = { prepareTarget = null },
         )
     }
     if (showHistory) {
