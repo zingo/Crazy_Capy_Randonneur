@@ -17,21 +17,26 @@ your ears do the navigating — no accounts, no cloud, no ads.
 - **GPS cadence setting** – choose 5 s (power-save), 3 s (normal) or 1 s (precise). Also a steady fix interval (no Play Services
   fused location, no cloud round-trips) is plenty for turn-by-turn guidance.
 - **Prepare route offline** – one action per saved route (also offered when a
-  route loads) downloads a MapLibre offline pack for its corridor (1.5 km
-  either side, zoom 8–14) and then pre-renders every turn preview and corridor
-  tile it can in a single run, with a phase label, progress and cancel (map
-  first, so previews use the cached tiles). There is no artificial turn cap; it
-  skips phases that are already done, and if the preview pass is interrupted it
+  route loads) downloads MapLibre offline regions in ~10 km corridor segments
+  (1.5 km either side) and then pre-renders every turn preview and corridor tile
+  it can in a single run, with a phase label, progress and cancel (map first, so
+  previews use the cached tiles). Choose **Standard** (whole corridor at zoom
+  8–14) or **Turn-focused** (whole corridor at 8–12 plus high zoom 13–14 in 1 km
+  boxes around turns); the last choice is remembered and can be set under
+  **Settings → Offline map detail**. There is no artificial turn cap; it skips
+  phases that are already done, and if the preview pass is interrupted it
   reports how many turns were cached ("Pre-cached 34/347 · rest on next load")
   and resumes on the next run, skipping what's done. On the ride the HUD pops
   up instantly from those cached images with zero tile fetches — and no/less
-  live rendering, so your radio
-  stays quieter — and the map works without network. Packs are keyed by route,
-  geometry hash and map style, so re-preparing an edited route replaces its old
-  pack instead of stacking duplicates, and turn/overview previews are
-  invalidated when the route changes. **Settings → Offline map packs** lists
-  every downloaded region with theme/style, size, date and status, and can
-  delete one or all. In a controlled benchmark,
+  live rendering, so your radio stays quieter — and the map works without
+  network. Segments are keyed by route, geometry hash, map style, detail
+  strategy and segment number, so re-preparing reuses completed segments,
+  replaces stale or partial ones and removes cancelled partial segments while
+  leaving other routes and strategies intact; turn/overview previews are
+  invalidated when the route changes. **Settings → Offline map packs** groups a
+  route's segments into one entry with the segment count, summed size,
+  strategy, theme/style, date and status, and can delete a route's segments or
+  all packs. In a controlled benchmark,
   showing a pre-cached preview cost ~1.4–2.5× less energy and ~6–8× less CPU
   than rendering it live (screen on/off), while warming only the map tiles made
   no measurable difference. On a ride the saved energy is small next to the

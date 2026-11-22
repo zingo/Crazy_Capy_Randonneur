@@ -671,7 +671,7 @@ internal fun NavigationMapScreen(
         val previewsCached = RouteCache.isCached(context, routeId, t, false) &&
             RouteCache.isCached(context, routeId, t, true) &&
             RouteCache.hasOverview(context, routeId, t)
-        RouteOfflinePack.findComplete(context, t) { lookup ->
+        RouteOfflinePack.findComplete(context, t, RideStore.offlineDetailStrategy) { lookup ->
             if (RideStore.track?.name == t.name && (!lookup.complete || !previewsCached)) askPrepareFor = t
         }
     }

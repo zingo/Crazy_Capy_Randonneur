@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.radar.RadarClient
 import com.crazycapy.randonneur.state.RideStore
@@ -118,6 +119,28 @@ internal fun SettingsDialog(
                     title = "Prepare routes offline",
                     subtitle = "Ask to download map tiles and turn previews when a route loads",
                 )
+                Column(Modifier.fillMaxWidth()) {
+                    Text("Offline map detail", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Standard keeps the whole corridor at zoom 8–14; turn-focused saves space with low zoom between turns and high zoom near them",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Row {
+                        OfflineDetailStrategy.values().forEach { option ->
+                            TextButton(onClick = {
+                                RideStore.offlineDetailStrategy = option
+                                RouteStore.saveSettings(context)
+                            }) {
+                                Text(
+                                    when (option) {
+                                        OfflineDetailStrategy.STANDARD -> "Standard"
+                                        OfflineDetailStrategy.TURN_FOCUSED -> "Turn-focused"
+                                    } + if (RideStore.offlineDetailStrategy == option) " ✓" else "",
+                                )
+                            }
+                        }
+                    }
+                }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Offline map packs", style = MaterialTheme.typography.bodyMedium)

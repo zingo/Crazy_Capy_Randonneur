@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.gpx.Track
+import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
 
 enum class PreparePhase { MAP, PREVIEWS, DONE }
@@ -23,6 +24,7 @@ data class PrepareState(
     val done: Boolean = false,
     val cancelled: Boolean = false,
     val previewsStatus: String? = null,
+    val strategy: OfflineDetailStrategy = OfflineDetailStrategy.STANDARD,
 )
 
 object RoutePrepare {
@@ -32,9 +34,13 @@ object RoutePrepare {
 
     private var generation = 0L
 
-    fun start(context: Context, track: Track) {
+    fun start(
+        context: Context,
+        track: Track,
+        strategy: OfflineDetailStrategy = RideStore.offlineDetailStrategy,
+    ) {
         val routeId = RouteStore.routeId(track.name)
-        if (state.running && state.routeId == routeId) return
+        if (state.running && state.routeId == routeId && state.strategy == strategy) return
         if (state.running) cancel()
         val appContext = context.applicationContext
         generation++
@@ -44,14 +50,15 @@ object RoutePrepare {
             routeName = track.name,
             running = true,
             phase = PreparePhase.MAP,
+            strategy = strategy,
         )
-        RouteOfflinePack.findComplete(appContext, track) { lookup ->
+        RouteOfflinePack.findComplete(appContext, track, strategy) { lookup ->
             if (gen != generation) return@findComplete
             if (lookup.complete) {
                 state = state.copy(mapSkipped = true)
                 startPreviews(appContext, track, gen)
             } else {
-                RouteOfflinePack.start(appContext, track, lookup.staleRegionIds) {
+                RouteOfflinePack.start(appContext, track, strategy) {
                     if (gen == generation) startPreviews(appContext, track, gen)
                 }
             }
