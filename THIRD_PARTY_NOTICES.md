@@ -40,6 +40,11 @@ consumer. They are copied here unmodified:
 - `app/src/main/java/es/jjrh/bikeradar/ipc/RadarStateParcel.kt`
 - `app/src/main/java/es/jjrh/bikeradar/ipc/RadarVehicleParcel.kt`
 
+They are synced to upstream release **v1.12.2**. That release changed only
+comments, in `IRadarService.aidl`, `RadarContract.kt` and
+`RadarVehicleParcel.kt`; the other three files are byte-identical to the
+previous copy, and the cross-app wire `VERSION` is still 1.
+
 Each carries `Copyright (C) 2026 JJ del Rio` and
 `SPDX-License-Identifier: Apache-2.0`. Leave those headers alone: keeping the
 copyright and licence notice is what Apache-2.0 asks of a copy, and editing one
