@@ -24,6 +24,12 @@
  *     -n com.crazycapy.randonneur/.debug.DebugControlReceiver \
  *     --es route /data/local/tmp/route.gpx --ez darkMap true
  *
+ * Inject heart rate (debug path; no BLE hardware needed):
+ *   adb shell am broadcast \
+ *     -a com.crazycapy.randonneur.debug.SET_HR \
+ *     -n com.crazycapy.randonneur/.debug.DebugControlReceiver \
+ *     --ei bpm 142
+ *
  * Stop:
  *   adb shell am broadcast \
  *     -a com.crazycapy.randonneur.debug.STOP \
@@ -35,6 +41,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.crazycapy.randonneur.ble.BleHrProvider
 import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.gpx.TrackLoader
@@ -51,6 +58,7 @@ class DebugControlReceiver : BroadcastReceiver() {
                 ACTION_START_GPS -> startGps(context, intent)
                 ACTION_PREFILL -> startPrefill(context, intent)
                 ACTION_BENCH -> startBench(context, intent)
+                ACTION_SET_HR -> setHr(context, intent)
                 ACTION_STOP -> { RideStore.precacheAskSuppressed = false; NavigationService.stop(context) }
                 else -> {}
             }
@@ -59,6 +67,13 @@ class DebugControlReceiver : BroadcastReceiver() {
             // script brings the app to the foreground first, but never crash.
             Log.e(TAG, "Action ${intent.action} failed", e)
         }
+    }
+
+    private fun setHr(context: Context, intent: Intent) {
+        BleHrProvider.init(context.applicationContext)
+        val bpm = intent.getIntExtra(EXTRA_BPM, -1)
+        BleHrProvider.setDebugHr(bpm.takeIf { it > 0 })
+        Log.i(TAG, "Injected HR ${if (bpm > 0) "$bpm bpm" else "cleared"}")
     }
 
     /** Loads the route named by [EXTRA_ROUTE], restricted to the adb staging dir. */
@@ -173,7 +188,9 @@ class DebugControlReceiver : BroadcastReceiver() {
         const val ACTION_START_GPS = "com.crazycapy.randonneur.debug.START_GPS"
         const val ACTION_PREFILL = "com.crazycapy.randonneur.debug.PREFILL"
         const val ACTION_BENCH = "com.crazycapy.randonneur.debug.BENCH"
+        const val ACTION_SET_HR = "com.crazycapy.randonneur.debug.SET_HR"
         const val ACTION_STOP = "com.crazycapy.randonneur.debug.STOP"
+        const val EXTRA_BPM = "bpm"
         const val EXTRA_ROUTE = "route"
         const val EXTRA_TIME_SCALE = "timeScale"
         const val EXTRA_SPEED_KMH = "speedKmh"

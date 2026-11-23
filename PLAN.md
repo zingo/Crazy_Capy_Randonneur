@@ -93,7 +93,7 @@ CrazyCapyRouting/
 
 - **Release:** `v0.2.0` (2026-10-11) — see the README [Releases](README.md#releases)
   section. `versionName = "0.2.0"`, `minSdk = 33` (Android 13+).
-- **M1–M4 done & verified**, M5 polish largely shipped. 119 unit tests +
+- **M1–M4 done & verified**, M5 polish largely shipped. 199 unit tests +
   instrumented ghost-ride tests pass on Capy15 (Android 15 AVD) via
   `./gradlew :app:connectedDebugAndroidTest`.
 - Shipped: TrainingHud → compact 3×2 top-left HUD (speed | covered | elapsed /
@@ -254,6 +254,15 @@ CrazyCapyRouting/
   tuning and style within the cap without duplicates), and shows **Route not
   found** otherwise. Tuning/signature, grouping and refresh/reclaim decisions
   are pure Kotlin with unit tests.
+- **BLE heart rate**: the `ble` package now has a real standard Heart Rate
+  Service client (`0x180D` / measurement `0x2A37`, notifications), a pure
+  flags/8–16-bit parser, scan filtering by service, device picker with runtime
+  Bluetooth permissions, connection status/error, persisted last strap and a
+  battery-friendly reconnect backoff (5/15/30/60 s, then stop). The foreground
+  navigation service declares `location|connectedDevice` and writes available
+  bpm into `RideStore.hr`, so saved GPX/TCX rides and history keep the existing
+  HR path. Debug builds expose `SET_HR` to inject bpm over adb where no BLE
+  hardware exists. Real straps still need physical BLE hardware for validation.
 - **QA (checkpoint markers)**: a checkpoint whose GPX `<wpt>` has no `<desc>`
   used to produce malformed GeoJSON (a stray quote), so MapLibre rejected the
   whole POI source and the markers silently vanished while the HUD's km-CP kept

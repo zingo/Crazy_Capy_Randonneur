@@ -128,6 +128,13 @@ debug-build-only; release builds carry none of it.
   mode), beside a live preview of the route ahead at the next turn and a small elevation profile of the next ~2 km. Tap the
   covered distance to switch between distance along the route and the actual
   distance ridden; the ridden path is drawn as a blue line on the map.
+- **BLE heart rate** – pair a standard Bluetooth LE heart-rate strap (service
+  `0x180D`) from **Settings → Heart rate**: scan, pick a device, and the latest
+  bpm is recorded into rides and the GPX/TCX history with the existing HR path.
+  The last strap is remembered and offered for reconnect; disconnects back off
+  gently instead of retrying in a tight loop. Real sensors need BLE-capable
+  hardware — the emulator has no usable BLE radio, so use a physical phone or
+  tablet for a real strap.
 - **Free ride** – start without a route: no green line or guidance, but speed,
   actual distance, average/max, the blue breadcrumb and a GPX are recorded just
   like a routed ride. The HUD shows max speed and straight-line distance home.
@@ -325,7 +332,7 @@ rendering via `adb exec-out screencap` and pixel analysis (see
 | `app/src/main/java/.../voice` | Spoken phrases |
 | `app/src/main/java/.../service` | Foreground `NavigationService`: GPS, ghost-ride driver, TTS (audio-focus ducking), wake lock, living notification |
 | `app/src/main/java/.../state` | `RideStore` (shared app state), `RouteStore` (on-device route library + settings/last-ride persistence), `RideMode` |
-| `app/src/main/java/.../ble` | BLE heart-rate provider (stub by default) |
+| `app/src/main/java/.../ble` | BLE heart-rate provider (service `0x180D`, parser, reconnect policy) |
 | `app/src/main/java/.../cache` | Prepare route offline: corridor map pack, turn-image generation, storage, tile warm, anchor projection |
 | `app/src/main/java/.../sim` | Ghost ride simulator |
 | `app/src/main/java/.../ui` | Compose overlays: HUD + next-turn preview, off-route ack, dialogs |

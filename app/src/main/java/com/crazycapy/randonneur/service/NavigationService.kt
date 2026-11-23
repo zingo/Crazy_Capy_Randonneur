@@ -33,6 +33,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -50,11 +51,12 @@ import android.os.SystemClock
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.crazycapy.randonneur.KMH_TO_MS
 import com.crazycapy.randonneur.R
+import com.crazycapy.randonneur.ble.BleHrProvider
 import com.crazycapy.randonneur.ble.HrProvider
-import com.crazycapy.randonneur.ble.StubHrProvider
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.nav.Geo
 import com.crazycapy.randonneur.nav.NavEngine
@@ -95,7 +97,7 @@ class NavigationService : Service() {
     private var ttsReady = false
     private var engine: NavEngine? = null
     private var poiTracker: PoiTracker? = null
-    private var hrProvider: HrProvider = StubHrProvider
+    private val hrProvider: HrProvider = BleHrProvider
     private var driverThread: Thread? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var locationManager: LocationManager? = null
@@ -170,6 +172,7 @@ class NavigationService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
+        BleHrProvider.init(applicationContext)
         audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
         tts = TextToSpeech(applicationContext) { status ->
             ttsReady = status == TextToSpeech.SUCCESS
@@ -247,6 +250,7 @@ class NavigationService : Service() {
         RideStore.avgSpeedKmh = 0.0
         RideStore.elapsedSec = 0L
         RideStore.hr = null
+        BleHrProvider.reconnectSaved(RideStore.hrDeviceAddress, RideStore.hrDeviceName)
         RideStore.nextPoiName = null
         RideStore.nextPoiM = null
         RideStore.nextPoiIndex = null
@@ -263,7 +267,18 @@ class NavigationService : Service() {
         RideStore.radarTargets = emptyList()
         radarSim = null
 
-        startForeground(NOTIF_ID, buildNotification(if (mode == RideMode.FREE) "Preparing free ride…" else "Preparing ${track?.name ?: "route"}…"))
+        val fgsType = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or
+            if (BleHrProvider.hasPermissions(this)) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+            } else {
+                0
+            }
+        ServiceCompat.startForeground(
+            this,
+            NOTIF_ID,
+            buildNotification(if (mode == RideMode.FREE) "Preparing free ride…" else "Preparing ${track?.name ?: "route"}…"),
+            fgsType,
+        )
 
         val nav: NavEngine?
         val reverse = RideStore.reverse
@@ -1058,6 +1073,7 @@ class NavigationService : Service() {
         RideStore.nextTurnIndex = null
         RideStore.upcomingRoute = emptyList()
         RideStore.nextTurnPopupVisible = false
+        BleHrProvider.setAutoReconnect(false)
         RideStore.radarTargets = emptyList() //TODO radar data/showing is not part or a ride and should probably not be cleared on stopRide
         cancelRadarLostAnnounce()
         radarLostAnnounced = false
@@ -1107,6 +1123,7 @@ class NavigationService : Service() {
         locationManager?.removeUpdates(locationListener)
         driverThread?.interrupt()
         releaseWakeLock()
+        BleHrProvider.shutdown()
         tts?.shutdown()
         tts = null
         super.onDestroy()

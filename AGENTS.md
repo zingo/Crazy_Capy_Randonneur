@@ -25,7 +25,8 @@ navigator for Android 13+ (API 33). No Play Services, no accounts, no cloud.
     library + settings/last-ride persistence)
   - `sim` — ghost ride simulator
   - `ui` — Compose overlays: HUD + next-turn preview, off-route ack, dialogs
-  - `ble` — BLE heart-rate provider (stub by default)
+  - `ble` — BLE heart-rate provider (standard `0x180D`/`0x2A37`, parser,
+    reconnect policy); debug `SET_HR` can inject bpm without hardware
 
 ## Build environment
 
@@ -86,7 +87,7 @@ actually runs out of memory.
 
 Before opening a PR, verify behavior on the emulator; use a physical device
 (T20Mini/phone) when emulator limits matter (BLE/radio, real GPS, hardware) or
-when a spot-check is really needed. Put the evidence in the PR description. Currently 187 unit tests + 4 instrumented ghost-ride tests.
+when a spot-check is really needed. Put the evidence in the PR description. Currently 199 unit tests + 4 instrumented ghost-ride tests.
 
 Device test notes:
 - The phone's notification is blocked at OS level (`dumpsys notification` shows
@@ -176,7 +177,7 @@ Device test notes:
   `navVolume` (0 = off), persisted by `RouteStore`.
 - Settings UI lives in `MainActivity.kt` (dialogs); new settings need a
   `RideStore` field + a `RouteStore` save/load key.
-- Tests: JUnit for JVM unit tests (currently 187), instrumented ghost-ride tests in
+- Tests: JUnit for JVM unit tests (currently 199), instrumented ghost-ride tests in
   `app/src/androidTest`.
 
 ## User shorthand
