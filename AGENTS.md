@@ -27,6 +27,9 @@ navigator for Android 13+ (API 33). No Play Services, no accounts, no cloud.
   - `ui` — Compose overlays: HUD + next-turn preview, off-route ack, dialogs
   - `ble` — BLE heart-rate provider (standard `0x180D`/`0x2A37`, parser,
     reconnect policy); debug `SET_HR` can inject bpm without hardware
+  - `coros` — optional read-only COROS: region endpoints, browser OAuth (CLI
+    login + PKCE), MCP client (JSON/SSE), Keystore-encrypted token store and
+    the read-only data controller
 
 ## Build environment
 

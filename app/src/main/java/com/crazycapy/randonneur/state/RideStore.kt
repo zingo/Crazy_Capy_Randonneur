@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.OfflineThemeMode
 import com.crazycapy.randonneur.cache.OfflineTuning
+import com.crazycapy.randonneur.coros.CorosRegion
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.radar.RadarVehicle
 import com.crazycapy.randonneur.voice.SpeechMarker
@@ -233,6 +234,9 @@ object RideStore {
 
     /** Current map bearing in degrees (0 = north up). */
     var mapBearing: Double by mutableStateOf(0.0)
+
+    /** COROS data server region; changing it invalidates a stored sign-in. */
+    var corosRegion: CorosRegion by mutableStateOf(CorosRegion.AUTO)
 
     /** Master switch for the live rear-radar integration (overlay app): when
      *  false nothing is bound or streamed, to save battery. */

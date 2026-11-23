@@ -18,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
 import com.crazycapy.randonneur.cache.OfflinePrune
 import com.crazycapy.randonneur.cache.PrepareRecovery
+import com.crazycapy.randonneur.coros.CorosController
 import com.crazycapy.randonneur.gpx.TrackLoader
 import com.crazycapy.randonneur.radar.RadarClient
 import com.crazycapy.randonneur.service.PrepareRecoveryWork
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity() {
         val appContext = applicationContext
         RouteStore.init(appContext)
         RouteStore.loadSettings(appContext)
+        CorosController.init(appContext)
         OfflinePrune.pruneAtStartup(appContext)
         if (PrepareRecovery.load(appContext) != null) {
             if (PrepareRecoveryWork.workerRunning) {
