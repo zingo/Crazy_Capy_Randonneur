@@ -170,6 +170,16 @@ debug-build-only; release builds carry none of it.
   (they can no longer be trusted), a red blinking triangle appears at the rider
   pointing back, and the voice says "Radar lost" three times; when the stream
   returns it says "Radar back" once.
+- **COROS (optional, read-only)** – sign in to the official COROS MCP server
+  through your browser; Crazy Capy never asks for or stores your COROS
+  password. A short-lived CLI login session is polled while you authorize,
+  then the app keeps OAuth tokens encrypted with Android Keystore (AES-GCM)
+  and shows recent activities (14 days), today's HRV, recovery and planned
+  workouts in a read-only dialog with manual Refresh and a last-sync time.
+  Pick Auto/EU/US/CN before connecting; changing the region requires signing
+  in again. Phase 1 is read-only and does not start workouts or stream live
+  sensors; in-progress/live data and workout-start guidance are follow-ups.
+  Disconnect clears the stored tokens.
 
 ### Testing
 - **Ghost ride simulator** – try any route without leaving home: follow a
@@ -313,7 +323,10 @@ fix pipeline and asserts arrival with turn announcements.
   packs (delete one or all, total vs cap, expired flags) and clear all route
   preview caches; set the offline theme default, storage cap and pack expiry;
   manage your saved routes; start a **ghost ride**; and reach the app-version/about section plus
-  the **Open-source licenses** viewer.
+  the **Open-source licenses** viewer. **Settings → COROS** connects the optional
+  read-only integration: choose Auto/EU/US/CN, Connect (opens the COROS sign-in
+  page), Cancel while waiting, or Disconnect; once connected, **COROS data**
+  shows recent activities, HRV, recovery and planned workouts.
 
 ### 4. Golden screenshot verification (hacker option)
 
@@ -333,6 +346,7 @@ rendering via `adb exec-out screencap` and pixel analysis (see
 | `app/src/main/java/.../service` | Foreground `NavigationService`: GPS, ghost-ride driver, TTS (audio-focus ducking), wake lock, living notification |
 | `app/src/main/java/.../state` | `RideStore` (shared app state), `RouteStore` (on-device route library + settings/last-ride persistence), `RideMode` |
 | `app/src/main/java/.../ble` | BLE heart-rate provider (service `0x180D`, parser, reconnect policy) |
+| `app/src/main/java/.../coros` | Optional COROS: region endpoints, browser OAuth (CLI login + PKCE), MCP client, Keystore-encrypted token store, read-only data controller |
 | `app/src/main/java/.../cache` | Prepare route offline: corridor map pack, turn-image generation, storage, tile warm, anchor projection |
 | `app/src/main/java/.../sim` | Ghost ride simulator |
 | `app/src/main/java/.../ui` | Compose overlays: HUD + next-turn preview, off-route ack, dialogs |

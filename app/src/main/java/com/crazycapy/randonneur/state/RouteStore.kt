@@ -23,6 +23,7 @@ import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.OfflineThemeMode
 import com.crazycapy.randonneur.cache.OfflineTuning
 import com.crazycapy.randonneur.cache.RouteIdentity
+import com.crazycapy.randonneur.coros.CorosRegion
 import com.crazycapy.randonneur.gpx.GpxParser
 import com.crazycapy.randonneur.gpx.GpxWriter
 import com.crazycapy.randonneur.gpx.Track
@@ -210,6 +211,7 @@ object RouteStore {
         map["gpsIntervalSec"]?.toIntOrNull()?.takeIf { it in listOf(1, 3, 5) }?.let { RideStore.gpsIntervalSec = it }
         map["hrDeviceAddress"]?.takeIf { it.isNotBlank() }?.let { RideStore.hrDeviceAddress = it }
         map["hrDeviceName"]?.takeIf { it.isNotBlank() }?.let { RideStore.hrDeviceName = it }
+        map["corosRegion"]?.let { RideStore.corosRegion = CorosRegion.fromName(it) }
     }
 
     fun saveSettings(context: Context) {
@@ -240,6 +242,7 @@ object RouteStore {
             "gpsIntervalSec=${RideStore.gpsIntervalSec}",
             "hrDeviceAddress=${RideStore.hrDeviceAddress.orEmpty()}",
             "hrDeviceName=${RideStore.hrDeviceName.orEmpty()}",
+            "corosRegion=${RideStore.corosRegion.name}",
         )
         runCatching { settingsFile(context).writeText(lines.joinToString("\n")) }
     }

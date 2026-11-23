@@ -48,6 +48,9 @@ import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.OfflineThemeMode
 import com.crazycapy.randonneur.cache.OfflineTuning
 import com.crazycapy.randonneur.cache.RouteCache
+import com.crazycapy.randonneur.coros.CorosController
+import com.crazycapy.randonneur.coros.CorosRegion
+import com.crazycapy.randonneur.coros.CorosStatus
 import com.crazycapy.randonneur.radar.RadarClient
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.state.RouteStore
@@ -108,6 +111,9 @@ internal fun SettingsDialog(
             )
         }
     }
+
+    var showCorosData by remember { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Settings") },
@@ -360,6 +366,56 @@ internal fun SettingsDialog(
                     "Standard BLE heart-rate straps (service 0x180D). A real sensor needs BLE-capable hardware.",
                     style = MaterialTheme.typography.bodySmall,
                 )
+                Text("COROS (optional)", style = MaterialTheme.typography.titleSmall)
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Status", style = MaterialTheme.typography.bodyMedium)
+                        Text(corosStatusText(), style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (CorosController.status == CorosStatus.CONNECTED) {
+                        TextButton(onClick = { showCorosData = true }) { Text("View data") }
+                    }
+                }
+                CorosController.error?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                Column(Modifier.fillMaxWidth()) {
+                    Text("Region", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Sign-in and data server; changing it requires reconnecting",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Row {
+                        CorosRegion.entries.forEach { option ->
+                            TextButton(onClick = { CorosController.setRegion(context, option) }) {
+                                Text(option.shortLabel + if (RideStore.corosRegion == option) " ✓" else "")
+                            }
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    when (CorosController.status) {
+                        CorosStatus.WAITING -> {
+                            TextButton(
+                                onClick = { CorosController.openLogin(context) },
+                                enabled = CorosController.loginUrl != null,
+                            ) { Text("Open login link again") }
+                            TextButton(onClick = { CorosController.cancelLogin() }) { Text("Cancel") }
+                        }
+                        CorosStatus.CONNECTED -> {
+                            TextButton(onClick = { CorosController.disconnect(context) }) { Text("Disconnect") }
+                            TextButton(onClick = { showCorosData = true }) { Text("COROS data") }
+                        }
+                        else -> {
+                            TextButton(onClick = { CorosController.connect(context) }) { Text("Connect") }
+                        }
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 Text("Demo", style = MaterialTheme.typography.titleSmall)
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -434,6 +490,16 @@ internal fun SettingsDialog(
             TextButton(onClick = onDismiss) { Text("Close") }
         },
     )
+    if (showCorosData) {
+        CorosDialog(context = context, onDismiss = { showCorosData = false })
+    }
+}
+
+private fun corosStatusText(): String = when (CorosController.status) {
+    CorosStatus.NOT_CONNECTED -> "Not connected"
+    CorosStatus.WAITING -> "Waiting for login"
+    CorosStatus.CONNECTED -> "Connected"
+    CorosStatus.ERROR -> "Error"
 }
 
 @Composable
