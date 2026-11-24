@@ -71,6 +71,8 @@ app that communicates with it solely through that interface.
 | MapLibre Android GeoJSON (org.maplibre.gl:android-sdk-geojson) | 6.0.1 | Apache-2.0 | MapLibre contributors |
 | kXML 2 (XML pull parser) | 2.3.0 | BSD-style (kXML classes); Public Domain (org.xmlpull.v1 API) | Stefan Haustein |
 | AndroidX Core KTX | 1.16.0 | Apache-2.0 | The Android Open Source Project |
+| OkHttp | 4.12.0 | Apache-2.0 | Square, Inc. |
+| Okio | 3.6.0 | Apache-2.0 | Square, Inc. |
 | AndroidX Activity Compose | 1.10.1 | Apache-2.0 | The Android Open Source Project |
 | AndroidX Lifecycle (runtime, compose, viewmodel) | 2.9.0 | Apache-2.0 | The Android Open Source Project |
 | Jetpack Compose BOM (UI, Foundation, Material3, Material icons, tooling) | 2025.06.01 (Compose 1.8.x, Material3 1.3.x) | Apache-2.0 | The Android Open Source Project |

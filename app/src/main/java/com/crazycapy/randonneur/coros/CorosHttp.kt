@@ -6,9 +6,17 @@ package com.crazycapy.randonneur.coros
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
+import okhttp3.Dns
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.IOException
+import java.net.InetAddress
+import java.net.UnknownHostException
 import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
 
 data class CorosHttpResult(
     val code: Int,
@@ -18,8 +26,30 @@ data class CorosHttpResult(
 
 object CorosHttp {
     private const val USER_AGENT = "Crazy Capy Randonneur"
-    private const val CONNECT_TIMEOUT_MS = 15_000
-    private const val READ_TIMEOUT_MS = 30_000
+
+    private val dohClient = OkHttpClient.Builder()
+        .connectTimeout(6, TimeUnit.SECONDS)
+        .readTimeout(6, TimeUnit.SECONDS)
+        .build()
+
+    private val dns = object : Dns {
+        override fun lookup(hostname: String): List<InetAddress> = try {
+            Dns.SYSTEM.lookup(hostname)
+        } catch (failure: UnknownHostException) {
+            resolveOverHttps(hostname) ?: throw failure
+        }
+    }
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .dns(dns)
+        .build()
+
+    private val noRedirectClient = client.newBuilder()
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .build()
 
     suspend fun postJson(
         url: String,
@@ -63,34 +93,60 @@ object CorosHttp {
         headers: Map<String, String>,
         followRedirects: Boolean,
     ): CorosHttpResult {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = CONNECT_TIMEOUT_MS
-            readTimeout = READ_TIMEOUT_MS
-            instanceFollowRedirects = followRedirects
-            useCaches = false
-            requestMethod = method
-            setRequestProperty("User-Agent", USER_AGENT)
-            contentType?.let { setRequestProperty("Content-Type", it) }
-            headers.forEach { (name, value) -> setRequestProperty(name, value) }
-            if (body != null) doOutput = true
+        val builder = Request.Builder()
+            .url(url)
+            .header("User-Agent", USER_AGENT)
+        contentType?.let { builder.header("Content-Type", it) }
+        headers.forEach { (name, value) -> builder.header(name, value) }
+        val requestBody = body?.toRequestBody(contentType?.toMediaType())
+        builder.method(method, requestBody)
+
+        var lastFailure: IOException? = null
+        repeat(3) { attempt ->
+            try {
+                val http = if (followRedirects) client else noRedirectClient
+                http.newCall(builder.build()).execute().use { response ->
+                    val text = response.body?.string().orEmpty()
+                    val responseHeaders = response.headers.toMultimap()
+                        .mapValues { it.value.joinToString(", ") }
+                        .mapKeys { it.key.lowercase() }
+                    return CorosHttpResult(response.code, text, responseHeaders)
+                }
+            } catch (failure: IOException) {
+                lastFailure = failure
+                if (attempt < 2) Thread.sleep(500L * (attempt + 1))
+            }
         }
-        return try {
-            if (body != null) connection.outputStream.use { it.write(body) }
-            val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val text = runCatching {
-                stream?.bufferedReader()?.use { it.readText() } ?: ""
-            }.getOrDefault("")
-            val responseHeaders = buildMap {
-                connection.headerFields.forEach { (name, values) ->
-                    if (name != null && values.isNotEmpty()) {
-                        put(name.lowercase(), values.joinToString(", "))
+        throw lastFailure ?: IOException("COROS request failed")
+    }
+
+    private fun resolveOverHttps(hostname: String): List<InetAddress>? {
+        val endpoints = listOf(
+            { type: String -> "https://1.1.1.1/dns-query?name=$hostname&type=$type" },
+            { type: String -> "https://8.8.8.8/resolve?name=$hostname&type=$type" },
+        )
+        val addresses = linkedSetOf<InetAddress>()
+        for (endpoint in endpoints) {
+            for (type in listOf("A", "AAAA")) {
+                val request = Request.Builder()
+                    .url(endpoint(type))
+                    .header("Accept", "application/dns-json")
+                    .build()
+                val json = runCatching {
+                    dohClient.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) return@use null
+                        JSONObject(response.body?.string().orEmpty())
                     }
+                }.getOrNull() ?: continue
+                val answers = json.optJSONArray("Answer") ?: continue
+                for (index in 0 until answers.length()) {
+                    val data = answers.optJSONObject(index)?.optString("data").orEmpty()
+                    if (data.isBlank()) continue
+                    runCatching { InetAddress.getByName(data) }.getOrNull()?.let(addresses::add)
                 }
             }
-            CorosHttpResult(code, text, responseHeaders)
-        } finally {
-            connection.disconnect()
+            if (addresses.isNotEmpty()) return addresses.toList()
         }
+        return addresses.takeIf { it.isNotEmpty() }?.toList()
     }
 }
