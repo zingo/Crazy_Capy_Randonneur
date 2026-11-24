@@ -63,34 +63,41 @@ object CorosHttp {
         headers: Map<String, String>,
         followRedirects: Boolean,
     ): CorosHttpResult {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = CONNECT_TIMEOUT_MS
-            readTimeout = READ_TIMEOUT_MS
-            instanceFollowRedirects = followRedirects
-            useCaches = false
-            requestMethod = method
-            setRequestProperty("User-Agent", USER_AGENT)
-            contentType?.let { setRequestProperty("Content-Type", it) }
-            headers.forEach { (name, value) -> setRequestProperty(name, value) }
-            if (body != null) doOutput = true
-        }
-        return try {
-            if (body != null) connection.outputStream.use { it.write(body) }
-            val code = connection.responseCode
-            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-            val text = runCatching {
-                stream?.bufferedReader()?.use { it.readText() } ?: ""
-            }.getOrDefault("")
-            val responseHeaders = buildMap {
-                connection.headerFields.forEach { (name, values) ->
-                    if (name != null && values.isNotEmpty()) {
-                        put(name.lowercase(), values.joinToString(", "))
+        var lastFailure: java.io.IOException? = null
+        repeat(3) { attempt ->
+            val attemptConnection = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                instanceFollowRedirects = followRedirects
+                useCaches = false
+                requestMethod = method
+                setRequestProperty("User-Agent", USER_AGENT)
+                contentType?.let { setRequestProperty("Content-Type", it) }
+                headers.forEach { (name, value) -> setRequestProperty(name, value) }
+                if (body != null) doOutput = true
+            }
+            try {
+                if (body != null) attemptConnection.outputStream.use { it.write(body) }
+                val code = attemptConnection.responseCode
+                val stream = if (code in 200..299) attemptConnection.inputStream else attemptConnection.errorStream
+                val text = runCatching {
+                    stream?.bufferedReader()?.use { it.readText() } ?: ""
+                }.getOrDefault("")
+                val responseHeaders = buildMap {
+                    attemptConnection.headerFields.forEach { (name, values) ->
+                        if (name != null && values.isNotEmpty()) {
+                            put(name.lowercase(), values.joinToString(", "))
+                        }
                     }
                 }
+                return CorosHttpResult(code, text, responseHeaders)
+            } catch (failure: java.io.IOException) {
+                lastFailure = failure
+                if (attempt < 2) Thread.sleep(500L * (attempt + 1))
+            } finally {
+                attemptConnection.disconnect()
             }
-            CorosHttpResult(code, text, responseHeaders)
-        } finally {
-            connection.disconnect()
         }
+        throw lastFailure ?: java.io.IOException("COROS request failed")
     }
 }
