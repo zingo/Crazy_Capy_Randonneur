@@ -26,10 +26,12 @@ navigator for Android 13+ (API 33). No Play Services, no accounts, no cloud.
   - `sim` — ghost ride simulator
   - `ui` — Compose overlays: HUD + next-turn preview, off-route ack, dialogs
   - `ble` — BLE heart-rate provider (standard `0x180D`/`0x2A37`, parser,
-    reconnect policy); debug `SET_HR` can inject bpm without hardware
+    reconnect policy); debug `SET_HR` can inject bpm and debug `SET_CADENCE`
+    can inject cadence, without hardware or a COROS account
   - `coros` — optional read-only COROS: region endpoints, browser OAuth (CLI
-    login + PKCE), MCP client (JSON/SSE), Keystore-encrypted token store and
-    the read-only data controller
+    login + PKCE), MCP client (JSON/SSE), Keystore-encrypted token store, the
+    read-only data controller, near-live activity/window parsers + poll policy
+    and the battery-aware `CorosLiveMonitor` used by `NavigationService`
 
 ## Build environment
 
@@ -90,7 +92,7 @@ actually runs out of memory.
 
 Before opening a PR, verify behavior on the emulator; use a physical device
 (T20Mini/phone) when emulator limits matter (BLE/radio, real GPS, hardware) or
-when a spot-check is really needed. Put the evidence in the PR description. Currently 199 unit tests + 4 instrumented ghost-ride tests.
+when a spot-check is really needed. Put the evidence in the PR description. Currently 262 unit tests + 4 instrumented ghost-ride tests.
 
 Device test notes:
 - The phone's notification is blocked at OS level (`dumpsys notification` shows
@@ -180,7 +182,7 @@ Device test notes:
   `navVolume` (0 = off), persisted by `RouteStore`.
 - Settings UI lives in `MainActivity.kt` (dialogs); new settings need a
   `RideStore` field + a `RouteStore` save/load key.
-- Tests: JUnit for JVM unit tests (currently 199), instrumented ghost-ride tests in
+- Tests: JUnit for JVM unit tests (currently 262), instrumented ghost-ride tests in
   `app/src/androidTest`.
 
 ## User shorthand

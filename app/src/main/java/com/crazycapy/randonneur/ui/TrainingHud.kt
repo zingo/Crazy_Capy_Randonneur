@@ -49,6 +49,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.crazycapy.randonneur.coros.CorosLiveStatus
+import com.crazycapy.randonneur.coros.LiveSource
 import com.crazycapy.randonneur.state.RideStore
 import java.time.Duration
 import java.time.Instant
@@ -208,6 +210,7 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                     )
                 }
             }
+            LiveBadges()
         }
 
         if (showPreview) {
@@ -259,6 +262,67 @@ fun TrainingHud(modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+@Composable
+private fun LiveBadges() {
+    if (!RideStore.active) return
+    val hr = RideStore.hr
+    val cadence = RideStore.corosCadence
+    val workout = RideStore.corosTodayWorkout
+    val unavailable = RideStore.corosLiveStatus == CorosLiveStatus.ERROR &&
+        hr == null && cadence == null
+    if (hr == null && cadence == null && workout == null && !unavailable) return
+    val valueColor = if (RideStore.darkMap) Color(0xFFE9E9E9) else Color(0xFF1A1A1A)
+    val mutedColor = if (RideStore.darkMap) Color(0xFFBABABA) else Color(0xFF666666)
+    Column(
+        Modifier.padding(top = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            hr?.let {
+                Text(
+                    "HR $it · ${sourceLabel(RideStore.hrSource)}",
+                    color = valueColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+            }
+            cadence?.let {
+                Text(
+                    "CAD $it · ${sourceLabel(RideStore.cadenceSource)}",
+                    color = valueColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+            }
+            if (unavailable) {
+                Text(
+                    "COROS live unavailable",
+                    color = mutedColor,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                )
+            }
+        }
+        workout?.let {
+            Text(
+                "Today: $it",
+                color = mutedColor,
+                fontSize = 10.sp,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+private fun sourceLabel(source: LiveSource): String = when (source) {
+    LiveSource.BLE -> "BLE"
+    LiveSource.COROS -> "COROS"
+    LiveSource.DEBUG -> "debug"
+    LiveSource.NONE -> "live"
 }
 
 private enum class CoveredMode { ROUTE, RIDE }

@@ -10,4 +10,5 @@ data class RidePoint(
     val timeMs: Long,
     val eleM: Double? = null,
     val hr: Int? = null,
+    val cadence: Int? = null,
 )

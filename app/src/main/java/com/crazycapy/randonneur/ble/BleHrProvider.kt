@@ -99,6 +99,8 @@ object BleHrProvider : HrProvider {
 
     override fun currentHr(): Int? = debugHr ?: state.bpm.takeIf { state.phase == HrPhase.CONNECTED }
 
+    fun currentHrIsDebug(): Boolean = debugHr != null
+
     @SuppressLint("MissingPermission")
     fun startScan() {
         val ctx = context ?: return

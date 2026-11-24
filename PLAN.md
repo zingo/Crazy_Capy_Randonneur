@@ -26,8 +26,9 @@ the phone in the pocket with the screen off, and ride to spoken guidance.
 - Import: GPX v1.0/1.1 + basic TCX via system file picker; URL import later.
 - Coros: optional read-only COROS integration over the official MCP server —
   browser OAuth (CLI login session + PKCE), Keystore-encrypted tokens,
-  activities/HRV/recovery/planned-workout dashboard. BLE HR/speed remains a
-  separate future adapter.
+  activities/HRV/recovery/planned-workout dashboard, plus near-live pickup of an
+  in-progress watch activity (last-5-minute HR/cadence/power, battery-aware and
+  read-only). BLE HR/speed remains a separate adapter and wins for heart rate.
 - Branding: `Crazy Capy-D.png` from crazycapy.com; adaptive + legacy mipmaps via PIL;
   app label "Crazy Capy Randonneur". Notification icon is a separate monochrome silhouette.
 
@@ -95,7 +96,7 @@ CrazyCapyRouting/
 
 - **Release:** `v0.2.0` (2026-10-11) — see the README [Releases](README.md#releases)
   section. `versionName = "0.2.0"`, `minSdk = 33` (Android 13+).
-- **M1–M4 done & verified**, M5 polish largely shipped. 199 unit tests +
+- **M1–M4 done & verified**, M5 polish largely shipped. 262 unit tests +
   instrumented ghost-ride tests pass on Capy15 (Android 15 AVD) via
   `./gradlew :app:connectedDebugAndroidTest`.
 - Shipped: TrainingHud → compact 3×2 top-left HUD (speed | covered | elapsed /
@@ -280,17 +281,31 @@ CrazyCapyRouting/
   Connect/Cancel/Disconnect/Open-login and a read-only dashboard (activities
   last 14 days, HRV, recovery, planned workouts) with Refresh, loading/empty/
   error states and last-sync time. No COROS password is requested or stored;
-  no workout start, live sensor streaming or write tools. JVM tests cover
-  URLs, PKCE, state, expiry, SSE/JSON and defensive tool text; device
-  verification stops at the login/cancel path without a COROS account.
+  no workout start or write tools. JVM tests cover URLs, PKCE, state, expiry,
+  SSE/JSON and defensive tool text; device verification stops at the login/cancel
+  path without a COROS account.
+- **COROS phase 2 (optional, near-live, read-only)**: while a GPS/free ride is
+  active, `CorosLiveMonitor` finds an in-progress activity from today's
+  `querySportRecords` (up to 5, then a bounded `getActivityDetail` check), reads
+  the last five minutes with `queryCustomActivityLapData`, and writes COROS
+  HR/cadence/power plus source and status to `RideStore`. Polling is every 30 s
+  only while riding, stops on pause/finish/disconnect, backs off up to 5 min on
+  errors and refreshes an expired/401 token once. BLE HR wins when present;
+  COROS HR is the fallback and cadence is used for the HUD and saved ride points
+  (`gpxtpx:cad` in GPX, `Cadence` in TCX). Today's scheduled workout is shown in
+  the dialog/Settings/HUD with an "Open COROS app" action, but starting on the
+  watch remains manual. Debug `SET_CADENCE` injects live cadence without an
+  account; JVM tests cover text/JSON records, detail, window stats, policy and
+  GPX/TCX cadence. Authenticated live COROS still needs a real account and watch
+  to verify end to end.
 
 ## Next (M5 polish)
 
 - Real-ride tuning on the physical phone: beep/nav volumes, turn-window timing,
   pre-cache feedback.
 - Edge cases: import a malformed GPX, empty route, repeated rides after reset.
-- COROS follow-up: in-progress/live data and workout-start guidance (phase 1 is
-  read-only), plus authenticated dashboard verification on a real account.
+- COROS follow-up: authenticated live/dashboard verification on a real account
+  and watch; workout start remains manual in the COROS app.
 
 ## Verification
 

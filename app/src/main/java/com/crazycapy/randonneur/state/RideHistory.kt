@@ -67,7 +67,8 @@ object RideHistory {
                     .append(p.lat).append(',')
                     .append(p.lon).append(',')
                     .append(p.eleM?.toString() ?: "").append(',')
-                    .append(p.hr?.toString() ?: "").append('\n')
+                    .append(p.hr?.toString() ?: "").append(',')
+                    .append(p.cadence?.toString() ?: "").append('\n')
             }
             runCatching { logFile(context).appendText(sb.toString()) }
         }
@@ -133,7 +134,7 @@ object RideHistory {
         }
         val ride = SavedRide("ride-$started", name, started, dur, dist, avg, max, ascent, descent, total, stops, longestStop)
 
-        runCatching { atomicWrite(rideFile(context, ride.id), buildGpx(name, started, points)) }.getOrElse { return null }
+        runCatching { atomicWrite(rideFile(context, ride.id), RideExport.gpx(name, started, points)) }.getOrElse { return null }
         runCatching {
             val old = indexFile(context).takeIf { it.exists() }?.readLines()
                 ?.filterNot { it.startsWith(ride.id + "\t") }.orEmpty()
@@ -149,7 +150,7 @@ object RideHistory {
         return finalizeRide(context, 0L, 0L, 0.0, 0.0, 0L)
     }
 
-    data class SeriesPoint(val tMs: Long, val lat: Double, val lon: Double, val eleM: Double?, val hr: Int?, val speedKmh: Double)
+    data class SeriesPoint(val tMs: Long, val lat: Double, val lon: Double, val eleM: Double?, val hr: Int?, val speedKmh: Double, val cadence: Int? = null)
 
     /** Parse a saved ride's GPX into a time/elevation/HR/speed series for charts. */
     fun loadSeries(context: Context, id: String): List<SeriesPoint> = runCatching {
@@ -170,11 +171,12 @@ object RideHistory {
                 ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
                 ?: continue
             val hr = Regex("<gpxtpx:hr>(\\d+)</gpxtpx:hr>").find(body)?.groupValues?.get(1)?.toIntOrNull()
+            val cadence = Regex("<gpxtpx:cad>(\\d+)</gpxtpx:cad>").find(body)?.groupValues?.get(1)?.toIntOrNull()
             var speed = 0.0
             if (prevLat != null && prevLon != null && prevT != null && t > prevT!!) {
                 speed = Geo.distanceMeters(prevLat!!, prevLon!!, lat, lon) / ((t - prevT!!) / 1000.0) * 3.6
             }
-            out.add(SeriesPoint(t, lat, lon, ele, hr, speed.coerceIn(0.0, 120.0)))
+            out.add(SeriesPoint(t, lat, lon, ele, hr, speed.coerceIn(0.0, 120.0), cadence))
             prevLat = lat; prevLon = lon; prevT = t
         }
         out
@@ -184,19 +186,17 @@ object RideHistory {
         val ride = list(context).firstOrNull { it.id == id } ?: return null
         val pts = loadSeries(context, id)
         if (pts.size < 2) return null
-        val iso = { ms: Long -> Instant.ofEpochMilli(ms).toString() }
-        val sb = StringBuilder()
-        sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-        sb.append("<TrainingCenterDatabase xmlns=\"http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2\"><Activities><Activity Sport=\"Biking\"><Id>").append(esc(ride.name)).append("</Id><Lap StartTime=\"").append(iso(ride.startedAtMs)).append("\"><TotalTimeSeconds>").append(ride.totalSec).append("</TotalTimeSeconds><DistanceMeters>").append(ride.distanceM).append("</DistanceMeters><Calories>0</Calories><Intensity>Active</Intensity><TriggerMethod>Manual</TriggerMethod><Track>")
-        pts.forEach { p ->
-            sb.append("<Trackpoint><Time>").append(iso(p.tMs)).append("</Time><Position><LatitudeDegrees>").append(p.lat).append("</LatitudeDegrees><LongitudeDegrees>").append(p.lon).append("</LongitudeDegrees></Position>")
-            p.eleM?.let { sb.append("<AltitudeMeters>").append(it).append("</AltitudeMeters>") }
-            p.hr?.let { sb.append("<HeartRateBpm><Value>").append(it).append("</Value></HeartRateBpm>") }
-            sb.append("</Trackpoint>")
-        }
-        sb.append("</Track></Lap></Activity></Activities></TrainingCenterDatabase>\n")
+        val xml = RideExport.tcx(
+            name = ride.name,
+            startedAtMs = ride.startedAtMs,
+            totalSec = ride.totalSec,
+            distanceM = ride.distanceM,
+            points = pts.map {
+                ExportPoint(it.tMs, it.lat, it.lon, it.eleM, it.hr, it.cadence)
+            },
+        )
         val f = File(dir(context), "$id.tcx")
-        atomicWrite(f, sb.toString())
+        atomicWrite(f, xml)
         f
     }.getOrNull()
 
@@ -235,25 +235,6 @@ object RideHistory {
         }
     }
 
-    private fun buildGpx(name: String, startedAtMs: Long, points: List<RidePoint>): String = buildString {
-        append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-        append("<gpx version=\"1.1\" creator=\"Crazy Capy Randonneur\" xmlns=\"http://www.topografix.com/GPX/1/1\"")
-        append(" xmlns:gpxtpx=\"http://www.garmin.com/xmlschemas/TrackPointExtension/v1\">\n")
-        append("  <metadata><time>").append(Instant.ofEpochMilli(startedAtMs)).append("</time></metadata>\n")
-        append("  <trk><name>").append(esc(name)).append("</name><type>cycling</type><trkseg>\n")
-        points.forEach { p ->
-            append("    <trkpt lat=\"").append(p.lat).append("\" lon=\"").append(p.lon).append("\">")
-            p.eleM?.let { append("<ele>").append(it).append("</ele>") }
-            append("<time>").append(Instant.ofEpochMilli(p.timeMs)).append("</time>")
-            p.hr?.let { hr ->
-                append("<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>")
-                    .append(hr).append("</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>")
-            }
-            append("</trkpt>\n")
-        }
-        append("  </trkseg></trk>\n</gpx>\n")
-    }
-
     private fun esc(s: String): String = s
         .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         .replace("\"", "&quot;").replace("'", "&apos;")
@@ -280,7 +261,7 @@ object RideHistory {
     }
 
     private fun parseLogLine(line: String): RidePoint? {
-        val p = line.split(",", limit = 5)
+        val p = line.split(",", limit = 6)
         if (p.size < 3) return null
         return RidePoint(
             lat = p[1].toDoubleOrNull() ?: return null,
@@ -288,6 +269,7 @@ object RideHistory {
             timeMs = p[0].toLongOrNull() ?: return null,
             eleM = p.getOrNull(3)?.toDoubleOrNull(),
             hr = p.getOrNull(4)?.toIntOrNull(),
+            cadence = p.getOrNull(5)?.toIntOrNull(),
         )
     }
 

@@ -17,6 +17,9 @@
                 <action android:name="com.crazycapy.randonneur.debug.PREFILL" />
                 <action android:name="com.crazycapy.randonneur.debug.BENCH" />
                 <action android:name="com.crazycapy.randonneur.debug.SET_HR" />
+                <action android:name="com.crazycapy.randonneur.debug.SET_CADENCE" />
+                <action android:name="com.crazycapy.randonneur.debug.PAUSE" />
+                <action android:name="com.crazycapy.randonneur.debug.RESUME" />
                 <action android:name="com.crazycapy.randonneur.debug.STOP" />
             </intent-filter>
         </receiver>

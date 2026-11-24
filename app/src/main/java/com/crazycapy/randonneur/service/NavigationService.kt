@@ -69,6 +69,9 @@ import com.crazycapy.randonneur.sim.RouteSimulator
 import com.crazycapy.randonneur.state.RideMode
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.cache.RouteCache
+import com.crazycapy.randonneur.coros.CorosLiveMonitor
+import com.crazycapy.randonneur.coros.CorosLiveStatus
+import com.crazycapy.randonneur.coros.LiveSource
 import com.crazycapy.randonneur.state.RideHistory
 import com.crazycapy.randonneur.state.RidePoint
 import com.crazycapy.randonneur.state.RouteStore
@@ -250,6 +253,14 @@ class NavigationService : Service() {
         RideStore.avgSpeedKmh = 0.0
         RideStore.elapsedSec = 0L
         RideStore.hr = null
+        RideStore.hrSource = LiveSource.NONE
+        RideStore.cadenceSource = LiveSource.NONE
+        RideStore.corosLiveStatus = CorosLiveStatus.IDLE
+        RideStore.corosLiveSource = LiveSource.NONE
+        RideStore.corosHr = null
+        RideStore.corosCadence = null
+        RideStore.corosPowerW = null
+        RideStore.corosLiveUpdatedMs = null
         BleHrProvider.reconnectSaved(RideStore.hrDeviceAddress, RideStore.hrDeviceName)
         RideStore.nextPoiName = null
         RideStore.nextPoiM = null
@@ -312,6 +323,11 @@ class NavigationService : Service() {
                 RadarClient.start(this)
             }
             RideMode.IDLE -> Unit
+        }
+        if (mode == RideMode.GPS || mode == RideMode.FREE) {
+            CorosLiveMonitor.start(this)
+        } else {
+            CorosLiveMonitor.stop()
         }
     }
 
@@ -488,13 +504,17 @@ class NavigationService : Service() {
             val pts = RideStore.riddenPoints
             if (pts.isEmpty()) {
                 if (accuracyM == null || accuracyM <= 30f) {
-                    RideStore.riddenPoints = listOf(RidePoint(lat, lon, nowMs, eleM, hrProvider.currentHr()))
+                    RideStore.riddenPoints = listOf(
+                        RidePoint(lat, lon, nowMs, eleM, currentHr(), currentCadence()),
+                    )
                 }
             } else if (plausible) {
                 RideStore.riddenM += moved
                 val last = pts.last()
                 if (Geo.distanceMeters(last.lat, last.lon, lat, lon) >= TRACE_POINT_M) {
-                    RideStore.riddenPoints = pts + RidePoint(lat, lon, nowMs, eleM, hrProvider.currentHr())
+                    RideStore.riddenPoints = pts + RidePoint(
+                        lat, lon, nowMs, eleM, currentHr(), currentCadence(),
+                    )
                 }
             }
         }
@@ -586,6 +606,17 @@ class NavigationService : Service() {
         }
     }
 
+    private fun currentHr(): Int? = hrProvider.currentHr() ?: RideStore.corosHr
+
+    private fun currentHrSource(): LiveSource {
+        if (hrProvider.currentHr() != null) {
+            return if (BleHrProvider.currentHrIsDebug()) LiveSource.DEBUG else LiveSource.BLE
+        }
+        return if (RideStore.corosHr != null) RideStore.corosLiveSource else LiveSource.NONE
+    }
+
+    private fun currentCadence(): Int? = RideStore.corosCadence
+
     private fun appendTracePoints() {
         val pts = RideStore.riddenPoints
         if (pts.size <= pointsCommitted) return
@@ -654,7 +685,13 @@ class NavigationService : Service() {
                 RideStore.elapsedSec = movingSec
                 RideStore.totalElapsedSec = totalSec
                 RideStore.pausedSec = (totalSec - movingSec).coerceAtLeast(0)
-                RideStore.hr = hrProvider.currentHr()
+                RideStore.hr = currentHr()
+                RideStore.hrSource = currentHrSource()
+                RideStore.cadenceSource = if (RideStore.corosCadence != null) {
+                    RideStore.corosLiveSource
+                } else {
+                    LiveSource.NONE
+                }
                 updateAvgSpeed()
                 maybeCheckpointRide()
                 if (RideStore.radarLostAtMs != null && !radarLostAnnounced) {
@@ -983,6 +1020,7 @@ class NavigationService : Service() {
         autoStopSinceMs = 0L
         autoMoveSinceMs = 0L
         RideStore.status = "Auto-paused"
+        CorosLiveMonitor.pause()
     }
 
     private fun autoResume() {
@@ -993,6 +1031,9 @@ class NavigationService : Service() {
         RideStore.autoPaused = false
         autoMoveSinceMs = 0L
         RideStore.status = "Riding…"
+        if (RideStore.mode == RideMode.GPS || RideStore.mode == RideMode.FREE) {
+            CorosLiveMonitor.resume(this)
+        }
     }
 
     private fun pauseRide() {
@@ -1009,6 +1050,7 @@ class NavigationService : Service() {
         RideStore.status = "Paused"
         appendTracePoints()
         stopBeeps()
+        CorosLiveMonitor.pause()
         updateNotification("Paused\nTap Resume to continue")
     }
 
@@ -1022,10 +1064,14 @@ class NavigationService : Service() {
         RideStore.autoPaused = false
         lastFixAtMs = null
         RideStore.status = "Riding…"
+        if (RideStore.mode == RideMode.GPS || RideStore.mode == RideMode.FREE) {
+            CorosLiveMonitor.resume(this)
+        }
         updateNotification("Riding…")
     }
 
     private fun stopRide(message: String) {
+        CorosLiveMonitor.stop()
         saveRideHistory()
         if (!arrived.get()) {
             saveLastRideState()
@@ -1063,6 +1109,14 @@ class NavigationService : Service() {
         RideStore.nextPoiM = null
         RideStore.nextPoiIndex = null
         RideStore.hr = null
+        RideStore.hrSource = LiveSource.NONE
+        RideStore.cadenceSource = LiveSource.NONE
+        RideStore.corosLiveStatus = CorosLiveStatus.IDLE
+        RideStore.corosLiveSource = LiveSource.NONE
+        RideStore.corosHr = null
+        RideStore.corosCadence = null
+        RideStore.corosPowerW = null
+        RideStore.corosLiveUpdatedMs = null
         RideStore.offRouteActive = false
         RideStore.offRouteM = 0.0
         RideStore.offRouteAcknowledged = false
@@ -1123,6 +1177,7 @@ class NavigationService : Service() {
         locationManager?.removeUpdates(locationListener)
         driverThread?.interrupt()
         releaseWakeLock()
+        CorosLiveMonitor.stop()
         BleHrProvider.shutdown()
         tts?.shutdown()
         tts = null

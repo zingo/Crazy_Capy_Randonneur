@@ -372,6 +372,9 @@ internal fun SettingsDialog(
                     Column(Modifier.weight(1f)) {
                         Text("Status", style = MaterialTheme.typography.bodyMedium)
                         Text(corosStatusText(), style = MaterialTheme.typography.bodySmall)
+                        (CorosController.todayWorkout ?: RideStore.corosTodayWorkout)?.let {
+                            Text("Today: $it", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     if (CorosController.status == CorosStatus.CONNECTED) {
                         TextButton(onClick = { showCorosData = true }) { Text("View data") }

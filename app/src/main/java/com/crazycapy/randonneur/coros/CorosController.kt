@@ -55,7 +55,10 @@ object CorosController {
         private set
     var lastSyncMs: Long? by mutableStateOf(null)
         private set
+    var todayWorkout: String? by mutableStateOf(null)
+        private set
 
+    @Volatile
     private var token: CorosToken? = null
     private var job: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -157,6 +160,40 @@ object CorosController {
         openBrowser(context.applicationContext, url)
     }
 
+    fun hasLiveSession(): Boolean = token != null
+
+    fun openCorosApp(context: Context): Boolean {
+        val app = context.applicationContext
+        val intent = app.packageManager.getLaunchIntentForPackage(COROS_PACKAGE) ?: return false
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return runCatching { app.startActivity(intent) }.isSuccess
+    }
+
+    suspend fun acquireLiveToken(
+        context: Context,
+        rejectedAccessToken: String? = null,
+    ): CorosToken? {
+        val current = token ?: return null
+        if (rejectedAccessToken != null && current.accessToken != rejectedAccessToken) {
+            return current
+        }
+        if (rejectedAccessToken == null && !current.isExpired(System.currentTimeMillis())) {
+            return current
+        }
+        return try {
+            val fresh = CorosOAuth.refresh(current)
+            if (token?.accessToken == current.accessToken) {
+                CorosTokenStore.save(context.applicationContext, fresh)
+                token = fresh
+            }
+            fresh
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     fun refresh(context: Context) {
         val app = context.applicationContext
         if (loading || status == CorosStatus.WAITING) return
@@ -194,8 +231,11 @@ object CorosController {
         error = null
         snapshot = null
         lastSyncMs = null
+        todayWorkout = null
         loading = false
         status = CorosStatus.NOT_CONNECTED
+        CorosLiveMonitor.stop()
+        RideStore.corosTodayWorkout = null
     }
 
     private suspend fun ensureFresh(current: CorosToken): CorosToken =
@@ -210,10 +250,12 @@ object CorosController {
             val activities = section(current, client, "querySportRecords", activityArguments())
             val hrv = section(current, client, "querySleepHrv", JSONObject())
             val recovery = section(current, client, "queryRecoveryStatus", JSONObject())
-            val schedule = section(current, client, "queryTrainingSchedule", JSONObject())
+            val schedule = section(current, client, "queryTrainingSchedule", scheduleArguments())
             val fetchedAt = System.currentTimeMillis()
             snapshot = CorosSnapshot(activities, hrv, recovery, schedule, fetchedAt)
             lastSyncMs = fetchedAt
+            todayWorkout = CorosLiveParser.parseTodayWorkout(schedule.lines, LocalDate.now())
+            RideStore.corosTodayWorkout = todayWorkout
             if (listOf(activities, hrv, recovery, schedule).all { it.error != null }) {
                 status = CorosStatus.ERROR
                 error = "Could not load COROS data"
@@ -254,6 +296,14 @@ object CorosController {
         }
     }
 
+    private fun scheduleArguments(): JSONObject {
+        val today = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE)
+        return JSONObject().apply {
+            put("startDate", today)
+            put("endDate", today)
+        }
+    }
+
     private fun openBrowser(context: Context, url: String): Boolean = runCatching {
         context.startActivity(
             Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -261,4 +311,6 @@ object CorosController {
         )
         true
     }.getOrDefault(false)
+
+    private const val COROS_PACKAGE = "com.yf.smart.coros.dist"
 }

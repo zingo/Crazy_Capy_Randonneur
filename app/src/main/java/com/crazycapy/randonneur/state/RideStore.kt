@@ -22,7 +22,9 @@ import androidx.compose.runtime.setValue
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
 import com.crazycapy.randonneur.cache.OfflineThemeMode
 import com.crazycapy.randonneur.cache.OfflineTuning
+import com.crazycapy.randonneur.coros.CorosLiveStatus
 import com.crazycapy.randonneur.coros.CorosRegion
+import com.crazycapy.randonneur.coros.LiveSource
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.radar.RadarVehicle
 import com.crazycapy.randonneur.voice.SpeechMarker
@@ -208,6 +210,23 @@ object RideStore {
     /** Heart rate in bpm, or null when no sensor connected. */
     var hr: Int? by mutableStateOf(null)
 
+    /** Where the displayed heart rate came from. */
+    var hrSource: LiveSource by mutableStateOf(LiveSource.NONE)
+
+    /** Where the displayed cadence came from. */
+    var cadenceSource: LiveSource by mutableStateOf(LiveSource.NONE)
+
+    /** Near-live COROS state for the active ride. */
+    var corosLiveStatus: CorosLiveStatus by mutableStateOf(CorosLiveStatus.IDLE)
+    var corosLiveSource: LiveSource by mutableStateOf(LiveSource.NONE)
+    var corosHr: Int? by mutableStateOf(null)
+    var corosCadence: Int? by mutableStateOf(null)
+    var corosPowerW: Int? by mutableStateOf(null)
+    var corosLiveUpdatedMs: Long? by mutableStateOf(null)
+
+    /** Today's COROS scheduled workout, when one is available. */
+    var corosTodayWorkout: String? by mutableStateOf(null)
+
     /** Last heart-rate strap chosen in Settings, offered for reconnect. */
     var hrDeviceAddress: String? by mutableStateOf(null)
     var hrDeviceName: String? by mutableStateOf(null)
@@ -330,6 +349,15 @@ object RideStore {
         avgSpeedKmh = 0.0
         elapsedSec = 0L
         hr = null
+        hrSource = LiveSource.NONE
+        cadenceSource = LiveSource.NONE
+        corosLiveStatus = CorosLiveStatus.IDLE
+        corosLiveSource = LiveSource.NONE
+        corosHr = null
+        corosCadence = null
+        corosPowerW = null
+        corosLiveUpdatedMs = null
+        corosTodayWorkout = null
         nextPoiName = null
         nextPoiM = null
         nextPoiIndex = null

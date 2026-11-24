@@ -81,7 +81,7 @@ object CorosMcpParser {
     }
 }
 
-class CorosMcpException(message: String) : Exception(message)
+class CorosMcpException(message: String, val code: Int? = null) : Exception(message)
 
 class CorosMcpClient(private val issuer: String) {
     private var initialized = false
@@ -141,7 +141,7 @@ class CorosMcpClient(private val issuer: String) {
             ),
         )
         if (response.code !in 200..299) {
-            throw CorosMcpException("COROS request failed (${response.code})")
+            throw CorosMcpException("COROS request failed (${response.code})", response.code)
         }
         return response
     }
