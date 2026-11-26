@@ -217,6 +217,7 @@ object RideStore {
     var cadenceSource: LiveSource by mutableStateOf(LiveSource.NONE)
 
     /** Near-live COROS state for the active ride. */
+    var showCorosDiag: Boolean by mutableStateOf(false)
     var corosLiveStatus: CorosLiveStatus by mutableStateOf(CorosLiveStatus.IDLE)
     var corosLiveSource: LiveSource by mutableStateOf(LiveSource.NONE)
     var corosHr: Int? by mutableStateOf(null)

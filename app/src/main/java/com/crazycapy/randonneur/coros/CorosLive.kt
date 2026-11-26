@@ -55,6 +55,20 @@ data class CorosWindowStats(
     val samples: Int,
 )
 
+data class CorosLiveDiag(
+    val state: String = "off",
+    val polls: Int = 0,
+    val failures: Int = 0,
+    val lastPollMs: Long? = null,
+    val lastDataMs: Long? = null,
+    val records: Int = 0,
+    val candidates: Int = 0,
+    val activity: String? = null,
+    val window: String? = null,
+    val workout: String? = null,
+    val error: String? = null,
+)
+
 data class CorosTimeWindow(
     val startSec: Long,
     val endSec: Long,

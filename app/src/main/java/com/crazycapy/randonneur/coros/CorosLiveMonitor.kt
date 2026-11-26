@@ -8,6 +8,9 @@ import android.content.Context
 import android.util.Log
 import com.crazycapy.randonneur.BuildConfig
 import com.crazycapy.randonneur.state.RideStore
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +32,7 @@ object CorosLiveMonitor {
     private var job: Job? = null
     private var generation = 0
     private var scheduleLoadedFor: LocalDate? = null
+    var diag: CorosLiveDiag by mutableStateOf(CorosLiveDiag())
 
     fun start(context: Context) {
         val app = context.applicationContext
@@ -36,11 +40,13 @@ object CorosLiveMonitor {
             job?.cancel()
             job = null
             clearLiveStats()
+            diag = CorosLiveDiag(state = "idle", error = "not active or no COROS session")
             log("idle (not connected)")
             return
         }
         if (job?.isActive == true) return
         val runId = ++generation
+        diag = CorosLiveDiag(state = "start", lastPollMs = System.currentTimeMillis())
         log("start")
         job = scope.launch { runLoop(app, runId) }
     }
@@ -50,6 +56,7 @@ object CorosLiveMonitor {
         job?.cancel()
         job = null
         clearLiveStats()
+        diag = diag.copy(state = "paused")
         log("paused")
     }
 
@@ -64,6 +71,7 @@ object CorosLiveMonitor {
         scheduleLoadedFor = null
         clearLiveStats()
         RideStore.corosTodayWorkout = null
+        diag = diag.copy(state = "stop")
         log("stop")
     }
 
@@ -79,6 +87,7 @@ object CorosLiveMonitor {
             ) {
                 return
             }
+            diag = diag.copy(state = "polling", polls = diag.polls + 1, lastPollMs = System.currentTimeMillis())
             val token = CorosController.acquireLiveToken(app)
             if (token == null) {
                 if (!CorosController.hasLiveSession()) {
@@ -87,6 +96,7 @@ object CorosLiveMonitor {
                 }
                 failures++
                 RideStore.corosLiveStatus = CorosLiveStatus.ERROR
+                diag = diag.copy(state = "error", failures = failures, error = "poll returned no result")
                 delay(CorosPollPolicy.nextDelayMs(failures))
                 continue
             }
@@ -98,11 +108,13 @@ object CorosLiveMonitor {
                 throw cancelled
             } catch (failure: Exception) {
                 log("poll failed: ${failure.javaClass.simpleName}")
+                diag = diag.copy(state = "error", error = "${failure.javaClass.simpleName}: ${failure.message.orEmpty()}")
                 null
             }
             if (result == null) {
                 failures++
                 RideStore.corosLiveStatus = CorosLiveStatus.ERROR
+                diag = diag.copy(state = "error", failures = failures, error = "poll returned no result")
                 delay(CorosPollPolicy.nextDelayMs(failures))
             } else {
                 failures = 0
@@ -119,6 +131,7 @@ object CorosLiveMonitor {
         try {
             val lines = session.call("queryTrainingSchedule", scheduleArguments(today))
             RideStore.corosTodayWorkout = CorosLiveParser.parseTodayWorkout(lines, today)
+            diag = diag.copy(workout = RideStore.corosTodayWorkout ?: "none")
             scheduleLoadedFor = today
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -148,6 +161,9 @@ object CorosLiveMonitor {
         val stats = CorosLiveParser.parseWindow(
             session.call("queryCustomActivityLapData", arguments),
         )
+        diag = diag.copy(
+            window = "hr=${stats.avgHr ?: stats.maxHr ?: "-"} cad=${stats.avgCadence ?: stats.maxCadence ?: "-"} pow=${stats.avgPowerW ?: stats.maxPowerW ?: "-"} samples=${stats.samples}",
+        )
         if (stats.inProgress == false) return PollResult(null, null)
         return PollResult(activity, stats)
     }
@@ -161,9 +177,11 @@ object CorosLiveMonitor {
             .filter { it.date == null || CorosLiveParser.isDate(it.date, today) }
             .sortedByDescending { it.startTimestampSec ?: 0L }
             .take(CorosPollPolicy.MAX_ACTIVITY_CANDIDATES)
+        diag = diag.copy(records = records.size, candidates = candidates.size)
         var detailChecks = 0
         for (record in candidates) {
             if (record.inProgress == true && record.labelId != null && record.sportType != null) {
+                diag = diag.copy(activity = "${record.title ?: "activity"} ${record.labelId}/${record.sportType} inProgress=true")
                 return record
             }
             if (record.inProgress == false) continue
@@ -179,8 +197,12 @@ object CorosLiveMonitor {
                     },
                 ),
             )
-            if (detail.inProgress) return record.copy(inProgress = true, labelId = label, sportType = sport)
+            if (detail.inProgress) {
+                diag = diag.copy(activity = "${record.title ?: "activity"} $label/$sport inProgress=true")
+                return record.copy(inProgress = true, labelId = label, sportType = sport)
+            }
         }
+        diag = diag.copy(activity = "none in progress today")
         return null
     }
 
@@ -192,6 +214,7 @@ object CorosLiveMonitor {
         }
         RideStore.corosLiveStatus = CorosLiveStatus.ACTIVE
         RideStore.corosLiveSource = LiveSource.COROS
+        diag = diag.copy(state = "active", lastDataMs = System.currentTimeMillis(), error = null)
         result.stats?.let { stats ->
             (stats.avgHr ?: stats.maxHr)?.let { RideStore.corosHr = it }
             (stats.avgCadence ?: stats.maxCadence)?.let {

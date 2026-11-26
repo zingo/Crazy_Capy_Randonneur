@@ -25,6 +25,12 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.produceState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrightnessHigh
@@ -80,6 +86,8 @@ import com.crazycapy.randonneur.DEFAULT_LAT
 import com.crazycapy.randonneur.DEFAULT_LON
 import com.crazycapy.randonneur.TAG
 import com.crazycapy.randonneur.cache.OfflineEstimateCalculator
+import com.crazycapy.randonneur.coros.CorosController
+import com.crazycapy.randonneur.coros.CorosLiveMonitor
 import com.crazycapy.randonneur.cache.RouteCache
 import com.crazycapy.randonneur.cache.RouteIdentity
 import com.crazycapy.randonneur.cache.RouteOfflinePack
@@ -572,6 +580,11 @@ internal fun NavigationMapScreen(
                 onClick = { map?.moveCamera(CameraUpdateFactory.bearingTo(0.0)) },
                 modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 16.dp, end = 8.dp),
             )
+            if (BuildConfig.DEBUG && RideStore.showCorosDiag) {
+                CorosLiveDebugCard(
+                    Modifier.align(Alignment.BottomStart).padding(8.dp).widthIn(max = 360.dp).heightIn(max = 220.dp),
+                )
+            }
         }
     }
 
@@ -795,4 +808,34 @@ private fun fmtSec(seconds: Long): String { val h=seconds/3600; val m=(seconds%3
 private fun formatEstimate(bytes: Long): String {
     if (bytes < 1024 * 1024) return "${bytes / 1024} kB"
     return "%.1f MB".format(bytes / (1024.0 * 1024.0))
+}
+
+@Composable
+private fun CorosLiveDebugCard(modifier: Modifier) {
+    val diag = CorosLiveMonitor.diag
+    val now by produceState(System.currentTimeMillis()) {
+        while (true) {
+            value = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1000L)
+        }
+    }
+    fun age(at: Long?): String = at?.let { "${((now - it) / 1000L).coerceAtLeast(0L)}s" } ?: "never"
+    val lines = listOf(
+        "COROS live · ${diag.state}",
+        "app=${if (RideStore.active) "ride" else "idle"} paused=${RideStore.paused || RideStore.autoPaused} coros=${CorosController.status}",
+        "polls=${diag.polls} fail=${diag.failures} last=${age(diag.lastPollMs)} data=${age(diag.lastDataMs)}",
+        "records=${diag.records} candidates=${diag.candidates}",
+        "activity=${diag.activity ?: "none"}",
+        "window=${diag.window ?: "none"}",
+        "hr=${RideStore.hr ?: "-"}(${RideStore.hrSource}) cad=${RideStore.corosCadence ?: "-"}(${RideStore.cadenceSource})",
+        "workout=${diag.workout ?: "not loaded"}",
+        "error=${diag.error ?: "-"}",
+    )
+    Surface(modifier, color = Color.Black.copy(alpha = 0.78f), shape = RoundedCornerShape(6.dp)) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(6.dp)) {
+            lines.forEach {
+                Text(it, color = Color.White, fontSize = 10.sp, lineHeight = 12.sp)
+            }
+        }
+    }
 }

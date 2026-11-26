@@ -464,6 +464,17 @@ internal fun SettingsDialog(
                     title = "Show speech markers",
                     subtitle = "Toggle the marker overlay on the map",
                 )
+                if (com.crazycapy.randonneur.BuildConfig.DEBUG) {
+                    Spacer(Modifier.height(12.dp))
+                    Text("Debug", style = MaterialTheme.typography.titleSmall)
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                    SettingSwitch(
+                        checked = RideStore.showCorosDiag,
+                        onCheckedChange = { RideStore.showCorosDiag = it },
+                        title = "COROS live diagnostics",
+                        subtitle = "On-screen COROS poll/activity/error panel during rides",
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
                 Text("About", style = MaterialTheme.typography.titleSmall)
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
