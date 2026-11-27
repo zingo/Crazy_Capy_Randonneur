@@ -16,6 +16,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.core.view.WindowCompat
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.MaterialTheme
+import com.crazycapy.randonneur.ble.BleCyclingProvider
+import com.crazycapy.randonneur.ble.BleHrProvider
 import com.crazycapy.randonneur.cache.OfflinePrune
 import com.crazycapy.randonneur.cache.PrepareRecovery
 import com.crazycapy.randonneur.coros.CorosController
@@ -36,6 +38,8 @@ class MainActivity : ComponentActivity() {
         RouteStore.init(appContext)
         RouteStore.loadSettings(appContext)
         CorosController.init(appContext)
+        BleHrProvider.init(appContext)
+        BleCyclingProvider.init(appContext)
         OfflinePrune.pruneAtStartup(appContext)
         if (PrepareRecovery.load(appContext) != null) {
             if (PrepareRecoveryWork.workerRunning) {

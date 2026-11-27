@@ -212,6 +212,59 @@ object RideStore {
     var hrDeviceAddress: String? by mutableStateOf(null)
     var hrDeviceName: String? by mutableStateOf(null)
 
+    var sensorSpeedKmh: Double? by mutableStateOf(null)
+    var sensorSpeedSource: SensorSource? by mutableStateOf(null)
+    var cadenceRpm: Int? by mutableStateOf(null)
+    var cadenceSource: SensorSource? by mutableStateOf(null)
+    var powerWatts: Int? by mutableStateOf(null)
+    var powerSource: SensorSource? by mutableStateOf(null)
+
+    var cyclingDeviceAddress: String? by mutableStateOf(null)
+    var cyclingDeviceName: String? by mutableStateOf(null)
+    var wheelCircumferenceMm: Int by mutableStateOf(2096)
+
+    fun applySensorSpeed(value: Double?, source: SensorSource?) {
+        if (value == null) {
+            if (source == null || sensorSpeedSource == source) {
+                sensorSpeedKmh = null
+                sensorSpeedSource = null
+            }
+            return
+        }
+        val current = sensorSpeedSource
+        if (current != null && source != null && current.priority > source.priority) return
+        sensorSpeedKmh = value
+        sensorSpeedSource = source
+    }
+
+    fun applyCadence(value: Int?, source: SensorSource?) {
+        if (value == null) {
+            if (source == null || cadenceSource == source) {
+                cadenceRpm = null
+                cadenceSource = null
+            }
+            return
+        }
+        val current = cadenceSource
+        if (current != null && source != null && current.priority > source.priority) return
+        cadenceRpm = value
+        cadenceSource = source
+    }
+
+    fun applyPower(value: Int?, source: SensorSource?) {
+        if (value == null) {
+            if (source == null || powerSource == source) {
+                powerWatts = null
+                powerSource = null
+            }
+            return
+        }
+        val current = powerSource
+        if (current != null && source != null && current.priority > source.priority) return
+        powerWatts = value
+        powerSource = source
+    }
+
     // ---- POI / waypoint guidance ----
 
     /** Name of the next waypoint along the route, if any. */
@@ -330,6 +383,12 @@ object RideStore {
         avgSpeedKmh = 0.0
         elapsedSec = 0L
         hr = null
+        sensorSpeedKmh = null
+        sensorSpeedSource = null
+        cadenceRpm = null
+        cadenceSource = null
+        powerWatts = null
+        powerSource = null
         nextPoiName = null
         nextPoiM = null
         nextPoiIndex = null

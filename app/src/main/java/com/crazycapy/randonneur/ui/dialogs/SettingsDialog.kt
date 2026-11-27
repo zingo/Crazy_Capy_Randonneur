@@ -41,7 +41,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.crazycapy.randonneur.ble.BleCyclingProvider
 import com.crazycapy.randonneur.ble.BleHrProvider
+import com.crazycapy.randonneur.ble.CyclingPhase
+import com.crazycapy.randonneur.ble.CyclingSensorState
 import com.crazycapy.randonneur.ble.HrPhase
 import com.crazycapy.randonneur.ble.HrSensorState
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
@@ -79,7 +82,9 @@ internal fun SettingsDialog(
 ) {
     val context = LocalContext.current
     val hrState = BleHrProvider.state
+    val cyclingState = BleCyclingProvider.state
     var pendingHrConnect by remember { mutableStateOf<Pair<String, String?>?>(null) }
+    var pendingCyclingConnect by remember { mutableStateOf<Pair<String, String?>?>(null) }
     val hrPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) {
@@ -107,6 +112,38 @@ internal fun SettingsDialog(
         else {
             pendingHrConnect = address to name
             hrPermission.launch(
+                arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT),
+            )
+        }
+    }
+
+    val cyclingPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) {
+        val pending = pendingCyclingConnect
+        pendingCyclingConnect = null
+        if (BleCyclingProvider.hasPermissions(context)) {
+            if (pending != null) BleCyclingProvider.connect(pending.first, pending.second)
+            else BleCyclingProvider.startScan()
+        }
+    }
+    fun scanCycling() {
+        if (BleCyclingProvider.hasPermissions(context)) BleCyclingProvider.startScan()
+        else {
+            pendingCyclingConnect = null
+            cyclingPermission.launch(
+                arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT),
+            )
+        }
+    }
+    fun connectCycling(address: String, name: String?) {
+        RideStore.cyclingDeviceAddress = address
+        RideStore.cyclingDeviceName = name
+        RouteStore.saveSettings(context)
+        if (BleCyclingProvider.hasPermissions(context)) BleCyclingProvider.connect(address, name)
+        else {
+            pendingCyclingConnect = address to name
+            cyclingPermission.launch(
                 arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT),
             )
         }
@@ -366,6 +403,59 @@ internal fun SettingsDialog(
                     "Standard BLE heart-rate straps (service 0x180D). A real sensor needs BLE-capable hardware.",
                     style = MaterialTheme.typography.bodySmall,
                 )
+                Spacer(Modifier.height(12.dp))
+                Text("Speed / cadence / power", style = MaterialTheme.typography.titleSmall)
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                Text(cyclingStatusText(cyclingState), style = MaterialTheme.typography.bodyMedium)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    if (cyclingState.phase == CyclingPhase.CONNECTED) {
+                        TextButton(onClick = { BleCyclingProvider.disconnect() }) { Text("Disconnect") }
+                    } else {
+                        if (cyclingState.phase == CyclingPhase.SCANNING) {
+                            TextButton(onClick = { BleCyclingProvider.stopScan() }) { Text("Cancel scan") }
+                        } else {
+                            TextButton(onClick = { scanCycling() }) { Text("Scan") }
+                        }
+                        val savedAddress = RideStore.cyclingDeviceAddress
+                        if (!savedAddress.isNullOrBlank() && cyclingState.phase != CyclingPhase.SCANNING) {
+                            TextButton(onClick = { connectCycling(savedAddress, RideStore.cyclingDeviceName) }) {
+                                Text("Connect ${RideStore.cyclingDeviceName ?: "saved sensor"}")
+                            }
+                        }
+                    }
+                }
+                if (cyclingState.phase == CyclingPhase.SCANNING) {
+                    if (cyclingState.devices.isEmpty()) {
+                        Text("No cycling sensors found yet", style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        Text("Choose a sensor", style = MaterialTheme.typography.bodySmall)
+                        cyclingState.devices.forEach { device ->
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(device.name ?: "Cycling sensor", style = MaterialTheme.typography.bodyMedium)
+                                    Text(device.address, style = MaterialTheme.typography.bodySmall)
+                                }
+                                TextButton(onClick = { connectCycling(device.address, device.name) }) {
+                                    Text("Connect")
+                                }
+                            }
+                        }
+                    }
+                }
+                SettingNumberField(
+                    title = "Wheel circumference",
+                    subtitle = "CSC wheel speed calibration in mm",
+                    value = RideStore.wheelCircumferenceMm,
+                    suffix = "mm",
+                    onValueChange = {
+                        RideStore.wheelCircumferenceMm = it.coerceIn(500, 3000)
+                        RouteStore.saveSettings(context)
+                    },
+                )
+                Text(
+                    "Standard BLE cycling sensors: speed/cadence (CSC 0x1816) and power (CPS 0x1818). GPS speed stays the HUD speed; wheel speed is shown as a sensor value. A real sensor needs BLE-capable hardware.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
                 Text("COROS (optional)", style = MaterialTheme.typography.titleSmall)
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -493,6 +583,26 @@ internal fun SettingsDialog(
     if (showCorosData) {
         CorosDialog(context = context, onDismiss = { showCorosData = false })
     }
+}
+
+private fun cyclingStatusText(state: CyclingSensorState): String = when (state.phase) {
+    CyclingPhase.IDLE -> {
+        val saved = RideStore.cyclingDeviceName ?: RideStore.cyclingDeviceAddress
+        if (saved.isNullOrBlank()) "Not connected" else "Saved sensor: $saved"
+    }
+    CyclingPhase.SCANNING -> "Scanning…"
+    CyclingPhase.CONNECTING -> "Connecting…"
+    CyclingPhase.CONNECTED -> buildString {
+        append("Connected: ").append(state.deviceName ?: state.deviceAddress ?: "sensor")
+        val values = listOfNotNull(
+            state.speedKmh?.let { "wheel" },
+            state.cadenceRpm?.let { "cadence" },
+            state.powerWatts?.let { "power" },
+        )
+        if (values.isNotEmpty()) append(" · ").append(values.joinToString(", "))
+    }
+    CyclingPhase.PERMISSION_NEEDED -> "Bluetooth permission needed"
+    CyclingPhase.ERROR -> state.error ?: "Error"
 }
 
 private fun corosStatusText(): String = when (CorosController.status) {
