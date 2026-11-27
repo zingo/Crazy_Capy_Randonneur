@@ -27,8 +27,9 @@ the phone in the pocket with the screen off, and ride to spoken guidance.
 - Coros: optional read-only COROS integration over the official MCP server —
   browser OAuth (CLI login session + PKCE), Keystore-encrypted tokens,
   activities/HRV/recovery/planned-workout dashboard plus post-ride latest
-  activity detail (laps, HR/cadence/power, training load/effect); no live
-  in-ride polling. BLE HR/speed remains a separate future adapter.
+  activity detail (laps, HR/cadence/power, training load/effect) and
+  saved-ride overlap matching with missing-only enrichment; no live in-ride
+  polling. BLE HR/speed remains a separate future adapter.
 - Branding: `Crazy Capy-D.png` from crazycapy.com; adaptive + legacy mipmaps via PIL;
   app label "Crazy Capy Randonneur". Notification icon is a separate monochrome silhouette.
 
@@ -284,11 +285,16 @@ CrazyCapyRouting/
   picks the newest completed record, fetches detail + lap data and shows
   duration/distance, avg/max HR and cadence, power, training load/effect and a
   compact lap summary; a connected account refreshes it once after a ride
-  finishes. No COROS password is requested or stored; no workout start, live
-  sensor streaming, in-ride polling or write tools. JVM tests cover URLs, PKCE,
-  state, expiry, SSE/JSON, defensive activity/detail/lap text+JSON and latest
-  selection; device verification stops at the login/cancel path without a
-  COROS account.
+  finishes. Saved rides are also matched to recent COROS activities by time
+  overlap (best positive overlap, watch start/stop differences allowed);
+  matched detail/laps are stored in a per-ride sidecar and merged missing-only
+  (app GPX/HR/elevation wins, COROS fills cadence/power/load/TE/calories/zones)
+  for ride detail and TCX. No COROS password is requested or stored; no
+  workout start, live sensor streaming, in-ride polling or write tools. JVM
+  tests cover URLs, PKCE, state, expiry, SSE/JSON, defensive activity/detail/
+  lap text+JSON, latest selection, overlap selection, merge precedence and
+  enrichment JSON backward compatibility; device verification stops at the
+  login/cancel path without a COROS account.
 
 ## Next (M5 polish)
 

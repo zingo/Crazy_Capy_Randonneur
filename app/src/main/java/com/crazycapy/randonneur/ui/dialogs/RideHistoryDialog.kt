@@ -64,7 +64,17 @@ internal fun RideHistoryDialog(
                     rides.forEach { ride ->
                         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
                             Column(Modifier.weight(1f).clickable { detailTarget = ride }) {
-                                Text(ride.name, style = MaterialTheme.typography.bodyMedium)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(ride.name, style = MaterialTheme.typography.bodyMedium)
+                                    if (ride.corosEnriched) {
+                                        Text(
+                                            "COROS",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.tertiary,
+                                            modifier = Modifier.padding(start = 6.dp),
+                                        )
+                                    }
+                                }
                                 Text(
                                     "${Phrases.formatDistance(ride.distanceM)} · moving ${formatDuration(ride.durationSec)} · total ${formatDuration(ride.totalSec)} · paused ${formatDuration((ride.totalSec - ride.durationSec).coerceAtLeast(0))} · ${"%.1f".format(ride.avgKmh)} km/h avg · ↑${ride.ascentM.roundToInt()} ↓${ride.descentM.roundToInt()} m",
                                     style = MaterialTheme.typography.bodySmall,
@@ -106,7 +116,10 @@ internal fun RideHistoryDialog(
     )
 
     detailTarget?.let { ride ->
-        RideDetailDialog(context = context, ride = ride, onClose = { detailTarget = null })
+        RideDetailDialog(context = context, ride = ride, onClose = {
+            detailTarget = null
+            rides = RideHistory.list(context)
+        })
     }
 
     renameTarget?.let { ride ->

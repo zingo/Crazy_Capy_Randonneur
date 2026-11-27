@@ -610,8 +610,11 @@ class NavigationService : Service() {
     private fun saveRideHistory() {
         if ((RideStore.mode == RideMode.GPS || RideStore.mode == RideMode.FREE) && RideStore.riddenM >= 50.0) {
             appendTracePoints()
-            RideStore.lastRideSummary = RideHistory.finalizeRide(this, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh, RideStore.totalElapsedSec)
-            if (CorosController.isConnected()) CorosController.refreshLatestActivity(this)
+            val saved = RideHistory.finalizeRide(this, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh, RideStore.totalElapsedSec)
+            RideStore.lastRideSummary = saved
+            if (saved != null && CorosController.isConnected()) {
+                CorosController.syncRide(this, saved)
+            }
         } else {
             RideHistory.abort(this)
         }

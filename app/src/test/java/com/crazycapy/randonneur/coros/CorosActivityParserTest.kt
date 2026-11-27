@@ -173,6 +173,39 @@ class CorosActivityParserTest {
     }
 
     @Test
+    fun parsesAdditionalDetailMetricsAndHrZones() {
+        val detail = CorosActivityParser.parseActivityDetail(
+            """
+            {"activity":{"labelId":"abc123","sportType":200,
+             "calories":910,"elevationGain":1240,
+             "anaerobicTrainingEffect":1.2,
+             "hrZones":[
+               {"zone":1,"label":"Recovery","min":100,"max":120,"seconds":600,"percent":12},
+               {"zone":2,"name":"Aerobic","minBpm":121,"maxBpm":140,"time":1200}
+             ]}}
+            """.trimIndent(),
+        )
+
+        assertEquals(910.0, detail.calories ?: 0.0, 0.001)
+        assertEquals(1240.0, detail.elevationGainM ?: 0.0, 0.001)
+        assertEquals(1.2, detail.anaerobicTrainingEffect ?: 0.0, 0.001)
+        assertEquals(2, detail.hrZones.size)
+        assertEquals("Aerobic", detail.hrZones[1].label)
+        assertEquals(121, detail.hrZones[1].minBpm)
+        assertEquals(1200.0, detail.hrZones[1].seconds ?: 0.0, 0.001)
+    }
+
+    @Test
+    fun parsesSportRecordDurationForOverlap() {
+        val records = CorosActivityParser.parseSportRecords(
+            """{"records":[{"labelId":"abc","sportType":200,"startTime":1790000000,
+               "duration":4200}]}""",
+        )
+
+        assertEquals(4200.0, records[0].durationSec ?: 0.0, 0.001)
+    }
+
+    @Test
     fun ignoresBlankAndNonActivityText() {
         assertEquals(0, CorosActivityParser.parseSportRecords("").size)
         assertEquals(0, CorosActivityParser.parseLaps("no laps here").size)

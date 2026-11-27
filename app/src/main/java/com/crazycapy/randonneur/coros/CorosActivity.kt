@@ -18,6 +18,16 @@ data class CorosSportRecord(
     val startTimestampSec: Long?,
     val endTimestampSec: Long?,
     val title: String?,
+    val durationSec: Double? = null,
+)
+
+data class CorosHrZone(
+    val zone: Int?,
+    val label: String?,
+    val minBpm: Int?,
+    val maxBpm: Int?,
+    val seconds: Double?,
+    val percent: Double?,
 )
 
 data class CorosLap(
@@ -48,6 +58,10 @@ data class CorosActivityDetail(
     val maxPowerW: Int? = null,
     val trainingLoad: Double? = null,
     val trainingEffect: Double? = null,
+    val anaerobicTrainingEffect: Double? = null,
+    val calories: Double? = null,
+    val elevationGainM: Double? = null,
+    val hrZones: List<CorosHrZone> = emptyList(),
 )
 
 data class CorosLatestActivity(
@@ -86,6 +100,14 @@ object CorosActivityParser {
         Regex("(?i)\\btraining\\s*load\\b\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)")
     private val TRAINING_EFFECT_TEXT =
         Regex("(?i)\\b(?:aerobic\\s*)?training\\s*effect\\b\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)")
+    private val ANAEROBIC_EFFECT_TEXT =
+        Regex("(?i)\\banaerobic\\s*training\\s*effect\\b\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)")
+    private val CALORIES_TEXT =
+        Regex("(?i)\\b(?:calories|energy)\\b\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)")
+    private val ELEVATION_TEXT = Regex(
+        "(?i)\\b(?:elevation\\s*(?:gain)?|ascent|total\\s*ascent)\\b\\s*[:=]?\\s*" +
+            "(\\d+(?:\\.\\d+)?)\\s*(?:m|meters?|metres?)?",
+    )
     private val AVG_HR_KEYS = arrayOf(
         "avgHr", "avg_hr", "averageHr", "average_hr", "averageHeartRate", "average_heart_rate",
     )
@@ -122,6 +144,27 @@ object CorosActivityParser {
         arrayOf("trainingLoad", "training_load", "load", "trainingLoadScore")
     private val TRAINING_EFFECT_KEYS =
         arrayOf("trainingEffect", "training_effect", "aerobicTrainingEffect", "te")
+    private val ANAEROBIC_EFFECT_KEYS = arrayOf(
+        "anaerobicTrainingEffect", "anaerobic_training_effect", "anaerobicTe", "anaerobic_te",
+    )
+    private val CALORIE_KEYS =
+        arrayOf("calories", "calorie", "totalCalories", "total_calories", "energy", "kcal")
+    private val ELEVATION_KEYS = arrayOf(
+        "elevationGain", "elevation_gain", "elevationGainM", "totalAscent", "total_ascent",
+        "ascent", "elevation", "totalElevationGain", "total_elevation_gain",
+    )
+    private val ZONE_KEYS = arrayOf("zone", "zoneIndex", "zone_index", "index", "number")
+    private val ZONE_NAME_KEYS = arrayOf("name", "label", "zoneName", "zone_name")
+    private val ZONE_MIN_KEYS = arrayOf(
+        "min", "minHr", "min_hr", "minBpm", "min_bpm", "lower", "lowerHr",
+    )
+    private val ZONE_MAX_KEYS = arrayOf(
+        "max", "maxHr", "max_hr", "maxBpm", "max_bpm", "upper", "upperHr",
+    )
+    private val ZONE_SECONDS_KEYS =
+        arrayOf("seconds", "time", "duration", "durationSec", "duration_sec", "timeSec")
+    private val ZONE_PERCENT_KEYS =
+        arrayOf("percent", "percentage", "pct", "ratio")
 
     fun parseSportRecords(lines: List<String>): List<CorosSportRecord> {
         val fromJson = lines.flatMap(::jsonSportRecords)
@@ -165,6 +208,10 @@ object CorosActivityParser {
             maxPowerW = metrics.maxPowerW,
             trainingLoad = metrics.trainingLoad,
             trainingEffect = metrics.trainingEffect,
+            anaerobicTrainingEffect = metrics.anaerobicTrainingEffect,
+            calories = metrics.calories,
+            elevationGainM = metrics.elevationGainM,
+            hrZones = jsonHrZones(lines),
         )
     }
 
@@ -190,6 +237,9 @@ object CorosActivityParser {
         val maxPowerW: Int? = null,
         val trainingLoad: Double? = null,
         val trainingEffect: Double? = null,
+        val anaerobicTrainingEffect: Double? = null,
+        val calories: Double? = null,
+        val elevationGainM: Double? = null,
     )
 
     private fun jsonSportRecords(text: String): List<CorosSportRecord> {
@@ -212,6 +262,7 @@ object CorosActivityParser {
             startTimestampSec = start,
             endTimestampSec = firstTimestamp(obj, END_KEYS),
             title = firstString(obj, NAME_KEYS),
+            durationSec = firstDouble(obj, DURATION_KEYS),
         )
     }
 
@@ -240,6 +291,7 @@ object CorosActivityParser {
             endTimestampSec = END_TEXT.find(text)?.groupValues?.get(1)
                 ?.toLongOrNull()?.let(::normalizeTimestamp),
             title = null,
+            durationSec = parseDuration(DURATION_TEXT.find(text)?.groupValues?.get(1)),
         )
     }
 
@@ -257,12 +309,17 @@ object CorosActivityParser {
             maxPowerW = objects.firstNotNullOfOrNull { firstInt(it, MAX_POWER_KEYS) },
             trainingLoad = objects.firstNotNullOfOrNull { firstDouble(it, TRAINING_LOAD_KEYS) },
             trainingEffect = objects.firstNotNullOfOrNull { firstDouble(it, TRAINING_EFFECT_KEYS) },
+            anaerobicTrainingEffect =
+                objects.firstNotNullOfOrNull { firstDouble(it, ANAEROBIC_EFFECT_KEYS) },
+            calories = objects.firstNotNullOfOrNull { firstDouble(it, CALORIE_KEYS) },
+            elevationGainM = objects.firstNotNullOfOrNull { firstDouble(it, ELEVATION_KEYS) },
         )
         return stats.takeIf {
             it.durationSec != null || it.distanceM != null || it.avgHr != null ||
                 it.maxHr != null || it.avgCadence != null || it.maxCadence != null ||
                 it.avgPowerW != null || it.maxPowerW != null || it.trainingLoad != null ||
-                it.trainingEffect != null
+                it.trainingEffect != null || it.anaerobicTrainingEffect != null ||
+                it.calories != null || it.elevationGainM != null
         }
     }
 
@@ -277,7 +334,53 @@ object CorosActivityParser {
         maxPowerW = MAX_POWER_TEXT.find(text)?.groupValues?.get(1)?.toIntOrNull(),
         trainingLoad = TRAINING_LOAD_TEXT.find(text)?.groupValues?.get(1)?.toDoubleOrNull(),
         trainingEffect = TRAINING_EFFECT_TEXT.find(text)?.groupValues?.get(1)?.toDoubleOrNull(),
+        anaerobicTrainingEffect =
+            ANAEROBIC_EFFECT_TEXT.find(text)?.groupValues?.get(1)?.toDoubleOrNull(),
+        calories = CALORIES_TEXT.find(text)?.groupValues?.get(1)?.toDoubleOrNull(),
+        elevationGainM = ELEVATION_TEXT.find(text)?.groupValues?.get(1)?.toDoubleOrNull(),
     )
+
+    private fun jsonHrZones(lines: List<String>): List<CorosHrZone> {
+        val root = lines.firstNotNullOfOrNull(::jsonRoot) ?: return emptyList()
+        val arrays = mutableListOf<JSONArray>()
+        collectZoneArrays(root, arrays, 0)
+        val zones = mutableListOf<CorosHrZone>()
+        arrays.forEach { array ->
+            for (index in 0 until array.length()) {
+                val obj = array.optJSONObject(index) ?: continue
+                val zone = CorosHrZone(
+                    zone = firstInt(obj, ZONE_KEYS) ?: (index + 1),
+                    label = firstString(obj, ZONE_NAME_KEYS),
+                    minBpm = firstInt(obj, ZONE_MIN_KEYS),
+                    maxBpm = firstInt(obj, ZONE_MAX_KEYS),
+                    seconds = firstDouble(obj, ZONE_SECONDS_KEYS),
+                    percent = firstDouble(obj, ZONE_PERCENT_KEYS),
+                )
+                if (zone.minBpm != null || zone.maxBpm != null || zone.seconds != null ||
+                    zone.percent != null
+                ) {
+                    zones.add(zone)
+                }
+            }
+        }
+        return zones.distinctBy { it.zone to it.minBpm to it.maxBpm }
+    }
+
+    private fun collectZoneArrays(value: Any?, out: MutableList<JSONArray>, depth: Int) {
+        if (depth > MAX_DEPTH) return
+        when (value) {
+            is JSONObject -> value.keys().forEach { key ->
+                val child = value.opt(key)
+                if (child is JSONArray && key.contains("zone", ignoreCase = true)) out.add(child)
+                collectZoneArrays(child, out, depth + 1)
+            }
+            is JSONArray -> {
+                for (index in 0 until value.length()) {
+                    collectZoneArrays(value.opt(index), out, depth + 1)
+                }
+            }
+        }
+    }
 
     private fun jsonLaps(text: String): List<CorosLap> {
         val root = jsonRoot(text) ?: return emptyList()
