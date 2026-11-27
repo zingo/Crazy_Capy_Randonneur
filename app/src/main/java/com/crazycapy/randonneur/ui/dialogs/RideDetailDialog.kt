@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -41,7 +43,7 @@ internal fun RideDetailDialog(
         onDismissRequest = onClose,
         title = { Text(ride.name) },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 Text(
                     "${Phrases.formatDistance(ride.distanceM)} · moving ${fmt(ride.durationSec)} · total ${fmt(ride.totalSec)}\n" +
                         "paused ${fmt((ride.totalSec - ride.durationSec).coerceAtLeast(0))} · ${"%.1f".format(ride.avgKmh)} km/h avg · " +
@@ -116,6 +118,7 @@ internal fun RideDetailDialog(
                 } else {
                     Text("No track samples in this file.", style = MaterialTheme.typography.bodySmall)
                 }
+                CorosRideBlock(context = context, ride = ride)
             }
         },
         confirmButton = {},

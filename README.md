@@ -174,12 +174,23 @@ debug-build-only; release builds carry none of it.
   through your browser; Crazy Capy never asks for or stores your COROS
   password. A short-lived CLI login session is polled while you authorize,
   then the app keeps OAuth tokens encrypted with Android Keystore (AES-GCM)
-  and shows recent activities (14 days), today's HRV, recovery and planned
-  workouts in a read-only dialog with manual Refresh and a last-sync time.
-  Pick Auto/EU/US/CN before connecting; changing the region requires signing
-  in again. Phase 1 is read-only and does not start workouts or stream live
-  sensors; in-progress/live data and workout-start guidance are follow-ups.
-  Disconnect clears the stored tokens.
+  and shows recent activities (14 days), today's HRV, recovery, planned
+  workouts and a **Latest activity** section (name/date, duration/distance,
+  avg/max HR and cadence, power, training load/effect and a compact lap
+  summary) in a read-only dialog with manual Refresh and a last-sync time.
+  After a ride finishes, a connected account makes one background attempt to
+  match the saved ride against recent COROS activities by time overlap (watch
+  starts/stops may differ; ≥5 min or ≥50% of the shorter ride is required).
+  The best overlap wins and its detail/laps are stored in a sidecar JSON next
+  to the ride, adding only missing metrics (COROS HR when the app recorded
+  none, cadence, power, training load/effect, calories, elevation, HR zones
+  and lap summary) with a **COROS** label in ride detail and history. The GPX
+  points are never modified, app values always win, and TCX export fills only
+  the summary fields the app lacked. Ride detail has a manual **Sync COROS**
+  retry with matched/unmatched/error states; there is no polling loop. Pick
+  Auto/EU/US/CN before connecting; changing the region requires signing in
+  again. The integration is read-only and does not start workouts or stream
+  live sensors. Disconnect clears the stored tokens.
 
 ### Testing
 - **Ghost ride simulator** – try any route without leaving home: follow a
@@ -326,7 +337,10 @@ fix pipeline and asserts arrival with turn announcements.
   the **Open-source licenses** viewer. **Settings → COROS** connects the optional
   read-only integration: choose Auto/EU/US/CN, Connect (opens the COROS sign-in
   page), Cancel while waiting, or Disconnect; once connected, **COROS data**
-  shows recent activities, HRV, recovery and planned workouts.
+  shows the latest completed activity (with lap summary) plus recent
+  activities, HRV, recovery and planned workouts. Saved rides gain a small
+  **COROS** badge when matched; open a ride to see the overlap, contributed
+  metrics, HR zones/laps and to retry the match.
 
 ### 4. Golden screenshot verification (hacker option)
 
@@ -346,7 +360,7 @@ rendering via `adb exec-out screencap` and pixel analysis (see
 | `app/src/main/java/.../service` | Foreground `NavigationService`: GPS, ghost-ride driver, TTS (audio-focus ducking), wake lock, living notification |
 | `app/src/main/java/.../state` | `RideStore` (shared app state), `RouteStore` (on-device route library + settings/last-ride persistence), `RideMode` |
 | `app/src/main/java/.../ble` | BLE heart-rate provider (service `0x180D`, parser, reconnect policy) |
-| `app/src/main/java/.../coros` | Optional COROS: region endpoints, browser OAuth (CLI login + PKCE), MCP client, Keystore-encrypted token store, read-only data controller |
+| `app/src/main/java/.../coros` | Optional COROS: region endpoints, browser OAuth (CLI login + PKCE), MCP client, Keystore-encrypted token store, read-only data controller, post-ride overlap matcher/enrichment |
 | `app/src/main/java/.../cache` | Prepare route offline: corridor map pack, turn-image generation, storage, tile warm, anchor projection |
 | `app/src/main/java/.../sim` | Ghost ride simulator |
 | `app/src/main/java/.../ui` | Compose overlays: HUD + next-turn preview, off-route ack, dialogs |

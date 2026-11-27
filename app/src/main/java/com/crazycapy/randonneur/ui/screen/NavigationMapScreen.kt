@@ -100,6 +100,7 @@ import com.crazycapy.randonneur.ui.TrainingHud
 import com.crazycapy.randonneur.ui.components.GhostControls
 import com.crazycapy.randonneur.ui.components.ResumeBanner
 import com.crazycapy.randonneur.ui.components.showResumeOffer
+import com.crazycapy.randonneur.ui.dialogs.CorosRideBlock
 import com.crazycapy.randonneur.ui.dialogs.LicensesDialog
 import com.crazycapy.randonneur.ui.dialogs.OfflinePacksDialog
 import com.crazycapy.randonneur.ui.dialogs.PrepareRouteDialog
@@ -642,6 +643,7 @@ internal fun NavigationMapScreen(
                             "${"%.1f".format(r.avgKmh)} km/h avg · ${"%.1f".format(r.maxKmh)} max · ↑${r.ascentM.toInt()} ↓${r.descentM.toInt()} m\n" +
                             "${r.stops} stops · longest ${fmtSec(r.longestStopSec)}",
                     )
+                    CorosRideBlock(context = context, ride = r)
                 }
             },
             confirmButton = {

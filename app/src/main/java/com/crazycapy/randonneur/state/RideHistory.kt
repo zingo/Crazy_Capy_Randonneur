@@ -5,6 +5,9 @@
 package com.crazycapy.randonneur.state
 
 import android.content.Context
+import com.crazycapy.randonneur.coros.CorosEnrichment
+import com.crazycapy.randonneur.coros.CorosEnrichmentCodec
+import com.crazycapy.randonneur.coros.CorosMerge
 import com.crazycapy.randonneur.gpx.Track
 import com.crazycapy.randonneur.gpx.TrackLoader
 import com.crazycapy.randonneur.nav.Geo
@@ -15,6 +18,7 @@ import java.nio.file.StandardCopyOption
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * On-device library of completed rides. While riding, an append-only log
@@ -37,6 +41,7 @@ object RideHistory {
         val totalSec: Long = durationSec,
         val stops: Int = 0,
         val longestStopSec: Long = 0,
+        val corosEnriched: Boolean = false,
     )
 
     private fun dir(context: Context): File = File(context.filesDir, "rides").apply { mkdirs() }
@@ -44,12 +49,28 @@ object RideHistory {
     private fun metaFile(context: Context) = File(dir(context), "inprogress.meta")
     private fun logFile(context: Context) = File(dir(context), "inprogress.log")
     private fun rideFile(context: Context, id: String) = File(dir(context), "$id.gpx")
+    private fun enrichmentFile(context: Context, id: String) =
+        File(dir(context), "$id.coros.json")
 
     fun list(context: Context): List<SavedRide> = runCatching {
         val f = indexFile(context)
         if (!f.exists()) emptyList()
-        else f.readLines().mapNotNull(::parseLine).sortedByDescending { it.startedAtMs }
+        else f.readLines().mapNotNull(::parseLine)
+            .map { it.copy(corosEnriched = enrichmentFile(context, it.id).exists()) }
+            .sortedByDescending { it.startedAtMs }
     }.getOrDefault(emptyList())
+
+    fun loadEnrichment(context: Context, id: String): CorosEnrichment? = runCatching {
+        val f = enrichmentFile(context, id)
+        if (!f.exists()) return null
+        CorosEnrichmentCodec.decode(f.readText())
+    }.getOrNull()
+
+    fun saveEnrichment(context: Context, id: String, enrichment: CorosEnrichment) {
+        runCatching {
+            atomicWrite(enrichmentFile(context, id), CorosEnrichmentCodec.encode(enrichment))
+        }
+    }
 
     /** Append new points + refresh the tiny meta line. Cheap (append-only). */
     fun checkpoint(
@@ -184,17 +205,50 @@ object RideHistory {
         val ride = list(context).firstOrNull { it.id == id } ?: return null
         val pts = loadSeries(context, id)
         if (pts.size < 2) return null
+        val appHr = pts.mapNotNull { it.hr }
+        val appElevation = ride.ascentM.takeIf { pts.any { p -> p.eleM != null } }
+        val merged = CorosMerge.merge(
+            appHr,
+            appElevation,
+            null,
+            loadEnrichment(context, id),
+        )
+        val tcx = CorosMerge.tcx(merged)
         val iso = { ms: Long -> Instant.ofEpochMilli(ms).toString() }
         val sb = StringBuilder()
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-        sb.append("<TrainingCenterDatabase xmlns=\"http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2\"><Activities><Activity Sport=\"Biking\"><Id>").append(esc(ride.name)).append("</Id><Lap StartTime=\"").append(iso(ride.startedAtMs)).append("\"><TotalTimeSeconds>").append(ride.totalSec).append("</TotalTimeSeconds><DistanceMeters>").append(ride.distanceM).append("</DistanceMeters><Calories>0</Calories><Intensity>Active</Intensity><TriggerMethod>Manual</TriggerMethod><Track>")
+        sb.append("<TrainingCenterDatabase xmlns=\"http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2\"")
+        sb.append(" xmlns:ns3=\"http://www.garmin.com/xmlschemas/ActivityExtension/v2\">")
+        sb.append("<Activities><Activity Sport=\"Biking\"><Id>").append(esc(ride.name))
+            .append("</Id><Lap StartTime=\"").append(iso(ride.startedAtMs))
+            .append("\"><TotalTimeSeconds>").append(ride.totalSec)
+            .append("</TotalTimeSeconds><DistanceMeters>").append(ride.distanceM)
+            .append("</DistanceMeters><Calories>").append((tcx.calories ?: 0.0).roundToInt())
+            .append("</Calories>")
+        tcx.avgHr?.let {
+            sb.append("<AverageHeartRateBpm><Value>").append(it).append("</Value></AverageHeartRateBpm>")
+        }
+        tcx.maxHr?.let {
+            sb.append("<MaximumHeartRateBpm><Value>").append(it).append("</Value></MaximumHeartRateBpm>")
+        }
+        sb.append("<Intensity>Active</Intensity>")
+        tcx.cadence?.let { sb.append("<Cadence>").append(it).append("</Cadence>") }
+        sb.append("<TriggerMethod>Manual</TriggerMethod>")
+        sb.append("<Track>")
         pts.forEach { p ->
             sb.append("<Trackpoint><Time>").append(iso(p.tMs)).append("</Time><Position><LatitudeDegrees>").append(p.lat).append("</LatitudeDegrees><LongitudeDegrees>").append(p.lon).append("</LongitudeDegrees></Position>")
             p.eleM?.let { sb.append("<AltitudeMeters>").append(it).append("</AltitudeMeters>") }
             p.hr?.let { sb.append("<HeartRateBpm><Value>").append(it).append("</Value></HeartRateBpm>") }
             sb.append("</Trackpoint>")
         }
-        sb.append("</Track></Lap></Activity></Activities></TrainingCenterDatabase>\n")
+        sb.append("</Track>")
+        if (tcx.avgPowerW != null || tcx.maxPowerW != null) {
+            sb.append("<Extensions><ns3:LX>")
+            tcx.avgPowerW?.let { sb.append("<ns3:AvgWatts>").append(it).append("</ns3:AvgWatts>") }
+            tcx.maxPowerW?.let { sb.append("<ns3:MaxWatts>").append(it).append("</ns3:MaxWatts>") }
+            sb.append("</ns3:LX></Extensions>")
+        }
+        sb.append("</Lap></Activity></Activities></TrainingCenterDatabase>\n")
         val f = File(dir(context), "$id.tcx")
         atomicWrite(f, sb.toString())
         f
@@ -229,6 +283,7 @@ object RideHistory {
 
     fun delete(context: Context, id: String) {
         runCatching { rideFile(context, id).delete() }
+        runCatching { enrichmentFile(context, id).delete() }
         runCatching {
             val kept = indexFile(context).readLines().filterNot { it.startsWith("$id\t") }
             indexFile(context).writeText(kept.joinToString("\n"))

@@ -69,6 +69,7 @@ import com.crazycapy.randonneur.sim.RouteSimulator
 import com.crazycapy.randonneur.state.RideMode
 import com.crazycapy.randonneur.state.RideStore
 import com.crazycapy.randonneur.cache.RouteCache
+import com.crazycapy.randonneur.coros.CorosController
 import com.crazycapy.randonneur.state.RideHistory
 import com.crazycapy.randonneur.state.RidePoint
 import com.crazycapy.randonneur.state.RouteStore
@@ -609,7 +610,11 @@ class NavigationService : Service() {
     private fun saveRideHistory() {
         if ((RideStore.mode == RideMode.GPS || RideStore.mode == RideMode.FREE) && RideStore.riddenM >= 50.0) {
             appendTracePoints()
-            RideStore.lastRideSummary = RideHistory.finalizeRide(this, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh, RideStore.totalElapsedSec)
+            val saved = RideHistory.finalizeRide(this, startWallMs, RideStore.elapsedSec, RideStore.riddenM, RideStore.maxSpeedKmh, RideStore.totalElapsedSec)
+            RideStore.lastRideSummary = saved
+            if (saved != null && CorosController.isConnected()) {
+                CorosController.syncRide(this, saved)
+            }
         } else {
             RideHistory.abort(this)
         }
