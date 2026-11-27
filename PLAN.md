@@ -26,8 +26,9 @@ the phone in the pocket with the screen off, and ride to spoken guidance.
 - Import: GPX v1.0/1.1 + basic TCX via system file picker; URL import later.
 - Coros: optional read-only COROS integration over the official MCP server —
   browser OAuth (CLI login session + PKCE), Keystore-encrypted tokens,
-  activities/HRV/recovery/planned-workout dashboard. BLE HR/speed remains a
-  separate future adapter.
+  activities/HRV/recovery/planned-workout dashboard plus post-ride latest
+  activity detail (laps, HR/cadence/power, training load/effect); no live
+  in-ride polling. BLE HR/speed remains a separate future adapter.
 - Branding: `Crazy Capy-D.png` from crazycapy.com; adaptive + legacy mipmaps via PIL;
   app label "Crazy Capy Randonneur". Notification icon is a separate monochrome silhouette.
 
@@ -279,18 +280,24 @@ CrazyCapyRouting/
   AES-GCM Android Keystore token store. Settings gets Auto/EU/US/CN,
   Connect/Cancel/Disconnect/Open-login and a read-only dashboard (activities
   last 14 days, HRV, recovery, planned workouts) with Refresh, loading/empty/
-  error states and last-sync time. No COROS password is requested or stored;
-  no workout start, live sensor streaming or write tools. JVM tests cover
-  URLs, PKCE, state, expiry, SSE/JSON and defensive tool text; device
-  verification stops at the login/cancel path without a COROS account.
+  error states and last-sync time. A post-ride **Latest activity** section
+  picks the newest completed record, fetches detail + lap data and shows
+  duration/distance, avg/max HR and cadence, power, training load/effect and a
+  compact lap summary; a connected account refreshes it once after a ride
+  finishes. No COROS password is requested or stored; no workout start, live
+  sensor streaming, in-ride polling or write tools. JVM tests cover URLs, PKCE,
+  state, expiry, SSE/JSON, defensive activity/detail/lap text+JSON and latest
+  selection; device verification stops at the login/cancel path without a
+  COROS account.
 
 ## Next (M5 polish)
 
 - Real-ride tuning on the physical phone: beep/nav volumes, turn-window timing,
   pre-cache feedback.
 - Edge cases: import a malformed GPX, empty route, repeated rides after reset.
-- COROS follow-up: in-progress/live data and workout-start guidance (phase 1 is
-  read-only), plus authenticated dashboard verification on a real account.
+- COROS follow-up: workout-start guidance and authenticated dashboard/latest-
+  activity verification on a real account (the integration stays post-ride and
+  read-only).
 
 ## Verification
 

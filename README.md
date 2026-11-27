@@ -174,11 +174,14 @@ debug-build-only; release builds carry none of it.
   through your browser; Crazy Capy never asks for or stores your COROS
   password. A short-lived CLI login session is polled while you authorize,
   then the app keeps OAuth tokens encrypted with Android Keystore (AES-GCM)
-  and shows recent activities (14 days), today's HRV, recovery and planned
-  workouts in a read-only dialog with manual Refresh and a last-sync time.
-  Pick Auto/EU/US/CN before connecting; changing the region requires signing
-  in again. Phase 1 is read-only and does not start workouts or stream live
-  sensors; in-progress/live data and workout-start guidance are follow-ups.
+  and shows recent activities (14 days), today's HRV, recovery, planned
+  workouts and a **Latest activity** section (name/date, duration/distance,
+  avg/max HR and cadence, power, training load/effect and a compact lap
+  summary) in a read-only dialog with manual Refresh and a last-sync time.
+  After a ride finishes, a connected account refreshes that latest activity
+  once in the background. Pick Auto/EU/US/CN before connecting; changing the
+  region requires signing in again. The integration is read-only and does not
+  start workouts, stream live sensors or poll in-ride data.
   Disconnect clears the stored tokens.
 
 ### Testing
@@ -326,7 +329,8 @@ fix pipeline and asserts arrival with turn announcements.
   the **Open-source licenses** viewer. **Settings → COROS** connects the optional
   read-only integration: choose Auto/EU/US/CN, Connect (opens the COROS sign-in
   page), Cancel while waiting, or Disconnect; once connected, **COROS data**
-  shows recent activities, HRV, recovery and planned workouts.
+  shows the latest completed activity (with lap summary) plus recent
+  activities, HRV, recovery and planned workouts.
 
 ### 4. Golden screenshot verification (hacker option)
 

@@ -55,6 +55,12 @@ object CorosController {
         private set
     var lastSyncMs: Long? by mutableStateOf(null)
         private set
+    var latestActivity: CorosLatestActivity? by mutableStateOf(null)
+        private set
+    var lastActivityError: String? by mutableStateOf(null)
+        private set
+    var activityLoading: Boolean by mutableStateOf(false)
+        private set
 
     private var token: CorosToken? = null
     private var job: Job? = null
@@ -104,6 +110,9 @@ object CorosController {
         loginUrl = null
         snapshot = null
         lastSyncMs = null
+        latestActivity = null
+        lastActivityError = null
+        activityLoading = false
         status = CorosStatus.WAITING
         job = scope.launch {
             try {
@@ -185,6 +194,31 @@ object CorosController {
         }
     }
 
+    fun isConnected(): Boolean = token != null
+
+    fun refreshLatestActivity(context: Context) {
+        val app = context.applicationContext
+        val current = token ?: return
+        if (activityLoading) return
+        scope.launch {
+            try {
+                val fresh = ensureFresh(current)
+                if (fresh !== current) {
+                    CorosTokenStore.save(app, fresh)
+                    token = fresh
+                }
+                val client = CorosMcpClient(fresh.issuer)
+                client.initialize(fresh.accessToken)
+                fetchLatestActivity(client, fresh)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                lastActivityError = failure.message ?: "Could not load latest activity"
+                activityLoading = false
+            }
+        }
+    }
+
     private fun clearState(context: Context) {
         job?.cancel()
         job = null
@@ -194,6 +228,9 @@ object CorosController {
         error = null
         snapshot = null
         lastSyncMs = null
+        latestActivity = null
+        lastActivityError = null
+        activityLoading = false
         loading = false
         status = CorosStatus.NOT_CONNECTED
     }
@@ -211,6 +248,7 @@ object CorosController {
             val hrv = section(current, client, "querySleepHrv", JSONObject())
             val recovery = section(current, client, "queryRecoveryStatus", JSONObject())
             val schedule = section(current, client, "queryTrainingSchedule", JSONObject())
+            fetchLatestActivity(client, current)
             val fetchedAt = System.currentTimeMillis()
             snapshot = CorosSnapshot(activities, hrv, recovery, schedule, fetchedAt)
             lastSyncMs = fetchedAt
@@ -242,6 +280,68 @@ object CorosController {
         throw cancelled
     } catch (_: Exception) {
         CorosSection(emptyList(), "Unavailable")
+    }
+
+    private suspend fun fetchLatestActivity(client: CorosMcpClient, current: CorosToken) {
+        activityLoading = true
+        lastActivityError = null
+        try {
+            val records = CorosActivityParser.parseSportRecords(
+                client.callTool(current.accessToken, "querySportRecords", latestActivityArguments()),
+            )
+            val newest = CorosActivityParser.latest(records)
+            if (newest == null) {
+                latestActivity = null
+                return
+            }
+            val label = newest.labelId
+            val sport = newest.sportType
+            if (label == null || sport == null) {
+                latestActivity = null
+                lastActivityError = "Latest activity has no id"
+                return
+            }
+            val idArguments = JSONObject()
+                .put("labelId", label)
+                .put("sportType", sport)
+            val parsed = CorosActivityParser.parseActivityDetail(
+                client.callTool(current.accessToken, "getActivityDetail", idArguments),
+            )
+            val detail = parsed.copy(
+                labelId = label,
+                sportType = sport,
+                title = parsed.title ?: newest.title,
+                date = parsed.date ?: newest.date,
+                startTimestampSec = parsed.startTimestampSec ?: newest.startTimestampSec,
+            )
+            val laps = try {
+                CorosActivityParser.parseLaps(
+                    client.callTool(current.accessToken, "queryActivityLapData", idArguments),
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
+            latestActivity = CorosLatestActivity(detail, laps)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            latestActivity = null
+            lastActivityError = failure.message ?: "Could not load latest activity"
+        } finally {
+            activityLoading = false
+        }
+    }
+
+    private fun latestActivityArguments(): JSONObject {
+        val end = LocalDate.now()
+        val start = end.minusDays(6)
+        return JSONObject().apply {
+            put("startDate", start.format(DateTimeFormatter.BASIC_ISO_DATE))
+            put("endDate", end.format(DateTimeFormatter.BASIC_ISO_DATE))
+            put("limit", 10)
+        }
     }
 
     private fun activityArguments(): JSONObject {
