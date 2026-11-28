@@ -29,7 +29,7 @@ the phone in the pocket with the screen off, and ride to spoken guidance.
   activities/HRV/recovery/planned-workout dashboard plus post-ride latest
   activity detail (laps, HR/cadence/power, training load/effect) and
   saved-ride overlap matching with missing-only enrichment; no live in-ride
-  polling. BLE HR/speed remains a separate future adapter.
+  polling. BLE HR/cadence/power remains a separate future adapter.
 - Branding: `Crazy Capy-D.png` from crazycapy.com; adaptive + legacy mipmaps via PIL;
   app label "Crazy Capy Randonneur". Notification icon is a separate monochrome silhouette.
 
@@ -267,18 +267,18 @@ CrazyCapyRouting/
   bpm into `RideStore.hr`, so saved GPX/TCX rides and history keep the existing
   HR path. Debug builds expose `SET_HR` to inject bpm over adb where no BLE
   hardware exists. Real straps still need physical BLE hardware for validation.
-- **BLE speed / cadence / power**: `BleCyclingProvider` scans for both CSC
-  (`0x1816`) and CPS (`0x1818`) service UUIDs and connects one selected device,
-  subscribing to whichever measurement characteristics it exposes. Pure CSC and
-  CPS parsers handle flags, 16/32-bit counters, wheel/crank wraps, zero time
-  deltas and unsupported optional fields; the CSC calculator derives wheel
-  speed from the persisted circumference (default 2096 mm) and cadence, while
-  CPS derives power and cadence when crank data is present. `RideStore` exposes
-  sensor speed/cadence/power with BLE/COROS/DEBUG sources (BLE wins ties), the
-  HUD adds compact sensor badges without changing the 3×2 grid, and history
-  writes cadence/power per point to GPX (`gpxtpx:cad` / `gpxtpx:power`) and TCX
-  (`Cadence` / `Watts`). Settings adds status/scan/cancel/device list/connect,
-  saved-sensor reconnect and the wheel number field. Debug builds add
+- **BLE cadence / power**: `BleCyclingProvider` scans for both CSC (`0x1816`)
+  and CPS (`0x1818`) service UUIDs and connects one selected device, subscribing
+  to whichever measurement characteristics it exposes. Pure CSC and CPS parsers
+  handle flags, counter wraps, zero time deltas and unsupported optional fields;
+  CSC derives cadence (wheel fields are skipped) and CPS derives power plus
+  cadence when crank data is present. `BleHrProvider` and `BleCyclingProvider`
+  share scan/GATT/CCCD/reconnect plumbing and the 5/15/30/60 s `HrReconnectPolicy`
+  backoff. `RideStore` exposes cadence/power with BLE/DEBUG sources (BLE wins
+  ties), the HUD adds compact sensor badges without changing the 3×2 grid, and
+  history writes cadence/power per point to GPX (`gpxtpx:cad` / `gpxtpx:power`)
+  and TCX (`Cadence` / `Watts`). Settings adds a shared status/scan/cancel/device
+  list/connect section and saved-sensor reconnect. Debug builds add
   `SET_CADENCE` and `SET_POWER`. Emulator checks cover UI/permission/scan/cancel
   and debug-driven HUD/history; real GATT still needs a physical sensor.
 - **QA (checkpoint markers)**: a checkpoint whose GPX `<wpt>` has no `<desc>`

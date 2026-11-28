@@ -253,8 +253,6 @@ class NavigationService : Service() {
         RideStore.avgSpeedKmh = 0.0
         RideStore.elapsedSec = 0L
         RideStore.hr = null
-        RideStore.sensorSpeedKmh = null
-        RideStore.sensorSpeedSource = null
         RideStore.cadenceRpm = null
         RideStore.cadenceSource = null
         RideStore.powerWatts = null
@@ -645,10 +643,6 @@ class NavigationService : Service() {
     }
 
     private fun applyCyclingReadings() {
-        RideStore.applySensorSpeed(
-            BleCyclingProvider.currentSpeedKmh(),
-            BleCyclingProvider.currentSpeedSource(),
-        )
         RideStore.applyCadence(
             BleCyclingProvider.currentCadence(),
             BleCyclingProvider.currentCadenceSource(),
@@ -1101,8 +1095,6 @@ class NavigationService : Service() {
         RideStore.nextPoiM = null
         RideStore.nextPoiIndex = null
         RideStore.hr = null
-        RideStore.sensorSpeedKmh = null
-        RideStore.sensorSpeedSource = null
         RideStore.cadenceRpm = null
         RideStore.cadenceSource = null
         RideStore.powerWatts = null

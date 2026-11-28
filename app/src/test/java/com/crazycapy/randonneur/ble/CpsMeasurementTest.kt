@@ -14,7 +14,6 @@ class CpsMeasurementTest {
     fun parsesInstantaneousPower() {
         val sample = CpsMeasurementParser.parse(byteArrayOf(0x00, 0x00, 0xFA.toByte(), 0x00))
         assertEquals(250, sample?.powerWatts)
-        assertNull(sample?.wheelRevolutions)
         assertNull(sample?.crankRevolutions)
     }
 
@@ -29,8 +28,6 @@ class CpsMeasurementTest {
             ),
         )
         assertEquals(272, sample?.powerWatts)
-        assertEquals(1000L, sample?.wheelRevolutions)
-        assertEquals(512, sample?.wheelEventTime)
         assertEquals(12, sample?.crankRevolutions)
         assertEquals(256, sample?.crankEventTime)
     }
@@ -47,8 +44,6 @@ class CpsMeasurementTest {
             ),
         )
         assertEquals(300, sample?.powerWatts)
-        assertEquals(1L, sample?.wheelRevolutions)
-        assertEquals(1024, sample?.wheelEventTime)
     }
 
     @Test
@@ -57,7 +52,7 @@ class CpsMeasurementTest {
             byteArrayOf(0x10, 0x00, 0x10, 0x00, 0x01, 0x00),
         )
         assertEquals(16, sample?.powerWatts)
-        assertNull(sample?.wheelRevolutions)
+        assertNull(sample?.crankRevolutions)
     }
 
     @Test

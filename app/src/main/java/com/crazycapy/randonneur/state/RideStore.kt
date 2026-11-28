@@ -212,8 +212,6 @@ object RideStore {
     var hrDeviceAddress: String? by mutableStateOf(null)
     var hrDeviceName: String? by mutableStateOf(null)
 
-    var sensorSpeedKmh: Double? by mutableStateOf(null)
-    var sensorSpeedSource: SensorSource? by mutableStateOf(null)
     var cadenceRpm: Int? by mutableStateOf(null)
     var cadenceSource: SensorSource? by mutableStateOf(null)
     var powerWatts: Int? by mutableStateOf(null)
@@ -221,48 +219,33 @@ object RideStore {
 
     var cyclingDeviceAddress: String? by mutableStateOf(null)
     var cyclingDeviceName: String? by mutableStateOf(null)
-    var wheelCircumferenceMm: Int by mutableStateOf(2096)
-
-    fun applySensorSpeed(value: Double?, source: SensorSource?) {
-        if (value == null) {
-            if (source == null || sensorSpeedSource == source) {
-                sensorSpeedKmh = null
-                sensorSpeedSource = null
-            }
-            return
-        }
-        val current = sensorSpeedSource
-        if (current != null && source != null && current.priority > source.priority) return
-        sensorSpeedKmh = value
-        sensorSpeedSource = source
-    }
 
     fun applyCadence(value: Int?, source: SensorSource?) {
-        if (value == null) {
-            if (source == null || cadenceSource == source) {
-                cadenceRpm = null
-                cadenceSource = null
-            }
-            return
+        applyReading(value, source, cadenceSource) { v, s ->
+            cadenceRpm = v
+            cadenceSource = s
         }
-        val current = cadenceSource
-        if (current != null && source != null && current.priority > source.priority) return
-        cadenceRpm = value
-        cadenceSource = source
     }
 
     fun applyPower(value: Int?, source: SensorSource?) {
+        applyReading(value, source, powerSource) { v, s ->
+            powerWatts = v
+            powerSource = s
+        }
+    }
+
+    private fun applyReading(
+        value: Int?,
+        source: SensorSource?,
+        currentSource: SensorSource?,
+        set: (Int?, SensorSource?) -> Unit,
+    ) {
         if (value == null) {
-            if (source == null || powerSource == source) {
-                powerWatts = null
-                powerSource = null
-            }
+            if (currentSource == null || currentSource == source) set(null, null)
             return
         }
-        val current = powerSource
-        if (current != null && source != null && current.priority > source.priority) return
-        powerWatts = value
-        powerSource = source
+        if (currentSource != null && source != null && currentSource.priority > source.priority) return
+        set(value, source)
     }
 
     // ---- POI / waypoint guidance ----
@@ -383,8 +366,6 @@ object RideStore {
         avgSpeedKmh = 0.0
         elapsedSec = 0L
         hr = null
-        sensorSpeedKmh = null
-        sensorSpeedSource = null
         cadenceRpm = null
         cadenceSource = null
         powerWatts = null

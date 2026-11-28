@@ -264,17 +264,13 @@ fun TrainingHud(modifier: Modifier = Modifier) {
 
 @Composable
 private fun LiveBadges() {
-    val speed = RideStore.sensorSpeedKmh
     val cadence = RideStore.cadenceRpm
     val power = RideStore.powerWatts
-    if (speed == null && cadence == null && power == null) return
+    if (cadence == null && power == null) return
     Row(
         Modifier.fillMaxWidth().padding(top = 3.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        speed?.let {
-            LiveBadge("SPD", formatKmh(it), "km/h", RideStore.sensorSpeedSource?.name)
-        }
         cadence?.let {
             LiveBadge("CAD", it.toString(), "rpm", RideStore.cadenceSource?.name)
         }

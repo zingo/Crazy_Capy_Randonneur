@@ -4,10 +4,7 @@
  */
 package com.crazycapy.randonneur.ui.dialogs
 
-import android.Manifest
 import android.content.Context
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -83,71 +80,26 @@ internal fun SettingsDialog(
     val context = LocalContext.current
     val hrState = BleHrProvider.state
     val cyclingState = BleCyclingProvider.state
-    var pendingHrConnect by remember { mutableStateOf<Pair<String, String?>?>(null) }
-    var pendingCyclingConnect by remember { mutableStateOf<Pair<String, String?>?>(null) }
-    val hrPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
-    ) {
-        val pending = pendingHrConnect
-        pendingHrConnect = null
-        if (BleHrProvider.hasPermissions(context)) {
-            if (pending != null) BleHrProvider.connect(pending.first, pending.second)
-            else BleHrProvider.startScan()
-        }
-    }
-    fun scanHr() {
-        if (BleHrProvider.hasPermissions(context)) BleHrProvider.startScan()
-        else {
-            pendingHrConnect = null
-            hrPermission.launch(
-                arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT),
-            )
-        }
-    }
-    fun connectHr(address: String, name: String?) {
-        RideStore.hrDeviceAddress = address
-        RideStore.hrDeviceName = name
-        RouteStore.saveSettings(context)
-        if (BleHrProvider.hasPermissions(context)) BleHrProvider.connect(address, name)
-        else {
-            pendingHrConnect = address to name
-            hrPermission.launch(
-                arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT),
-            )
-        }
-    }
-
-    val cyclingPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
-    ) {
-        val pending = pendingCyclingConnect
-        pendingCyclingConnect = null
-        if (BleCyclingProvider.hasPermissions(context)) {
-            if (pending != null) BleCyclingProvider.connect(pending.first, pending.second)
-            else BleCyclingProvider.startScan()
-        }
-    }
-    fun scanCycling() {
-        if (BleCyclingProvider.hasPermissions(context)) BleCyclingProvider.startScan()
-        else {
-            pendingCyclingConnect = null
-            cyclingPermission.launch(
-                arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT),
-            )
-        }
-    }
-    fun connectCycling(address: String, name: String?) {
-        RideStore.cyclingDeviceAddress = address
-        RideStore.cyclingDeviceName = name
-        RouteStore.saveSettings(context)
-        if (BleCyclingProvider.hasPermissions(context)) BleCyclingProvider.connect(address, name)
-        else {
-            pendingCyclingConnect = address to name
-            cyclingPermission.launch(
-                arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT),
-            )
-        }
-    }
+    val hrActions = rememberSensorActions(
+        hasPermissions = { BleHrProvider.hasPermissions(context) },
+        startScan = { BleHrProvider.startScan() },
+        connect = { address, name -> BleHrProvider.connect(address, name) },
+        saveDevice = { address, name ->
+            RideStore.hrDeviceAddress = address
+            RideStore.hrDeviceName = name
+            RouteStore.saveSettings(context)
+        },
+    )
+    val cyclingActions = rememberSensorActions(
+        hasPermissions = { BleCyclingProvider.hasPermissions(context) },
+        startScan = { BleCyclingProvider.startScan() },
+        connect = { address, name -> BleCyclingProvider.connect(address, name) },
+        saveDevice = { address, name ->
+            RideStore.cyclingDeviceAddress = address
+            RideStore.cyclingDeviceName = name
+            RouteStore.saveSettings(context)
+        },
+    )
 
     var showCorosData by remember { mutableStateOf(false) }
 
@@ -360,101 +312,37 @@ internal fun SettingsDialog(
                     title = "Live rear-radar",
                     subtitle = "Read a real rear radar via the overlay app (off saves battery)",
                 )
-                Spacer(Modifier.height(12.dp))
-                Text("Heart rate", style = MaterialTheme.typography.titleSmall)
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Text(hrStatusText(context, hrState), style = MaterialTheme.typography.bodyMedium)
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    if (hrState.phase == HrPhase.CONNECTED) {
-                        TextButton(onClick = { BleHrProvider.disconnect() }) { Text("Disconnect") }
-                    } else {
-                        if (hrState.phase == HrPhase.SCANNING) {
-                            TextButton(onClick = { BleHrProvider.stopScan() }) { Text("Cancel scan") }
-                        } else {
-                            TextButton(onClick = { scanHr() }) { Text("Scan") }
-                        }
-                        val savedAddress = RideStore.hrDeviceAddress
-                        if (!savedAddress.isNullOrBlank() && hrState.phase != HrPhase.SCANNING) {
-                            TextButton(onClick = { connectHr(savedAddress, RideStore.hrDeviceName) }) {
-                                Text("Connect ${RideStore.hrDeviceName ?: "saved sensor"}")
-                            }
-                        }
-                    }
-                }
-                if (hrState.phase == HrPhase.SCANNING) {
-                    if (hrState.devices.isEmpty()) {
-                        Text("No heart-rate straps found yet", style = MaterialTheme.typography.bodySmall)
-                    } else {
-                        Text("Choose a strap", style = MaterialTheme.typography.bodySmall)
-                        hrState.devices.forEach { device ->
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(device.name ?: "Heart-rate strap", style = MaterialTheme.typography.bodyMedium)
-                                    Text(device.address, style = MaterialTheme.typography.bodySmall)
-                                }
-                                TextButton(onClick = { connectHr(device.address, device.name) }) {
-                                    Text("Connect")
-                                }
-                            }
-                        }
-                    }
-                }
-                Text(
-                    "Standard BLE heart-rate straps (service 0x180D). A real sensor needs BLE-capable hardware.",
-                    style = MaterialTheme.typography.bodySmall,
+                SensorSection(
+                    title = "Heart rate",
+                    status = hrStatusText(context, hrState),
+                    description = "Standard BLE heart-rate straps (service 0x180D). A real sensor needs BLE-capable hardware.",
+                    connected = hrState.phase == HrPhase.CONNECTED,
+                    scanning = hrState.phase == HrPhase.SCANNING,
+                    devices = hrState.devices,
+                    savedAddress = RideStore.hrDeviceAddress,
+                    savedName = RideStore.hrDeviceName,
+                    emptyText = "No heart-rate straps found yet",
+                    chooseText = "Choose a strap",
+                    fallbackName = "Heart-rate strap",
+                    actions = hrActions,
+                    onCancelScan = { BleHrProvider.stopScan() },
+                    onDisconnect = { BleHrProvider.disconnect() },
                 )
-                Spacer(Modifier.height(12.dp))
-                Text("Speed / cadence / power", style = MaterialTheme.typography.titleSmall)
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Text(cyclingStatusText(cyclingState), style = MaterialTheme.typography.bodyMedium)
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    if (cyclingState.phase == CyclingPhase.CONNECTED) {
-                        TextButton(onClick = { BleCyclingProvider.disconnect() }) { Text("Disconnect") }
-                    } else {
-                        if (cyclingState.phase == CyclingPhase.SCANNING) {
-                            TextButton(onClick = { BleCyclingProvider.stopScan() }) { Text("Cancel scan") }
-                        } else {
-                            TextButton(onClick = { scanCycling() }) { Text("Scan") }
-                        }
-                        val savedAddress = RideStore.cyclingDeviceAddress
-                        if (!savedAddress.isNullOrBlank() && cyclingState.phase != CyclingPhase.SCANNING) {
-                            TextButton(onClick = { connectCycling(savedAddress, RideStore.cyclingDeviceName) }) {
-                                Text("Connect ${RideStore.cyclingDeviceName ?: "saved sensor"}")
-                            }
-                        }
-                    }
-                }
-                if (cyclingState.phase == CyclingPhase.SCANNING) {
-                    if (cyclingState.devices.isEmpty()) {
-                        Text("No cycling sensors found yet", style = MaterialTheme.typography.bodySmall)
-                    } else {
-                        Text("Choose a sensor", style = MaterialTheme.typography.bodySmall)
-                        cyclingState.devices.forEach { device ->
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(device.name ?: "Cycling sensor", style = MaterialTheme.typography.bodyMedium)
-                                    Text(device.address, style = MaterialTheme.typography.bodySmall)
-                                }
-                                TextButton(onClick = { connectCycling(device.address, device.name) }) {
-                                    Text("Connect")
-                                }
-                            }
-                        }
-                    }
-                }
-                SettingNumberField(
-                    title = "Wheel circumference",
-                    subtitle = "CSC wheel speed calibration in mm",
-                    value = RideStore.wheelCircumferenceMm,
-                    suffix = "mm",
-                    onValueChange = {
-                        RideStore.wheelCircumferenceMm = it.coerceIn(500, 3000)
-                        RouteStore.saveSettings(context)
-                    },
-                )
-                Text(
-                    "Standard BLE cycling sensors: speed/cadence (CSC 0x1816) and power (CPS 0x1818). GPS speed stays the HUD speed; wheel speed is shown as a sensor value. A real sensor needs BLE-capable hardware.",
-                    style = MaterialTheme.typography.bodySmall,
+                SensorSection(
+                    title = "Cadence / power",
+                    status = cyclingStatusText(context, cyclingState),
+                    description = "Standard BLE cadence (CSC 0x1816) and power (CPS 0x1818) sensors. GPS speed is always the HUD speed. A real sensor needs BLE-capable hardware.",
+                    connected = cyclingState.phase == CyclingPhase.CONNECTED,
+                    scanning = cyclingState.phase == CyclingPhase.SCANNING,
+                    devices = cyclingState.devices,
+                    savedAddress = RideStore.cyclingDeviceAddress,
+                    savedName = RideStore.cyclingDeviceName,
+                    emptyText = "No cycling sensors found yet",
+                    chooseText = "Choose a sensor",
+                    fallbackName = "Cycling sensor",
+                    actions = cyclingActions,
+                    onCancelScan = { BleCyclingProvider.stopScan() },
+                    onDisconnect = { BleCyclingProvider.disconnect() },
                 )
                 Text("COROS (optional)", style = MaterialTheme.typography.titleSmall)
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -585,24 +473,26 @@ internal fun SettingsDialog(
     }
 }
 
-private fun cyclingStatusText(state: CyclingSensorState): String = when (state.phase) {
-    CyclingPhase.IDLE -> {
-        val saved = RideStore.cyclingDeviceName ?: RideStore.cyclingDeviceAddress
-        if (saved.isNullOrBlank()) "Not connected" else "Saved sensor: $saved"
+private fun cyclingStatusText(context: Context, state: CyclingSensorState): String {
+    if (!BleCyclingProvider.hasPermissions(context)) return "Permission needed"
+    return when (state.phase) {
+        CyclingPhase.IDLE -> {
+            val saved = RideStore.cyclingDeviceName ?: RideStore.cyclingDeviceAddress
+            if (saved.isNullOrBlank()) "Not connected" else "Saved sensor: $saved"
+        }
+        CyclingPhase.SCANNING -> "Scanning…"
+        CyclingPhase.CONNECTING -> "Connecting…"
+        CyclingPhase.CONNECTED -> buildString {
+            append("Connected: ").append(state.deviceName ?: state.deviceAddress ?: "sensor")
+            val values = listOfNotNull(
+                state.cadenceRpm?.let { "cadence" },
+                state.powerWatts?.let { "power" },
+            )
+            if (values.isNotEmpty()) append(" · ").append(values.joinToString(", "))
+        }
+        CyclingPhase.PERMISSION_NEEDED -> "Bluetooth permission needed"
+        CyclingPhase.ERROR -> state.error ?: "Error"
     }
-    CyclingPhase.SCANNING -> "Scanning…"
-    CyclingPhase.CONNECTING -> "Connecting…"
-    CyclingPhase.CONNECTED -> buildString {
-        append("Connected: ").append(state.deviceName ?: state.deviceAddress ?: "sensor")
-        val values = listOfNotNull(
-            state.speedKmh?.let { "wheel" },
-            state.cadenceRpm?.let { "cadence" },
-            state.powerWatts?.let { "power" },
-        )
-        if (values.isNotEmpty()) append(" · ").append(values.joinToString(", "))
-    }
-    CyclingPhase.PERMISSION_NEEDED -> "Bluetooth permission needed"
-    CyclingPhase.ERROR -> state.error ?: "Error"
 }
 
 private fun corosStatusText(): String = when (CorosController.status) {

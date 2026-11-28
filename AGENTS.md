@@ -25,10 +25,10 @@ navigator for Android 13+ (API 33). No Play Services, no accounts, no cloud.
     library + settings/last-ride persistence)
   - `sim` — ghost ride simulator
   - `ui` — Compose overlays: HUD + next-turn preview, off-route ack, dialogs
-  - `ble` — BLE heart-rate (`0x180D`/`0x2A37`) and cycling speed/cadence
-    (`0x1816`/`0x2A5B`) plus power (`0x1818`/`0x2A63`) providers, parsers,
-    reconnect policy; debug `SET_HR`, `SET_CADENCE` and `SET_POWER` can inject
-    values without hardware
+  - `ble` — BLE heart-rate (`0x180D`/`0x2A37`) and cadence (`0x1816`/`0x2A5B`)
+    plus power (`0x1818`/`0x2A63`) providers, parsers, shared scan/GATT
+    plumbing and reconnect policy; debug `SET_HR`, `SET_CADENCE` and `SET_POWER`
+    can inject values without hardware
   - `coros` — optional read-only COROS: region endpoints, browser OAuth (CLI
     login + PKCE), MCP client (JSON/SSE), Keystore-encrypted token store, the
     read-only data controller, post-ride latest-activity parsers and saved-ride

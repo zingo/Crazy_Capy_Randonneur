@@ -213,7 +213,6 @@ object RouteStore {
         map["hrDeviceName"]?.takeIf { it.isNotBlank() }?.let { RideStore.hrDeviceName = it }
         map["cyclingDeviceAddress"]?.takeIf { it.isNotBlank() }?.let { RideStore.cyclingDeviceAddress = it }
         map["cyclingDeviceName"]?.takeIf { it.isNotBlank() }?.let { RideStore.cyclingDeviceName = it }
-        map["wheelCircumferenceMm"]?.toIntOrNull()?.takeIf { it in 500..3000 }?.let { RideStore.wheelCircumferenceMm = it }
         map["corosRegion"]?.let { RideStore.corosRegion = CorosRegion.fromName(it) }
     }
 
@@ -247,7 +246,6 @@ object RouteStore {
             "hrDeviceName=${RideStore.hrDeviceName.orEmpty()}",
             "cyclingDeviceAddress=${RideStore.cyclingDeviceAddress.orEmpty()}",
             "cyclingDeviceName=${RideStore.cyclingDeviceName.orEmpty()}",
-            "wheelCircumferenceMm=${RideStore.wheelCircumferenceMm}",
             "corosRegion=${RideStore.corosRegion.name}",
         )
         runCatching { settingsFile(context).writeText(lines.joinToString("\n")) }
