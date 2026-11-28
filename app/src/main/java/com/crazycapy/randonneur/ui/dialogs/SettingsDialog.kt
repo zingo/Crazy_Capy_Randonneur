@@ -6,7 +6,9 @@ package com.crazycapy.randonneur.ui.dialogs
 
 import android.content.Context
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -59,10 +61,10 @@ import kotlin.math.roundToInt
 
 /*
  * ┌─────────────────────────────────────────────────────────────────────────┐
- * │  SettingsDialog — ride options, offline prep, ghost ride, about         │
+ * │  SettingsDialog — ride options, sensors, offline prep, about            │
  * │                                                                         │
- * │  Opened from the gear icon (top-right).  Scrollable list of toggles,    │
- * │  sliders and action buttons in a single AlertDialog.                    │
+ * │  Opened from the gear icon (top-right).  Scrollable sections of         │
+ * │  toggles, sliders and action buttons in a single AlertDialog.           │
  * └─────────────────────────────────────────────────────────────────────────┘
  */
 @Composable
@@ -108,66 +110,165 @@ internal fun SettingsDialog(
         title = { Text("Settings") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text("Ride options", style = MaterialTheme.typography.titleSmall)
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                SettingSwitch(
-                    checked = RideStore.nextTurnPopupEnabled,
-                    onCheckedChange = { RideStore.nextTurnPopupEnabled = it; RouteStore.saveSettings(context) },
-                    title = "Next-turn popup",
-                    subtitle = "Corner popup with arrow and route preview",
-                )
-                SettingSwitch(
-                    checked = RideStore.notificationEnabled,
-                    onCheckedChange = { RideStore.notificationEnabled = it; RouteStore.saveSettings(context) },
-                    title = "Live notification",
-                    subtitle = "Refresh the notification every second (saves battery when off)",
-                )
-                SettingSwitch(
-                    checked = RideStore.duckMusicEnabled,
-                    onCheckedChange = { RideStore.duckMusicEnabled = it; RouteStore.saveSettings(context) },
-                    title = "Pause audio while speaking",
-                    subtitle = "Other apps pause during guidance announcements",
-                )
-                SettingSlider(
-                    value = RideStore.beepVolume,
-                    onValueChange = { RideStore.beepVolume = it; RouteStore.saveSettings(context) },
-                    title = "Turn beeps",
-                    subtitle = "Left vs right beeps that shorten as the turn nears",
-                )
-                SettingSlider(
-                    value = RideStore.navVolume,
-                    onValueChange = { RideStore.navVolume = it; RouteStore.saveSettings(context) },
-                    title = "Navigation voice",
-                    subtitle = "Spoken turn guidance",
-                )
-                Column(Modifier.fillMaxWidth()) {
-                    Text("GPS update rate", style = MaterialTheme.typography.bodyMedium)
-                    Text("Power-save 5 s · normal 3 s · precise 1 s", style = MaterialTheme.typography.bodySmall)
-                    Row {
+                SettingsSection(
+                    title = "Ride",
+                    subtitle = "Guidance, audio and GPS update rate",
+                ) {
+                    SettingSwitch(
+                        checked = RideStore.nextTurnPopupEnabled,
+                        onCheckedChange = { RideStore.nextTurnPopupEnabled = it; RouteStore.saveSettings(context) },
+                        title = "Next-turn popup",
+                        subtitle = "Corner popup with arrow and route preview",
+                    )
+                    SettingSwitch(
+                        checked = RideStore.notificationEnabled,
+                        onCheckedChange = { RideStore.notificationEnabled = it; RouteStore.saveSettings(context) },
+                        title = "Live notification",
+                        subtitle = "Refresh the notification every second (saves battery when off)",
+                    )
+                    SettingSwitch(
+                        checked = RideStore.duckMusicEnabled,
+                        onCheckedChange = { RideStore.duckMusicEnabled = it; RouteStore.saveSettings(context) },
+                        title = "Pause audio while speaking",
+                        subtitle = "Other apps pause during guidance announcements",
+                    )
+                    SettingSlider(
+                        value = RideStore.beepVolume,
+                        onValueChange = { RideStore.beepVolume = it; RouteStore.saveSettings(context) },
+                        title = "Turn beeps",
+                        subtitle = "Left vs right beeps that shorten as the turn nears",
+                    )
+                    SettingSlider(
+                        value = RideStore.navVolume,
+                        onValueChange = { RideStore.navVolume = it; RouteStore.saveSettings(context) },
+                        title = "Navigation voice",
+                        subtitle = "Spoken turn guidance",
+                    )
+                    SettingChoices(
+                        title = "GPS update rate",
+                        subtitle = "Power-save 5 s · normal 3 s · precise 1 s",
+                    ) {
                         listOf(5 to "5 s", 3 to "3 s", 1 to "1 s").forEach { (sec, label) ->
                             TextButton(onClick = { RideStore.gpsIntervalSec = sec; RouteStore.saveSettings(context) }) {
                                 Text(if (RideStore.gpsIntervalSec == sec) "$label ✓" else label)
                             }
                         }
                     }
+                    SettingRow(
+                        title = "Saved routes",
+                        subtitle = "Open the route library to manage saved files",
+                    ) {
+                        TextButton(onClick = { onShowRoutes(); onDismiss() }) { Text("Manage") }
+                    }
                 }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Saved routes", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    TextButton(onClick = { onShowRoutes(); onDismiss() }) { Text("Manage") }
-                }
-                SettingSwitch(
-                    checked = RideStore.precacheEnabled,
-                    onCheckedChange = { RideStore.precacheEnabled = it; RouteStore.saveSettings(context) },
-                    title = "Prepare routes offline",
-                    subtitle = "Ask to download map tiles and turn previews when a route loads",
-                )
-                Column(Modifier.fillMaxWidth()) {
-                    Text("Offline map detail", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        "Standard keeps the whole corridor at zoom 8–14; turn-focused saves space with low zoom between turns and high zoom near them",
-                        style = MaterialTheme.typography.bodySmall,
+
+                SettingsSection(
+                    title = "Sensors",
+                    subtitle = "Bluetooth heart rate, cadence and power",
+                ) {
+                    SensorSection(
+                        title = "Heart rate",
+                        status = hrStatusText(context, hrState),
+                        description = "Standard BLE heart-rate straps (service 0x180D). A real sensor needs BLE-capable hardware.",
+                        connected = hrState.phase == HrPhase.CONNECTED,
+                        scanning = hrState.phase == HrPhase.SCANNING,
+                        devices = hrState.devices,
+                        savedAddress = RideStore.hrDeviceAddress,
+                        savedName = RideStore.hrDeviceName,
+                        emptyText = "No heart-rate straps found yet",
+                        chooseText = "Choose a strap",
+                        fallbackName = "Heart-rate strap",
+                        actions = hrActions,
+                        onCancelScan = { BleHrProvider.stopScan() },
+                        onDisconnect = { BleHrProvider.disconnect() },
                     )
-                    Row {
+                    SensorSection(
+                        title = "Cadence / power",
+                        status = cyclingStatusText(context, cyclingState),
+                        description = "Standard BLE cadence (CSC 0x1816) and power (CPS 0x1818) sensors. GPS speed is always the HUD speed. A real sensor needs BLE-capable hardware.",
+                        connected = cyclingState.phase == CyclingPhase.CONNECTED,
+                        scanning = cyclingState.phase == CyclingPhase.SCANNING,
+                        devices = cyclingState.devices,
+                        savedAddress = RideStore.cyclingDeviceAddress,
+                        savedName = RideStore.cyclingDeviceName,
+                        emptyText = "No cycling sensors found yet",
+                        chooseText = "Choose a sensor",
+                        fallbackName = "Cycling sensor",
+                        actions = cyclingActions,
+                        onCancelScan = { BleCyclingProvider.stopScan() },
+                        onDisconnect = { BleCyclingProvider.disconnect() },
+                    )
+                }
+
+                SettingsSection(
+                    title = "Connections",
+                    subtitle = "Rear radar and optional COROS integration",
+                ) {
+                    SettingSwitch(
+                        checked = RideStore.radarIntegrationEnabled,
+                        onCheckedChange = { RadarClient.setIntegrationEnabled(context, it); RouteStore.saveSettings(context) },
+                        title = "Live rear-radar",
+                        subtitle = "Read a real rear radar via the overlay app (off saves battery)",
+                    )
+                    SettingRow(
+                        title = "COROS status",
+                        subtitle = corosStatusText(),
+                    ) {
+                        if (CorosController.status == CorosStatus.CONNECTED) {
+                            TextButton(onClick = { showCorosData = true }) { Text("View data") }
+                        }
+                    }
+                    CorosController.error?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    SettingChoices(
+                        title = "COROS region",
+                        subtitle = "Sign-in and data server; changing it requires reconnecting",
+                    ) {
+                        CorosRegion.entries.forEach { option ->
+                            TextButton(onClick = { CorosController.setRegion(context, option) }) {
+                                Text(option.shortLabel + if (RideStore.corosRegion == option) " ✓" else "")
+                            }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        when (CorosController.status) {
+                            CorosStatus.WAITING -> {
+                                TextButton(
+                                    onClick = { CorosController.openLogin(context) },
+                                    enabled = CorosController.loginUrl != null,
+                                ) { Text("Open login link again") }
+                                TextButton(onClick = { CorosController.cancelLogin() }) { Text("Cancel") }
+                            }
+                            CorosStatus.CONNECTED -> {
+                                TextButton(onClick = { CorosController.disconnect(context) }) { Text("Disconnect") }
+                                TextButton(onClick = { showCorosData = true }) { Text("COROS data") }
+                            }
+                            else -> {
+                                TextButton(onClick = { CorosController.connect(context) }) { Text("Connect") }
+                            }
+                        }
+                    }
+                }
+
+                SettingsSection(
+                    title = "Offline maps & storage",
+                    subtitle = "Route preparation, downloaded packs and retention",
+                ) {
+                    SettingSwitch(
+                        checked = RideStore.precacheEnabled,
+                        onCheckedChange = { RideStore.precacheEnabled = it; RouteStore.saveSettings(context) },
+                        title = "Prepare routes offline",
+                        subtitle = "Ask to download map tiles and turn previews when a route loads",
+                    )
+                    SettingChoices(
+                        title = "Offline map detail",
+                        subtitle = "Standard keeps the whole corridor at zoom 8–14; turn-focused saves space with low zoom between turns and high zoom near them",
+                    ) {
                         OfflineDetailStrategy.values().forEach { option ->
                             TextButton(onClick = {
                                 RideStore.offlineDetailStrategy = option
@@ -182,67 +283,62 @@ internal fun SettingsDialog(
                             }
                         }
                     }
-                }
-                Text("Advanced offline tuning", style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    "Applies to the next prepare; existing packs with different tuning are replaced",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                SettingRangeSlider(
-                    title = "Segment length",
-                    subtitle = "Corridor chunk in km · 2–50",
-                    value = RideStore.offlineSegmentKm.toFloat(),
-                    valueText = "${formatTuningKm(RideStore.offlineSegmentKm)} km",
-                    valueRange = OfflineTuning.MIN_SEGMENT_KM.toFloat()..OfflineTuning.MAX_SEGMENT_KM.toFloat(),
-                    steps = (OfflineTuning.MAX_SEGMENT_KM - OfflineTuning.MIN_SEGMENT_KM).toInt() - 1,
-                    onValueChange = {
-                        RideStore.offlineSegmentKm = it.roundToInt().toDouble()
-                        RouteStore.saveSettings(context)
-                    },
-                )
-                SettingRangeSlider(
-                    title = "Corridor padding",
-                    subtitle = "Map margin either side in km · 0.5–10",
-                    value = RideStore.offlineCorridorPadKm.toFloat(),
-                    valueText = "${formatTuningKm(RideStore.offlineCorridorPadKm)} km",
-                    valueRange = OfflineTuning.MIN_CORRIDOR_PAD_KM.toFloat()..OfflineTuning.MAX_CORRIDOR_PAD_KM.toFloat(),
-                    steps = 18,
-                    onValueChange = {
-                        RideStore.offlineCorridorPadKm = (it * 2f).roundToInt() / 2.0
-                        RouteStore.saveSettings(context)
-                    },
-                )
-                SettingRangeSlider(
-                    title = "High-detail turn box",
-                    subtitle = "Along-route turn window in km · 0.25–5",
-                    value = RideStore.offlineTurnBoxKm.toFloat(),
-                    valueText = "${formatTuningKm(RideStore.offlineTurnBoxKm)} km",
-                    valueRange = OfflineTuning.MIN_TURN_PAD_KM.toFloat()..OfflineTuning.MAX_TURN_PAD_KM.toFloat(),
-                    steps = 18,
-                    onValueChange = {
-                        RideStore.offlineTurnBoxKm = (it * 4f).roundToInt() / 4.0
-                        RouteStore.saveSettings(context)
-                    },
-                )
-                SettingRangeSlider(
-                    title = "High-detail max zoom",
-                    subtitle = "Tile zoom ceiling · 13–16",
-                    value = RideStore.offlineHighMaxZoom.toFloat(),
-                    valueText = "zoom ${RideStore.offlineHighMaxZoom}",
-                    valueRange = OfflineTuning.MIN_MAX_ZOOM.toFloat()..OfflineTuning.MAX_MAX_ZOOM.toFloat(),
-                    steps = OfflineTuning.MAX_MAX_ZOOM - OfflineTuning.MIN_MAX_ZOOM - 1,
-                    onValueChange = {
-                        RideStore.offlineHighMaxZoom = it.roundToInt()
-                        RouteStore.saveSettings(context)
-                    },
-                )
-                Column(Modifier.fillMaxWidth()) {
-                    Text("Offline map theme", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        "Default for “also prepare the other theme” in the prepare dialog",
-                        style = MaterialTheme.typography.bodySmall,
+                    SettingSubheader(
+                        title = "Advanced offline tuning",
+                        subtitle = "Applies to the next prepare; existing packs with different tuning are replaced",
                     )
-                    Row {
+                    SettingRangeSlider(
+                        title = "Segment length",
+                        subtitle = "Corridor chunk in km · 2–50",
+                        value = RideStore.offlineSegmentKm.toFloat(),
+                        valueText = "${formatTuningKm(RideStore.offlineSegmentKm)} km",
+                        valueRange = OfflineTuning.MIN_SEGMENT_KM.toFloat()..OfflineTuning.MAX_SEGMENT_KM.toFloat(),
+                        steps = (OfflineTuning.MAX_SEGMENT_KM - OfflineTuning.MIN_SEGMENT_KM).toInt() - 1,
+                        onValueChange = {
+                            RideStore.offlineSegmentKm = it.roundToInt().toDouble()
+                            RouteStore.saveSettings(context)
+                        },
+                    )
+                    SettingRangeSlider(
+                        title = "Corridor padding",
+                        subtitle = "Map margin either side in km · 0.5–10",
+                        value = RideStore.offlineCorridorPadKm.toFloat(),
+                        valueText = "${formatTuningKm(RideStore.offlineCorridorPadKm)} km",
+                        valueRange = OfflineTuning.MIN_CORRIDOR_PAD_KM.toFloat()..OfflineTuning.MAX_CORRIDOR_PAD_KM.toFloat(),
+                        steps = 18,
+                        onValueChange = {
+                            RideStore.offlineCorridorPadKm = (it * 2f).roundToInt() / 2.0
+                            RouteStore.saveSettings(context)
+                        },
+                    )
+                    SettingRangeSlider(
+                        title = "High-detail turn box",
+                        subtitle = "Along-route turn window in km · 0.25–5",
+                        value = RideStore.offlineTurnBoxKm.toFloat(),
+                        valueText = "${formatTuningKm(RideStore.offlineTurnBoxKm)} km",
+                        valueRange = OfflineTuning.MIN_TURN_PAD_KM.toFloat()..OfflineTuning.MAX_TURN_PAD_KM.toFloat(),
+                        steps = 18,
+                        onValueChange = {
+                            RideStore.offlineTurnBoxKm = (it * 4f).roundToInt() / 4.0
+                            RouteStore.saveSettings(context)
+                        },
+                    )
+                    SettingRangeSlider(
+                        title = "High-detail max zoom",
+                        subtitle = "Tile zoom ceiling · 13–16",
+                        value = RideStore.offlineHighMaxZoom.toFloat(),
+                        valueText = "zoom ${RideStore.offlineHighMaxZoom}",
+                        valueRange = OfflineTuning.MIN_MAX_ZOOM.toFloat()..OfflineTuning.MAX_MAX_ZOOM.toFloat(),
+                        steps = OfflineTuning.MAX_MAX_ZOOM - OfflineTuning.MIN_MAX_ZOOM - 1,
+                        onValueChange = {
+                            RideStore.offlineHighMaxZoom = it.roundToInt()
+                            RouteStore.saveSettings(context)
+                        },
+                    )
+                    SettingChoices(
+                        title = "Offline map theme",
+                        subtitle = "Default for “also prepare the other theme” in the prepare dialog",
+                    ) {
                         OfflineThemeMode.values().forEach { option ->
                             TextButton(onClick = {
                                 RideStore.offlineThemeMode = option
@@ -258,203 +354,110 @@ internal fun SettingsDialog(
                             }
                         }
                     }
-                }
-                SettingNumberField(
-                    title = "Offline storage cap",
-                    subtitle = "Map-pack budget in MB · 0 = unlimited",
-                    value = RideStore.offlineStorageCapMb,
-                    suffix = "MB",
-                    onValueChange = { RideStore.offlineStorageCapMb = it; RouteStore.saveSettings(context) },
-                )
-                SettingNumberField(
-                    title = "Offline pack expiry",
-                    subtitle = "Flag packs older than this many days · 0 = never",
-                    value = RideStore.offlineExpiryDays,
-                    suffix = "days",
-                    onValueChange = { RideStore.offlineExpiryDays = it; RouteStore.saveSettings(context) },
-                )
-                SettingSwitch(
-                    checked = RideStore.offlineAutoDeleteExpired,
-                    onCheckedChange = {
-                        RideStore.offlineAutoDeleteExpired = it
-                        RouteStore.saveSettings(context)
-                    },
-                    title = "Auto-delete expired offline packs",
-                    subtitle = "Remove expired packs on app start · off keeps them listed",
-                )
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Offline map packs", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "List, inspect and delete downloaded route maps",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                    SettingNumberField(
+                        title = "Offline storage cap",
+                        subtitle = "Map-pack budget in MB · 0 = unlimited",
+                        value = RideStore.offlineStorageCapMb,
+                        suffix = "MB",
+                        onValueChange = { RideStore.offlineStorageCapMb = it; RouteStore.saveSettings(context) },
+                    )
+                    SettingNumberField(
+                        title = "Offline pack expiry",
+                        subtitle = "Flag packs older than this many days · 0 = never",
+                        value = RideStore.offlineExpiryDays,
+                        suffix = "days",
+                        onValueChange = { RideStore.offlineExpiryDays = it; RouteStore.saveSettings(context) },
+                    )
+                    SettingSwitch(
+                        checked = RideStore.offlineAutoDeleteExpired,
+                        onCheckedChange = {
+                            RideStore.offlineAutoDeleteExpired = it
+                            RouteStore.saveSettings(context)
+                        },
+                        title = "Auto-delete expired offline packs",
+                        subtitle = "Remove expired packs on app start · off keeps them listed",
+                    )
+                    SettingRow(
+                        title = "Offline map packs",
+                        subtitle = "List, inspect and delete downloaded route maps",
+                    ) {
+                        TextButton(onClick = { onShowOfflinePacks(); onDismiss() }) { Text("Manage") }
                     }
-                    TextButton(onClick = { onShowOfflinePacks(); onDismiss() }) { Text("Manage") }
-                }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     val totalBytes = remember { RouteCache.totalBytes(context) }
-                    Text(
-                        if (totalBytes > 0) "Route caches: ${totalBytes / 1024} kB" else "Route caches: empty",
-                        Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    if (totalBytes > 0) {
-                        TextButton(onClick = { RouteCache.deleteAll(context) }) { Text("Clear all") }
+                    SettingRow(
+                        title = "Route caches",
+                        subtitle = if (totalBytes > 0) "${totalBytes / 1024} kB used" else "Empty",
+                    ) {
+                        if (totalBytes > 0) {
+                            TextButton(onClick = { RouteCache.deleteAll(context) }) { Text("Clear all") }
+                        }
                     }
                 }
-                Spacer(Modifier.height(12.dp))
-                Text("Rear radar", style = MaterialTheme.typography.titleSmall)
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                SettingSwitch(
-                    checked = RideStore.radarIntegrationEnabled,
-                    onCheckedChange = { RadarClient.setIntegrationEnabled(context, it); RouteStore.saveSettings(context) },
-                    title = "Live rear-radar",
-                    subtitle = "Read a real rear radar via the overlay app (off saves battery)",
-                )
-                SensorSection(
-                    title = "Heart rate",
-                    status = hrStatusText(context, hrState),
-                    description = "Standard BLE heart-rate straps (service 0x180D). A real sensor needs BLE-capable hardware.",
-                    connected = hrState.phase == HrPhase.CONNECTED,
-                    scanning = hrState.phase == HrPhase.SCANNING,
-                    devices = hrState.devices,
-                    savedAddress = RideStore.hrDeviceAddress,
-                    savedName = RideStore.hrDeviceName,
-                    emptyText = "No heart-rate straps found yet",
-                    chooseText = "Choose a strap",
-                    fallbackName = "Heart-rate strap",
-                    actions = hrActions,
-                    onCancelScan = { BleHrProvider.stopScan() },
-                    onDisconnect = { BleHrProvider.disconnect() },
-                )
-                SensorSection(
-                    title = "Cadence / power",
-                    status = cyclingStatusText(context, cyclingState),
-                    description = "Standard BLE cadence (CSC 0x1816) and power (CPS 0x1818) sensors. GPS speed is always the HUD speed. A real sensor needs BLE-capable hardware.",
-                    connected = cyclingState.phase == CyclingPhase.CONNECTED,
-                    scanning = cyclingState.phase == CyclingPhase.SCANNING,
-                    devices = cyclingState.devices,
-                    savedAddress = RideStore.cyclingDeviceAddress,
-                    savedName = RideStore.cyclingDeviceName,
-                    emptyText = "No cycling sensors found yet",
-                    chooseText = "Choose a sensor",
-                    fallbackName = "Cycling sensor",
-                    actions = cyclingActions,
-                    onCancelScan = { BleCyclingProvider.stopScan() },
-                    onDisconnect = { BleCyclingProvider.disconnect() },
-                )
-                Text("COROS (optional)", style = MaterialTheme.typography.titleSmall)
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Status", style = MaterialTheme.typography.bodyMedium)
-                        Text(corosStatusText(), style = MaterialTheme.typography.bodySmall)
+
+                SettingsSection(
+                    title = "Demo & diagnostics",
+                    subtitle = "Ghost ride and speech-marker tools",
+                ) {
+                    SettingRow(
+                        title = "Ghost ride",
+                        subtitle = if (ghostAvailable) {
+                            "Simulated ride on the loaded route (real time)"
+                        } else {
+                            "Load a route first"
+                        },
+                    ) {
+                        TextButton(enabled = ghostAvailable, onClick = { onStartGhost(); onDismiss() }) {
+                            Text("Start")
+                        }
                     }
-                    if (CorosController.status == CorosStatus.CONNECTED) {
-                        TextButton(onClick = { showCorosData = true }) { Text("View data") }
-                    }
-                }
-                CorosController.error?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
+                    SettingSwitch(
+                        checked = RideStore.showGhostControls,
+                        onCheckedChange = { RideStore.showGhostControls = it; RouteStore.saveSettings(context) },
+                        title = "Show ghost controls",
+                        subtitle = "Speed/scale/radar buttons during a ghost ride",
                     )
-                }
-                Column(Modifier.fillMaxWidth()) {
-                    Text("Region", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        "Sign-in and data server; changing it requires reconnecting",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Row {
-                        CorosRegion.entries.forEach { option ->
-                            TextButton(onClick = { CorosController.setRegion(context, option) }) {
-                                Text(option.shortLabel + if (RideStore.corosRegion == option) " ✓" else "")
+                    SettingRow(
+                        title = "Speech markers",
+                        subtitle = "Mark every spoken clip on the map at its trigger point",
+                    ) {
+                        TextButton(onClick = {
+                            val track = RideStore.track
+                            if (track != null) {
+                                Thread {
+                                    val markers = SpeechMarkerGenerator().generate(track, RideStore.ghostSpeedKmh)
+                                    RideStore.speechMarkers = markers
+                                    RideStore.speechMarkersVisible = true
+                                }.start()
                             }
-                        }
+                        }, enabled = ghostAvailable) { Text("Generate") }
                     }
+                    SettingSwitch(
+                        checked = RideStore.speechMarkersVisible,
+                        onCheckedChange = { RideStore.speechMarkersVisible = it },
+                        title = "Show speech markers",
+                        subtitle = "Toggle the marker overlay on the map",
+                    )
                 }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    when (CorosController.status) {
-                        CorosStatus.WAITING -> {
-                            TextButton(
-                                onClick = { CorosController.openLogin(context) },
-                                enabled = CorosController.loginUrl != null,
-                            ) { Text("Open login link again") }
-                            TextButton(onClick = { CorosController.cancelLogin() }) { Text("Cancel") }
-                        }
-                        CorosStatus.CONNECTED -> {
-                            TextButton(onClick = { CorosController.disconnect(context) }) { Text("Disconnect") }
-                            TextButton(onClick = { showCorosData = true }) { Text("COROS data") }
-                        }
-                        else -> {
-                            TextButton(onClick = { CorosController.connect(context) }) { Text("Connect") }
-                        }
-                    }
+
+                SettingsSection(
+                    title = "About",
+                    subtitle = "Version, attribution and licenses",
+                ) {
+                    AboutRow("App name", "Crazy Capy Randonneur")
+                    AboutRow("Version", versionName)
+                    AboutRow("Version code", versionCode.toString())
+                    AboutRow("Build type", buildType)
+                    AboutRow(
+                        "Rear radar",
+                        "Optional: android-bike-radar-overlay (GPL-3.0-or-later, separate app)",
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Map data © OpenStreetMap contributors. Tiles by OpenFreeMap.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
-                Spacer(Modifier.height(12.dp))
-                Text("Demo", style = MaterialTheme.typography.titleSmall)
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Ghost ride", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            if (ghostAvailable) "Simulated ride on the loaded route (real time)"
-                            else "Load a route first",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    TextButton(enabled = ghostAvailable, onClick = { onStartGhost(); onDismiss() }) { Text("Start") }
-                }
-                SettingSwitch(
-                    checked = RideStore.showGhostControls,
-                    onCheckedChange = { RideStore.showGhostControls = it; RouteStore.saveSettings(context) },
-                    title = "Show ghost controls",
-                    subtitle = "Speed/scale/radar buttons during a ghost ride",
-                )
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Speech markers", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Mark every spoken clip on the map at its trigger point",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    TextButton(onClick = {
-                        val track = RideStore.track
-                        if (track != null) {
-                            Thread {
-                                val markers = SpeechMarkerGenerator().generate(track, RideStore.ghostSpeedKmh)
-                                RideStore.speechMarkers = markers
-                                RideStore.speechMarkersVisible = true
-                            }.start()
-                        }
-                    }, enabled = ghostAvailable) { Text("Generate") }
-                }
-                SettingSwitch(
-                    checked = RideStore.speechMarkersVisible,
-                    onCheckedChange = { RideStore.speechMarkersVisible = it },
-                    title = "Show speech markers",
-                    subtitle = "Toggle the marker overlay on the map",
-                )
-                Spacer(Modifier.height(12.dp))
-                Text("About", style = MaterialTheme.typography.titleSmall)
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                AboutRow("App name", "Crazy Capy Randonneur")
-                AboutRow("Version", versionName)
-                AboutRow("Version code", versionCode.toString())
-                AboutRow("Build type", buildType)
-                AboutRow(
-                    "Rear radar",
-                    "Optional: android-bike-radar-overlay (GPL-3.0-or-later, separate app)",
-                )
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    "Map data © OpenStreetMap contributors. Tiles by OpenFreeMap.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
             }
         },
         confirmButton = {
@@ -470,6 +473,87 @@ internal fun SettingsDialog(
     )
     if (showCorosData) {
         CorosDialog(context = context, onDismiss = { showCorosData = false })
+    }
+}
+
+@Composable
+private fun SettingsSection(
+    title: String,
+    subtitle: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp),
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        if (subtitle != null) {
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        HorizontalDivider(Modifier.padding(top = 6.dp, bottom = 6.dp))
+        content()
+    }
+}
+
+@Composable
+private fun SettingSubheader(title: String, subtitle: String? = null) {
+    Column(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        if (subtitle != null) {
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingLabel(title: String, subtitle: String) {
+    Text(title, style = MaterialTheme.typography.bodyMedium)
+    Text(
+        subtitle,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun SettingRow(
+    title: String,
+    subtitle: String,
+    trailing: @Composable () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            SettingLabel(title, subtitle)
+        }
+        trailing()
+    }
+}
+
+@Composable
+private fun SettingChoices(
+    title: String,
+    subtitle: String,
+    choices: @Composable RowScope.() -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        SettingLabel(title, subtitle)
+        Row(content = choices)
     }
 }
 
@@ -514,14 +598,7 @@ private fun SettingNumberField(
     LaunchedEffect(value) {
         if (text.toIntOrNull() != value) text = value.toString()
     }
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall)
-        }
+    SettingRow(title = title, subtitle = subtitle) {
         OutlinedTextField(
             value = text,
             onValueChange = { raw ->
@@ -540,11 +617,7 @@ private fun SettingNumberField(
 
 @Composable
 internal fun SettingSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, title: String, subtitle: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall)
-        }
+    SettingRow(title = title, subtitle = subtitle) {
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
@@ -559,11 +632,10 @@ private fun SettingRangeSlider(
     steps: Int,
     onValueChange: (Float) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall)
+                SettingLabel(title, subtitle)
             }
             Text(valueText, style = MaterialTheme.typography.labelMedium)
         }
@@ -597,11 +669,10 @@ private fun hrStatusText(context: Context, state: HrSensorState): String {
 
 @Composable
 internal fun SettingSlider(value: Int, onValueChange: (Int) -> Unit, title: String, subtitle: String) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall)
+                SettingLabel(title, subtitle)
             }
             Text(if (value <= 0) "Off" else "$value%", style = MaterialTheme.typography.labelMedium)
         }
@@ -616,7 +687,7 @@ internal fun SettingSlider(value: Int, onValueChange: (Int) -> Unit, title: Stri
 
 @Composable
 internal fun AboutRow(label: String, value: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
         Text(value, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium)
     }

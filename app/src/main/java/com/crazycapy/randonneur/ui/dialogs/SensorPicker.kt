@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -92,43 +91,49 @@ internal fun SensorSection(
     onCancelScan: () -> Unit,
     onDisconnect: () -> Unit,
 ) {
-    Spacer(Modifier.height(12.dp))
-    Text(title, style = MaterialTheme.typography.titleSmall)
-    HorizontalDivider(Modifier.padding(vertical = 8.dp))
-    Text(status, style = MaterialTheme.typography.bodyMedium)
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        if (connected) {
-            TextButton(onClick = onDisconnect) { Text("Disconnect") }
-        } else {
-            if (scanning) {
-                TextButton(onClick = onCancelScan) { Text("Cancel scan") }
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        Text(status, style = MaterialTheme.typography.bodyMedium)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            if (connected) {
+                TextButton(onClick = onDisconnect) { Text("Disconnect") }
             } else {
-                TextButton(onClick = actions.onScan) { Text("Scan") }
-            }
-            if (!savedAddress.isNullOrBlank() && !scanning) {
-                TextButton(onClick = { actions.onConnect(savedAddress, savedName) }) {
-                    Text("Connect ${savedName ?: "saved sensor"}")
+                if (scanning) {
+                    TextButton(onClick = onCancelScan) { Text("Cancel scan") }
+                } else {
+                    TextButton(onClick = actions.onScan) { Text("Scan") }
                 }
-            }
-        }
-    }
-    if (scanning) {
-        if (devices.isEmpty()) {
-            Text(emptyText, style = MaterialTheme.typography.bodySmall)
-        } else {
-            Text(chooseText, style = MaterialTheme.typography.bodySmall)
-            devices.forEach { device ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(device.name ?: fallbackName, style = MaterialTheme.typography.bodyMedium)
-                        Text(device.address, style = MaterialTheme.typography.bodySmall)
-                    }
-                    TextButton(onClick = { actions.onConnect(device.address, device.name) }) {
-                        Text("Connect")
+                if (!savedAddress.isNullOrBlank() && !scanning) {
+                    TextButton(onClick = { actions.onConnect(savedAddress, savedName) }) {
+                        Text("Connect ${savedName ?: "saved sensor"}")
                     }
                 }
             }
         }
+        if (scanning) {
+            if (devices.isEmpty()) {
+                Text(emptyText, style = MaterialTheme.typography.bodySmall)
+            } else {
+                Text(chooseText, style = MaterialTheme.typography.bodySmall)
+                devices.forEach { device ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(device.name ?: fallbackName, style = MaterialTheme.typography.bodyMedium)
+                            Text(device.address, style = MaterialTheme.typography.bodySmall)
+                        }
+                        TextButton(onClick = { actions.onConnect(device.address, device.name) }) {
+                            Text("Connect")
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
-    Text(description, style = MaterialTheme.typography.bodySmall)
 }
