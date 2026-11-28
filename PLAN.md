@@ -29,7 +29,7 @@ the phone in the pocket with the screen off, and ride to spoken guidance.
   activities/HRV/recovery/planned-workout dashboard plus post-ride latest
   activity detail (laps, HR/cadence/power, training load/effect) and
   saved-ride overlap matching with missing-only enrichment; no live in-ride
-  polling. BLE HR/speed remains a separate future adapter.
+  polling. BLE HR/cadence/power remains a separate future adapter.
 - Branding: `Crazy Capy-D.png` from crazycapy.com; adaptive + legacy mipmaps via PIL;
   app label "Crazy Capy Randonneur". Notification icon is a separate monochrome silhouette.
 
@@ -97,7 +97,7 @@ CrazyCapyRouting/
 
 - **Release:** `v0.2.0` (2026-10-11) — see the README [Releases](README.md#releases)
   section. `versionName = "0.2.0"`, `minSdk = 33` (Android 13+).
-- **M1–M4 done & verified**, M5 polish largely shipped. 199 unit tests +
+- **M1–M4 done & verified**, M5 polish largely shipped. 264 unit tests +
   instrumented ghost-ride tests pass on Capy15 (Android 15 AVD) via
   `./gradlew :app:connectedDebugAndroidTest`.
 - Shipped: TrainingHud → compact 3×2 top-left HUD (speed | covered | elapsed /
@@ -267,6 +267,20 @@ CrazyCapyRouting/
   bpm into `RideStore.hr`, so saved GPX/TCX rides and history keep the existing
   HR path. Debug builds expose `SET_HR` to inject bpm over adb where no BLE
   hardware exists. Real straps still need physical BLE hardware for validation.
+- **BLE cadence / power**: `BleCyclingProvider` scans for both CSC (`0x1816`)
+  and CPS (`0x1818`) service UUIDs and connects one selected device, subscribing
+  to whichever measurement characteristics it exposes. Pure CSC and CPS parsers
+  handle flags, counter wraps, zero time deltas and unsupported optional fields;
+  CSC derives cadence (wheel fields are skipped) and CPS derives power plus
+  cadence when crank data is present. `BleHrProvider` and `BleCyclingProvider`
+  share scan/GATT/CCCD/reconnect plumbing and the 5/15/30/60 s `HrReconnectPolicy`
+  backoff. `RideStore` exposes cadence/power with BLE/DEBUG sources (BLE wins
+  ties), the HUD adds compact sensor badges without changing the 3×2 grid, and
+  history writes cadence/power per point to GPX (`gpxtpx:cad` / `gpxtpx:power`)
+  and TCX (`Cadence` / `Watts`). Settings adds a shared status/scan/cancel/device
+  list/connect section and saved-sensor reconnect. Debug builds add
+  `SET_CADENCE` and `SET_POWER`. Emulator checks cover UI/permission/scan/cancel
+  and debug-driven HUD/history; real GATT still needs a physical sensor.
 - **QA (checkpoint markers)**: a checkpoint whose GPX `<wpt>` has no `<desc>`
   used to produce malformed GeoJSON (a stray quote), so MapLibre rejected the
   whole POI source and the markers silently vanished while the HUD's km-CP kept

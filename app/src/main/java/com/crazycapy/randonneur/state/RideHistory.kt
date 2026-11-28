@@ -88,7 +88,9 @@ object RideHistory {
                     .append(p.lat).append(',')
                     .append(p.lon).append(',')
                     .append(p.eleM?.toString() ?: "").append(',')
-                    .append(p.hr?.toString() ?: "").append('\n')
+                    .append(p.hr?.toString() ?: "").append(',')
+                    .append(p.cadence?.toString() ?: "").append(',')
+                    .append(p.powerWatts?.toString() ?: "").append('\n')
             }
             runCatching { logFile(context).appendText(sb.toString()) }
         }
@@ -154,7 +156,7 @@ object RideHistory {
         }
         val ride = SavedRide("ride-$started", name, started, dur, dist, avg, max, ascent, descent, total, stops, longestStop)
 
-        runCatching { atomicWrite(rideFile(context, ride.id), buildGpx(name, started, points)) }.getOrElse { return null }
+        runCatching { atomicWrite(rideFile(context, ride.id), RideTrackWriter.gpx(name, started, points)) }.getOrElse { return null }
         runCatching {
             val old = indexFile(context).takeIf { it.exists() }?.readLines()
                 ?.filterNot { it.startsWith(ride.id + "\t") }.orEmpty()
@@ -170,7 +172,16 @@ object RideHistory {
         return finalizeRide(context, 0L, 0L, 0.0, 0.0, 0L)
     }
 
-    data class SeriesPoint(val tMs: Long, val lat: Double, val lon: Double, val eleM: Double?, val hr: Int?, val speedKmh: Double)
+    data class SeriesPoint(
+        val tMs: Long,
+        val lat: Double,
+        val lon: Double,
+        val eleM: Double?,
+        val hr: Int?,
+        val speedKmh: Double,
+        val cadence: Int? = null,
+        val powerWatts: Int? = null,
+    )
 
     /** Parse a saved ride's GPX into a time/elevation/HR/speed series for charts. */
     fun loadSeries(context: Context, id: String): List<SeriesPoint> = runCatching {
@@ -191,11 +202,13 @@ object RideHistory {
                 ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
                 ?: continue
             val hr = Regex("<gpxtpx:hr>(\\d+)</gpxtpx:hr>").find(body)?.groupValues?.get(1)?.toIntOrNull()
+            val cadence = Regex("<gpxtpx:cad>(\\d+)</gpxtpx:cad>").find(body)?.groupValues?.get(1)?.toIntOrNull()
+            val power = Regex("<gpxtpx:power>(\\d+)</gpxtpx:power>").find(body)?.groupValues?.get(1)?.toIntOrNull()
             var speed = 0.0
             if (prevLat != null && prevLon != null && prevT != null && t > prevT!!) {
                 speed = Geo.distanceMeters(prevLat!!, prevLon!!, lat, lon) / ((t - prevT!!) / 1000.0) * 3.6
             }
-            out.add(SeriesPoint(t, lat, lon, ele, hr, speed.coerceIn(0.0, 120.0)))
+            out.add(SeriesPoint(t, lat, lon, ele, hr, speed.coerceIn(0.0, 120.0), cadence, power))
             prevLat = lat; prevLon = lon; prevT = t
         }
         out
@@ -206,6 +219,9 @@ object RideHistory {
         val pts = loadSeries(context, id)
         if (pts.size < 2) return null
         val appHr = pts.mapNotNull { it.hr }
+        val appCadence = pts.mapNotNull { it.cadence }.takeIf { it.isNotEmpty() }?.average()?.roundToInt()
+        val appPowerAvg = pts.mapNotNull { it.powerWatts }.takeIf { it.isNotEmpty() }?.average()?.roundToInt()
+        val appPowerMax = pts.mapNotNull { it.powerWatts }.maxOrNull()
         val appElevation = ride.ascentM.takeIf { pts.any { p -> p.eleM != null } }
         val merged = CorosMerge.merge(
             appHr,
@@ -232,20 +248,26 @@ object RideHistory {
             sb.append("<MaximumHeartRateBpm><Value>").append(it).append("</Value></MaximumHeartRateBpm>")
         }
         sb.append("<Intensity>Active</Intensity>")
-        tcx.cadence?.let { sb.append("<Cadence>").append(it).append("</Cadence>") }
+        (appCadence ?: tcx.cadence)?.let { sb.append("<Cadence>").append(it).append("</Cadence>") }
         sb.append("<TriggerMethod>Manual</TriggerMethod>")
         sb.append("<Track>")
         pts.forEach { p ->
             sb.append("<Trackpoint><Time>").append(iso(p.tMs)).append("</Time><Position><LatitudeDegrees>").append(p.lat).append("</LatitudeDegrees><LongitudeDegrees>").append(p.lon).append("</LongitudeDegrees></Position>")
             p.eleM?.let { sb.append("<AltitudeMeters>").append(it).append("</AltitudeMeters>") }
             p.hr?.let { sb.append("<HeartRateBpm><Value>").append(it).append("</Value></HeartRateBpm>") }
+            p.cadence?.let { sb.append("<Cadence>").append(it).append("</Cadence>") }
+            p.powerWatts?.let {
+                sb.append("<Extensions><ns3:TPX><ns3:Watts>").append(it).append("</ns3:Watts></ns3:TPX></Extensions>")
+            }
             sb.append("</Trackpoint>")
         }
         sb.append("</Track>")
-        if (tcx.avgPowerW != null || tcx.maxPowerW != null) {
+        val avgPower = appPowerAvg ?: tcx.avgPowerW
+        val maxPower = appPowerMax ?: tcx.maxPowerW
+        if (avgPower != null || maxPower != null) {
             sb.append("<Extensions><ns3:LX>")
-            tcx.avgPowerW?.let { sb.append("<ns3:AvgWatts>").append(it).append("</ns3:AvgWatts>") }
-            tcx.maxPowerW?.let { sb.append("<ns3:MaxWatts>").append(it).append("</ns3:MaxWatts>") }
+            avgPower?.let { sb.append("<ns3:AvgWatts>").append(it).append("</ns3:AvgWatts>") }
+            maxPower?.let { sb.append("<ns3:MaxWatts>").append(it).append("</ns3:MaxWatts>") }
             sb.append("</ns3:LX></Extensions>")
         }
         sb.append("</Lap></Activity></Activities></TrainingCenterDatabase>\n")
@@ -290,25 +312,6 @@ object RideHistory {
         }
     }
 
-    private fun buildGpx(name: String, startedAtMs: Long, points: List<RidePoint>): String = buildString {
-        append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-        append("<gpx version=\"1.1\" creator=\"Crazy Capy Randonneur\" xmlns=\"http://www.topografix.com/GPX/1/1\"")
-        append(" xmlns:gpxtpx=\"http://www.garmin.com/xmlschemas/TrackPointExtension/v1\">\n")
-        append("  <metadata><time>").append(Instant.ofEpochMilli(startedAtMs)).append("</time></metadata>\n")
-        append("  <trk><name>").append(esc(name)).append("</name><type>cycling</type><trkseg>\n")
-        points.forEach { p ->
-            append("    <trkpt lat=\"").append(p.lat).append("\" lon=\"").append(p.lon).append("\">")
-            p.eleM?.let { append("<ele>").append(it).append("</ele>") }
-            append("<time>").append(Instant.ofEpochMilli(p.timeMs)).append("</time>")
-            p.hr?.let { hr ->
-                append("<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>")
-                    .append(hr).append("</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>")
-            }
-            append("</trkpt>\n")
-        }
-        append("  </trkseg></trk>\n</gpx>\n")
-    }
-
     private fun esc(s: String): String = s
         .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         .replace("\"", "&quot;").replace("'", "&apos;")
@@ -335,7 +338,7 @@ object RideHistory {
     }
 
     private fun parseLogLine(line: String): RidePoint? {
-        val p = line.split(",", limit = 5)
+        val p = line.split(",", limit = 7)
         if (p.size < 3) return null
         return RidePoint(
             lat = p[1].toDoubleOrNull() ?: return null,
@@ -343,6 +346,8 @@ object RideHistory {
             timeMs = p[0].toLongOrNull() ?: return null,
             eleM = p.getOrNull(3)?.toDoubleOrNull(),
             hr = p.getOrNull(4)?.toIntOrNull(),
+            cadence = p.getOrNull(5)?.toIntOrNull(),
+            powerWatts = p.getOrNull(6)?.toIntOrNull(),
         )
     }
 

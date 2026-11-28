@@ -25,8 +25,10 @@ navigator for Android 13+ (API 33). No Play Services, no accounts, no cloud.
     library + settings/last-ride persistence)
   - `sim` — ghost ride simulator
   - `ui` — Compose overlays: HUD + next-turn preview, off-route ack, dialogs
-  - `ble` — BLE heart-rate provider (standard `0x180D`/`0x2A37`, parser,
-    reconnect policy); debug `SET_HR` can inject bpm without hardware
+  - `ble` — BLE heart-rate (`0x180D`/`0x2A37`) and cadence (`0x1816`/`0x2A5B`)
+    plus power (`0x1818`/`0x2A63`) providers, parsers, shared scan/GATT
+    plumbing and reconnect policy; debug `SET_HR`, `SET_CADENCE` and `SET_POWER`
+    can inject values without hardware
   - `coros` — optional read-only COROS: region endpoints, browser OAuth (CLI
     login + PKCE), MCP client (JSON/SSE), Keystore-encrypted token store, the
     read-only data controller, post-ride latest-activity parsers and saved-ride
@@ -165,7 +167,8 @@ Device test notes:
   (resume after 3 s above 5 km/h), and ascent/descent are recorded from
   altitude (1 m deadband). Checkpoints every 5 min append new points to a log
   (plus a tiny atomic meta line) and are promoted on the next launch; the final
-  file is GPX 1.1 with time, elevation and Garmin `gpxtpx:hr` ("cycling").
+  file is GPX 1.1 with time, elevation, Garmin `gpxtpx:hr` and any BLE
+  cadence/power (`gpxtpx:cad`, `gpxtpx:power`) ("cycling").
   Both Rides and saved Routes can be exported via a FileProvider
   (`<applicationId>.files`) and renamed; rename keeps the storage id stable.
 - Radar targets are drawn whenever the radar is connected, not only during a

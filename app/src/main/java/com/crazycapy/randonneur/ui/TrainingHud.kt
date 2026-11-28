@@ -208,6 +208,7 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                     )
                 }
             }
+            LiveBadges()
         }
 
         if (showPreview) {
@@ -258,6 +259,57 @@ fun TrainingHud(modifier: Modifier = Modifier) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun LiveBadges() {
+    val cadence = RideStore.cadenceRpm
+    val power = RideStore.powerWatts
+    if (cadence == null && power == null) return
+    Row(
+        Modifier.fillMaxWidth().padding(top = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        cadence?.let {
+            LiveBadge("CAD", it.toString(), "rpm", RideStore.cadenceSource?.name)
+        }
+        power?.let {
+            LiveBadge("PWR", it.toString(), "W", RideStore.powerSource?.name)
+        }
+    }
+}
+
+@Composable
+private fun LiveBadge(label: String, value: String, unit: String, source: String?) {
+    Row(
+        Modifier
+            .background(
+                if (RideStore.darkMap) Color(0x33FFFFFF) else Color(0x22000000),
+                RoundedCornerShape(6.dp),
+            )
+            .padding(horizontal = 5.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            color = if (RideStore.darkMap) Color(0xFF7CC29A) else Color(0xFF2E5D46),
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            " $value",
+            color = if (RideStore.darkMap) Color.White else Color(0xFF1A1A1A),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
+        Text(
+            " $unit${source?.let { " · $it" } ?: ""}",
+            color = if (RideStore.darkMap) Color(0xFFBABABA) else Color(0xFF666666),
+            fontSize = 8.sp,
+            maxLines = 1,
+        )
     }
 }
 

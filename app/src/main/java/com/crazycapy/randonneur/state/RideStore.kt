@@ -212,6 +212,42 @@ object RideStore {
     var hrDeviceAddress: String? by mutableStateOf(null)
     var hrDeviceName: String? by mutableStateOf(null)
 
+    var cadenceRpm: Int? by mutableStateOf(null)
+    var cadenceSource: SensorSource? by mutableStateOf(null)
+    var powerWatts: Int? by mutableStateOf(null)
+    var powerSource: SensorSource? by mutableStateOf(null)
+
+    var cyclingDeviceAddress: String? by mutableStateOf(null)
+    var cyclingDeviceName: String? by mutableStateOf(null)
+
+    fun applyCadence(value: Int?, source: SensorSource?) {
+        applyReading(value, source, cadenceSource) { v, s ->
+            cadenceRpm = v
+            cadenceSource = s
+        }
+    }
+
+    fun applyPower(value: Int?, source: SensorSource?) {
+        applyReading(value, source, powerSource) { v, s ->
+            powerWatts = v
+            powerSource = s
+        }
+    }
+
+    private fun applyReading(
+        value: Int?,
+        source: SensorSource?,
+        currentSource: SensorSource?,
+        set: (Int?, SensorSource?) -> Unit,
+    ) {
+        if (value == null) {
+            if (currentSource == null || currentSource == source) set(null, null)
+            return
+        }
+        if (currentSource != null && source != null && currentSource.priority > source.priority) return
+        set(value, source)
+    }
+
     // ---- POI / waypoint guidance ----
 
     /** Name of the next waypoint along the route, if any. */
@@ -330,6 +366,10 @@ object RideStore {
         avgSpeedKmh = 0.0
         elapsedSec = 0L
         hr = null
+        cadenceRpm = null
+        cadenceSource = null
+        powerWatts = null
+        powerSource = null
         nextPoiName = null
         nextPoiM = null
         nextPoiIndex = null

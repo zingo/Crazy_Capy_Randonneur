@@ -55,6 +55,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.crazycapy.randonneur.KMH_TO_MS
 import com.crazycapy.randonneur.R
+import com.crazycapy.randonneur.ble.BleCyclingProvider
 import com.crazycapy.randonneur.ble.BleHrProvider
 import com.crazycapy.randonneur.ble.HrProvider
 import com.crazycapy.randonneur.gpx.Track
@@ -174,6 +175,7 @@ class NavigationService : Service() {
         super.onCreate()
         createChannel()
         BleHrProvider.init(applicationContext)
+        BleCyclingProvider.init(applicationContext)
         audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
         tts = TextToSpeech(applicationContext) { status ->
             ttsReady = status == TextToSpeech.SUCCESS
@@ -251,7 +253,12 @@ class NavigationService : Service() {
         RideStore.avgSpeedKmh = 0.0
         RideStore.elapsedSec = 0L
         RideStore.hr = null
+        RideStore.cadenceRpm = null
+        RideStore.cadenceSource = null
+        RideStore.powerWatts = null
+        RideStore.powerSource = null
         BleHrProvider.reconnectSaved(RideStore.hrDeviceAddress, RideStore.hrDeviceName)
+        BleCyclingProvider.reconnectSaved(RideStore.cyclingDeviceAddress, RideStore.cyclingDeviceName)
         RideStore.nextPoiName = null
         RideStore.nextPoiM = null
         RideStore.nextPoiIndex = null
@@ -489,13 +496,21 @@ class NavigationService : Service() {
             val pts = RideStore.riddenPoints
             if (pts.isEmpty()) {
                 if (accuracyM == null || accuracyM <= 30f) {
-                    RideStore.riddenPoints = listOf(RidePoint(lat, lon, nowMs, eleM, hrProvider.currentHr()))
+                    RideStore.riddenPoints = listOf(
+                        RidePoint(
+                            lat, lon, nowMs, eleM, hrProvider.currentHr(),
+                            BleCyclingProvider.currentCadence(), BleCyclingProvider.currentPower(),
+                        ),
+                    )
                 }
             } else if (plausible) {
                 RideStore.riddenM += moved
                 val last = pts.last()
                 if (Geo.distanceMeters(last.lat, last.lon, lat, lon) >= TRACE_POINT_M) {
-                    RideStore.riddenPoints = pts + RidePoint(lat, lon, nowMs, eleM, hrProvider.currentHr())
+                    RideStore.riddenPoints = pts + RidePoint(
+                        lat, lon, nowMs, eleM, hrProvider.currentHr(),
+                        BleCyclingProvider.currentCadence(), BleCyclingProvider.currentPower(),
+                    )
                 }
             }
         }
@@ -627,6 +642,17 @@ class NavigationService : Service() {
         return (now - startRealtimeMs - paused).coerceAtLeast(0)
     }
 
+    private fun applyCyclingReadings() {
+        RideStore.applyCadence(
+            BleCyclingProvider.currentCadence(),
+            BleCyclingProvider.currentCadenceSource(),
+        )
+        RideStore.applyPower(
+            BleCyclingProvider.currentPower(),
+            BleCyclingProvider.currentPowerSource(),
+        )
+    }
+
     private fun updateAvgSpeed() {
         val elapsed = activeElapsedMs() / 1000.0
         if (elapsed > 2.0 && RideStore.riddenM > 0.0) {
@@ -660,6 +686,7 @@ class NavigationService : Service() {
                 RideStore.totalElapsedSec = totalSec
                 RideStore.pausedSec = (totalSec - movingSec).coerceAtLeast(0)
                 RideStore.hr = hrProvider.currentHr()
+                applyCyclingReadings()
                 updateAvgSpeed()
                 maybeCheckpointRide()
                 if (RideStore.radarLostAtMs != null && !radarLostAnnounced) {
@@ -1068,6 +1095,10 @@ class NavigationService : Service() {
         RideStore.nextPoiM = null
         RideStore.nextPoiIndex = null
         RideStore.hr = null
+        RideStore.cadenceRpm = null
+        RideStore.cadenceSource = null
+        RideStore.powerWatts = null
+        RideStore.powerSource = null
         RideStore.offRouteActive = false
         RideStore.offRouteM = 0.0
         RideStore.offRouteAcknowledged = false
@@ -1079,6 +1110,7 @@ class NavigationService : Service() {
         RideStore.upcomingRoute = emptyList()
         RideStore.nextTurnPopupVisible = false
         BleHrProvider.setAutoReconnect(false)
+        BleCyclingProvider.setAutoReconnect(false)
         RideStore.radarTargets = emptyList() //TODO radar data/showing is not part or a ride and should probably not be cleared on stopRide
         cancelRadarLostAnnounce()
         radarLostAnnounced = false
@@ -1129,6 +1161,7 @@ class NavigationService : Service() {
         driverThread?.interrupt()
         releaseWakeLock()
         BleHrProvider.shutdown()
+        BleCyclingProvider.shutdown()
         tts?.shutdown()
         tts = null
         super.onDestroy()

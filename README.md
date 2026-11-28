@@ -125,8 +125,8 @@ debug-build-only; release builds carry none of it.
   elapsed time, average speed, distance left (switches to distance-to-next
   checkpoint while riding, e.g. `12.4 km CP 3`) and a tap-to-cycle ETA /
   time-left / total-time / ETA-CPx readout (dots under it show the selected
-  mode), beside a live preview of the route ahead at the next turn and a small elevation profile of the next ~2 km. Tap the
-  covered distance to switch between distance along the route and the actual
+  mode), beside a live preview of the route ahead at the next turn and a small elevation profile of the next ~2 km. Compact
+  sensor badges appear below the grid when BLE cadence/power are present. Tap the covered distance to switch between distance along the route and the actual
   distance ridden; the ridden path is drawn as a blue line on the map.
 - **BLE heart rate** – pair a standard Bluetooth LE heart-rate strap (service
   `0x180D`) from **Settings → Heart rate**: scan, pick a device, and the latest
@@ -135,6 +135,17 @@ debug-build-only; release builds carry none of it.
   gently instead of retrying in a tight loop. Real sensors need BLE-capable
   hardware — the emulator has no usable BLE radio, so use a physical phone or
   tablet for a real strap.
+- **BLE cadence / power** – pair a standard cadence sensor (CSC `0x1816`,
+  measurement `0x2A5B`) and/or power meter (CPS `0x1818`, measurement `0x2A63`)
+  from **Settings → Cadence / power**. One selected device may expose either or
+  both services; available measurements are subscribed together. GPS speed
+  remains the HUD speed, while cadence and power appear in the compact sensor
+  badges, each labelled with its source (BLE/DEBUG). Cadence and power are
+  recorded per ride point and written to history GPX (`gpxtpx:cad` /
+  `gpxtpx:power`) and TCX (`Cadence` / `Watts`). Saved sensors are offered for
+  reconnect and use the same 5/15/30/60 s backoff. Real GATT needs physical BLE
+  hardware; debug builds can inject `SET_CADENCE` and `SET_POWER` over adb for
+  HUD/history checks.
 - **Free ride** – start without a route: no green line or guidance, but speed,
   actual distance, average/max, the blue breadcrumb and a GPX are recorded just
   like a routed ride. The HUD shows max speed and straight-line distance home.
@@ -359,7 +370,7 @@ rendering via `adb exec-out screencap` and pixel analysis (see
 | `app/src/main/java/.../voice` | Spoken phrases |
 | `app/src/main/java/.../service` | Foreground `NavigationService`: GPS, ghost-ride driver, TTS (audio-focus ducking), wake lock, living notification |
 | `app/src/main/java/.../state` | `RideStore` (shared app state), `RouteStore` (on-device route library + settings/last-ride persistence), `RideMode` |
-| `app/src/main/java/.../ble` | BLE heart-rate provider (service `0x180D`, parser, reconnect policy) |
+| `app/src/main/java/.../ble` | BLE heart-rate (`0x180D`) and cycling cadence (`0x1816`) / power (`0x1818`) providers, parsers and reconnect policy |
 | `app/src/main/java/.../coros` | Optional COROS: region endpoints, browser OAuth (CLI login + PKCE), MCP client, Keystore-encrypted token store, read-only data controller, post-ride overlap matcher/enrichment |
 | `app/src/main/java/.../cache` | Prepare route offline: corridor map pack, turn-image generation, storage, tile warm, anchor projection |
 | `app/src/main/java/.../sim` | Ghost ride simulator |

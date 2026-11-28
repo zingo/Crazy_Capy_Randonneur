@@ -4,10 +4,7 @@
  */
 package com.crazycapy.randonneur.ui.dialogs
 
-import android.Manifest
 import android.content.Context
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -41,7 +38,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.crazycapy.randonneur.ble.BleCyclingProvider
 import com.crazycapy.randonneur.ble.BleHrProvider
+import com.crazycapy.randonneur.ble.CyclingPhase
+import com.crazycapy.randonneur.ble.CyclingSensorState
 import com.crazycapy.randonneur.ble.HrPhase
 import com.crazycapy.randonneur.ble.HrSensorState
 import com.crazycapy.randonneur.cache.OfflineDetailStrategy
@@ -79,38 +79,27 @@ internal fun SettingsDialog(
 ) {
     val context = LocalContext.current
     val hrState = BleHrProvider.state
-    var pendingHrConnect by remember { mutableStateOf<Pair<String, String?>?>(null) }
-    val hrPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
-    ) {
-        val pending = pendingHrConnect
-        pendingHrConnect = null
-        if (BleHrProvider.hasPermissions(context)) {
-            if (pending != null) BleHrProvider.connect(pending.first, pending.second)
-            else BleHrProvider.startScan()
-        }
-    }
-    fun scanHr() {
-        if (BleHrProvider.hasPermissions(context)) BleHrProvider.startScan()
-        else {
-            pendingHrConnect = null
-            hrPermission.launch(
-                arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT),
-            )
-        }
-    }
-    fun connectHr(address: String, name: String?) {
-        RideStore.hrDeviceAddress = address
-        RideStore.hrDeviceName = name
-        RouteStore.saveSettings(context)
-        if (BleHrProvider.hasPermissions(context)) BleHrProvider.connect(address, name)
-        else {
-            pendingHrConnect = address to name
-            hrPermission.launch(
-                arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT),
-            )
-        }
-    }
+    val cyclingState = BleCyclingProvider.state
+    val hrActions = rememberSensorActions(
+        hasPermissions = { BleHrProvider.hasPermissions(context) },
+        startScan = { BleHrProvider.startScan() },
+        connect = { address, name -> BleHrProvider.connect(address, name) },
+        saveDevice = { address, name ->
+            RideStore.hrDeviceAddress = address
+            RideStore.hrDeviceName = name
+            RouteStore.saveSettings(context)
+        },
+    )
+    val cyclingActions = rememberSensorActions(
+        hasPermissions = { BleCyclingProvider.hasPermissions(context) },
+        startScan = { BleCyclingProvider.startScan() },
+        connect = { address, name -> BleCyclingProvider.connect(address, name) },
+        saveDevice = { address, name ->
+            RideStore.cyclingDeviceAddress = address
+            RideStore.cyclingDeviceName = name
+            RouteStore.saveSettings(context)
+        },
+    )
 
     var showCorosData by remember { mutableStateOf(false) }
 
@@ -323,48 +312,37 @@ internal fun SettingsDialog(
                     title = "Live rear-radar",
                     subtitle = "Read a real rear radar via the overlay app (off saves battery)",
                 )
-                Spacer(Modifier.height(12.dp))
-                Text("Heart rate", style = MaterialTheme.typography.titleSmall)
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Text(hrStatusText(context, hrState), style = MaterialTheme.typography.bodyMedium)
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    if (hrState.phase == HrPhase.CONNECTED) {
-                        TextButton(onClick = { BleHrProvider.disconnect() }) { Text("Disconnect") }
-                    } else {
-                        if (hrState.phase == HrPhase.SCANNING) {
-                            TextButton(onClick = { BleHrProvider.stopScan() }) { Text("Cancel scan") }
-                        } else {
-                            TextButton(onClick = { scanHr() }) { Text("Scan") }
-                        }
-                        val savedAddress = RideStore.hrDeviceAddress
-                        if (!savedAddress.isNullOrBlank() && hrState.phase != HrPhase.SCANNING) {
-                            TextButton(onClick = { connectHr(savedAddress, RideStore.hrDeviceName) }) {
-                                Text("Connect ${RideStore.hrDeviceName ?: "saved sensor"}")
-                            }
-                        }
-                    }
-                }
-                if (hrState.phase == HrPhase.SCANNING) {
-                    if (hrState.devices.isEmpty()) {
-                        Text("No heart-rate straps found yet", style = MaterialTheme.typography.bodySmall)
-                    } else {
-                        Text("Choose a strap", style = MaterialTheme.typography.bodySmall)
-                        hrState.devices.forEach { device ->
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(device.name ?: "Heart-rate strap", style = MaterialTheme.typography.bodyMedium)
-                                    Text(device.address, style = MaterialTheme.typography.bodySmall)
-                                }
-                                TextButton(onClick = { connectHr(device.address, device.name) }) {
-                                    Text("Connect")
-                                }
-                            }
-                        }
-                    }
-                }
-                Text(
-                    "Standard BLE heart-rate straps (service 0x180D). A real sensor needs BLE-capable hardware.",
-                    style = MaterialTheme.typography.bodySmall,
+                SensorSection(
+                    title = "Heart rate",
+                    status = hrStatusText(context, hrState),
+                    description = "Standard BLE heart-rate straps (service 0x180D). A real sensor needs BLE-capable hardware.",
+                    connected = hrState.phase == HrPhase.CONNECTED,
+                    scanning = hrState.phase == HrPhase.SCANNING,
+                    devices = hrState.devices,
+                    savedAddress = RideStore.hrDeviceAddress,
+                    savedName = RideStore.hrDeviceName,
+                    emptyText = "No heart-rate straps found yet",
+                    chooseText = "Choose a strap",
+                    fallbackName = "Heart-rate strap",
+                    actions = hrActions,
+                    onCancelScan = { BleHrProvider.stopScan() },
+                    onDisconnect = { BleHrProvider.disconnect() },
+                )
+                SensorSection(
+                    title = "Cadence / power",
+                    status = cyclingStatusText(context, cyclingState),
+                    description = "Standard BLE cadence (CSC 0x1816) and power (CPS 0x1818) sensors. GPS speed is always the HUD speed. A real sensor needs BLE-capable hardware.",
+                    connected = cyclingState.phase == CyclingPhase.CONNECTED,
+                    scanning = cyclingState.phase == CyclingPhase.SCANNING,
+                    devices = cyclingState.devices,
+                    savedAddress = RideStore.cyclingDeviceAddress,
+                    savedName = RideStore.cyclingDeviceName,
+                    emptyText = "No cycling sensors found yet",
+                    chooseText = "Choose a sensor",
+                    fallbackName = "Cycling sensor",
+                    actions = cyclingActions,
+                    onCancelScan = { BleCyclingProvider.stopScan() },
+                    onDisconnect = { BleCyclingProvider.disconnect() },
                 )
                 Text("COROS (optional)", style = MaterialTheme.typography.titleSmall)
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -492,6 +470,28 @@ internal fun SettingsDialog(
     )
     if (showCorosData) {
         CorosDialog(context = context, onDismiss = { showCorosData = false })
+    }
+}
+
+private fun cyclingStatusText(context: Context, state: CyclingSensorState): String {
+    if (!BleCyclingProvider.hasPermissions(context)) return "Permission needed"
+    return when (state.phase) {
+        CyclingPhase.IDLE -> {
+            val saved = RideStore.cyclingDeviceName ?: RideStore.cyclingDeviceAddress
+            if (saved.isNullOrBlank()) "Not connected" else "Saved sensor: $saved"
+        }
+        CyclingPhase.SCANNING -> "Scanning…"
+        CyclingPhase.CONNECTING -> "Connecting…"
+        CyclingPhase.CONNECTED -> buildString {
+            append("Connected: ").append(state.deviceName ?: state.deviceAddress ?: "sensor")
+            val values = listOfNotNull(
+                state.cadenceRpm?.let { "cadence" },
+                state.powerWatts?.let { "power" },
+            )
+            if (values.isNotEmpty()) append(" · ").append(values.joinToString(", "))
+        }
+        CyclingPhase.PERMISSION_NEEDED -> "Bluetooth permission needed"
+        CyclingPhase.ERROR -> state.error ?: "Error"
     }
 }
 
